@@ -38,3 +38,10 @@ frontend/coverage/
 secrets/
 deploy/certs/
 *.key
+
+# Local NGINX TLS material / CI artifacts
+certs/
+deploy/nginx/certs/
+ci-tls.crt
+ci-headers
+*.pem

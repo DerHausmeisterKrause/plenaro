@@ -1,7 +1,7 @@
 # Zielarchitektur – Plenaro 2.0
 
 ```text
-Browser --(später HTTPS Reverse Proxy / SSO)--> ASP.NET Core Web/API
+Browser --(HTTP 80 / HTTPS 443)--> NGINX --> ASP.NET Core Web/API
                                                    |
                                       PostgreSQL (Docker internal)
                                                    |
@@ -17,7 +17,7 @@ Browser --(später HTTPS Reverse Proxy / SSO)--> ASP.NET Core Web/API
 - PostgreSQL 17 mit persistentem Volume und Healthcheck, internem Docker-Netz ohne Host-Port.
 - Webserver stellt Statusseite und `/health/live` sowie `/health/ready` bereit.
 - Docker Compose, lokale Konfiguration per `.env`, CI prüft Build/Compose/HTTP.
-- Web-Port aus Sicherheitsgründen nur an `127.0.0.1`, keine Geschäftsdaten ohne Auth.
+- Web/API nur im Docker-Netz erreichbar; NGINX ist der einzige öffentlich gemappte Web-Einstiegspunkt.
 
 ## Geplante Schnittstellen
 
@@ -40,7 +40,7 @@ Eine WPF-XAML-Oberfläche kann nicht direkt im Browser ausgeführt werden. Outlo
 - Browser-Routen werden durch `MapFallbackToFile("index.html")` auf die React-SPA umgeleitet.
 - `/health/live` und `/health/ready` bleiben separate Backend-Endpunkte und werden vom Browser abgefragt.
 - Navigation und Login-/Logout-Seiten sind Platzhalter **ohne Credentials, Session oder personenbezogene Daten**.
-- Docker-Portbindung ist per `PLENARO_BIND_IP` steuerbar; im vertrauenswürdigen LAN 0.0.0.0, bei Einzelhost 127.0.0.1.
+- NGINX-Hostportbindung ist per `PLENARO_BIND_IP` steuerbar; im vertrauenswürdigen LAN 0.0.0.0, bei Einzelhost 127.0.0.1.
 
 
 ## Datenbankschema und Migrationen (Phase-1-Abschluss)
@@ -85,3 +85,12 @@ Migration \`0005_user_management.sql\` ergänzt das administrative Deaktivierung
 - Strikt definierte Felder: persönlich `theme` (light/dark), `weekStart` (inherit/monday/sunday); global `instanceName`, `supportEmail`, `defaultWeekStart`.
 - React lädt die gespeicherte Designvorgabe bei Anmeldung und zeigt für Admins bearbeitbare globale, für normale User nur lesbare globale Einstellungen. Wochenbeginn wird zunächst nur gespeichert; die Kalenderfunktion wird erst in Phase 5 implementiert.
 - Keine Passwörter, Tokens, Integrationssecrets oder beliebigen JSON-Schlüssel in dieser API; dafür ist ein separates verschlüsseltes Konzept erforderlich.
+
+## Phase 3 – NGINX als Standard-Frontend (ersetzt Caddy)
+
+- `compose.yaml` startet bei jedem normalen `docker compose up` PostgreSQL, ASP.NET Core und NGINX.
+- Nur NGINX veröffentlicht Host-Port 80/443. ASP.NET Core nutzt weiterhin Port 8080, aber **nur intern**.
+- `PLENARO_HTTPS_ENABLED=false`: HTTP-Template; `true`: separates HTTPS-Template mit TLS 1.2/1.3, Zertifikaten aus Hostpfaden und 301-Redirect HTTP → HTTPS.
+- `PLENARO_SERVER_NAME` ist optional, Standard `_` für Host-IP. Ein FQDN benötigt DNS und ein passendes TLS-Zertifikat.
+- NGINX verwendet die feste Edge-Netz-IP `172.29.213.10`; ASP.NET Core vertraut nur dieser IP für X-Forwarded-For/Proto, auch für korrektes Login-Rate-Limiting im HTTP-Entwicklungsmodus.
+- Keine zweite Proxy-Infrastruktur, keine externe CA-Automatik. Verschlüsselter Vault unverändert, optionale Hostdatei `./secrets/vault.key`.

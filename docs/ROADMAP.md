@@ -12,7 +12,7 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [x] PostgreSQL 17, Docker-Volume, internes Netzwerk und Healthcheck
 - [x] Versioniertes PostgreSQL-Basisschema (Tasks, Segmente, Zeitbuchungen, globale Einstellungen), Transaktionsmigrationen und Schema-Readiness hinzugefügt
 - [x] Migrationen gegen nachträgliche Änderungen, Downgrades und parallelen Containerstart abgesichert
-- [x] Docker Compose mit Web/DB, konfigurierbarer LAN-Bindung und Startabhängigkeiten
+- [x] Docker Compose mit PostgreSQL, Web und NGINX-Reverse-Proxy; Port 80/443 und LAN-Bindung konfigurierbar
 - [x] Minimale Browser-Statusseite
 - [x] GitHub Actions CI: Build, Docker-Compose-Syntax, Build & HTTP-Smoke-Test (Workflow hinzugefügt, Lauf noch zu prüfen)
 - [x] GitHub Actions: .NET-Build, Compose-Syntax und Docker-HTTP-Smoke-Test erfolgreich ([CI #1](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/40755261974))
@@ -20,7 +20,7 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [ ] LAN-Zugriff via Host-IP nach Update und Datenpersistenz/Neustart am Zielhost prüfen (CI prüft Neustart und Persistenz automatisch)
 - [ ] Lizenz juristisch final prüfen (vor kommerziellem Release)
 
-**Abnahme:** `http://127.0.0.1:8080` zeigt den Webstatus, `/health/ready` prüft PostgreSQL und Persistenz über Neustarts.
+**Abnahme:** `http://127.0.0.1` zeigt den Webstatus, `/health/ready` prüft PostgreSQL und Persistenz über Neustarts.
 
 ## Phase 2 – Browseroberfläche (Web-Shell implementiert)
 - [x] React 19, TypeScript, Vite, Routing und Docker-Multi-Stage-Build
@@ -100,10 +100,11 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 
 ## Sicherheitsgrundlage für Phasen 3/4 – Stand dieses Schritts
 
-- [x] Optionaler Caddy-LAN-HTTPS-Overlay mit Host-Port nur 443, interner CA und explizitem KnownProxy
-- [x] `Secure`-Cookies, HTTPS-Pflicht im sicheren Modus, interne HTTP-Health-Ausnahme
+- [x] NGINX-Reverse-Proxy direkt in der Standard-Compose; HTTP auf Port 80 oder optional HTTPS auf 443 mit automatischer HTTP-Weiterleitung und Zertifikat-/Schlüsselpfaden aus .env
+- [x] `Secure`-Cookies und HTTPS-Pflicht im sicheren Modus, interne HTTP-Health-Ausnahme
+- [x] Internes ASP.NET 8080 nicht mehr am Host veröffentlicht; Forwarded Headers ausschließlich vom NGINX-IP-Endpunkt
 - [x] Verschlüsselter Secret-Vault mit PostgreSQL-Migration 0007, externem Masterkey, User-/Admin-Scopes und CSRF
 - [x] Verwaltung der Secret-Namen, Erstellung/Aktualisierung/Löschung im Web (ohne Klartextabruf)
-- [ ] LAN-HTTPS und Zertifikatvertrauen auf dem Zielhost manuell abnehmen
+- [ ] NGINX-LAN-HTTPS, Zertifikatvertrauen und FQDN/IP-Zugriff auf dem Zielhost manuell abnehmen
 - [ ] Master-Key-Rotation, verschlüsselter DataProtection-Keyring und Secret-Recovery-Konzept
 - [ ] Vollständige Phase-3-Sicherheitsprüfung inklusive Backup-Restore und Bedrohungsmodell

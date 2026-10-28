@@ -2,13 +2,13 @@
 
 ## Aktuell
 
-- Web-Port standardmäßig auf `0.0.0.0:8080` gebunden (LAN-Zugriff auf Host-IP möglich). **Ausschließlich in vertrauenswürdigem LAN verwenden; keine Internet-Freigabe!** Mit `PLENARO_BIND_IP=127.0.0.1` kann der Zugang wieder lokal begrenzt werden.
+- NGINX ist standardmäßig auf `0.0.0.0:80` (und reserviert 443) gebunden; ASP.NET Port 8080 ist **nicht** am Host veröffentlicht. **Ausschließlich in vertrauenswürdigem LAN verwenden; keine Internet-Freigabe!** Mit `PLENARO_BIND_IP=127.0.0.1` kann der Zugang wieder lokal begrenzt werden.
 - PostgreSQL nur im internen Docker-Netz; kein Port 5432 am Host.
 - Passwort wird ausschließlich aus `.env` gelesen; `.env` ist gitignored.
 - Container läuft als unprivilegierter Nutzer (`APP_UID`).
 - Backend gibt bei DB-Ausfall oder veralteter/inkonsistenter Migrationshistorie HTTP 503 zurück, ohne das Connection-Secret an den Browser zu senden.
 - Migrationen sind transaktional, per Advisory Lock gegen parallelen Start geschützt und durch SHA-256-Prüfsummen überwacht.
-- Noch **keine** Identität und Autorisierung: es gibt nur eine öffentliche SPA-Vorschau mit leeren Modulen und Statusabfragen. **Kein öffentliches Deployment**, keine produktiven Daten.
+- Lokale ASP.NET Identity, Login, Admin-Bootstrap und RBAC-Grundlage sind implementiert. Fachliche Aufgaben-/Ticket-API-Rechte und vollständiger Security-Audit stehen noch aus.
 
 **Netzwerk:** Host-Firewall auf vertrauenswürdiges LAN begrenzen. Auf keinen Fall Router-Portfreigabe, UPnP/öffentliche Reverse-Proxies oder Public-IP-Bindung vor Phase 3.
 
@@ -66,13 +66,15 @@
 - Kontentrennung wird im Docker-Smoke-Test mit zwei echten Konten geprüft: normale Benutzer sehen ihre eigenen Einstellungen; globale Änderungen liefern 403. Persistenz wird nach Webcontainer-Neustart geprüft.
 - Weiter offen: verschlüsselte Secrets für Entra/Graph/Ticketsysteme, umfassende Autorisierung der zukünftigen Datenendpunkte, DSGVO-Konzept und verpflichtender TLS-Reverse-Proxy.
 
-## HTTPS-Overlay und verschlüsselte Integration-Secrets (Phase 3)
+## NGINX-Standardproxy und verschlüsselte Integration-Secrets (Phase 3)
 
-- Der optionale `compose.secure.yaml`-Overlay entfernt mit `!override` die HTTP-Hostfreigabe, setzt Caddy HTTPS (`tls internal`), HSTS und `Secure`-Cookies ein.
+- NGINX startet immer per `compose.yaml`. Die `.env` aktiviert bei Bedarf HTTPS auf 443 mit eigenen Zertifikat-/Schlüsselpfaden. HTTP auf 80 leitet im HTTPS-Modus per 301 weiter; der interne Port 8080 wird nie am Host veröffentlicht.
 - Forwarded-Proto/For wird ausschließlich von der explizit hinterlegten Proxy-IP akzeptiert; andere HTTP-Aufrufe als die interne Loopback-Gesundheitsprüfung werden im sicheren Modus mit 426 abgelehnt.
 - AES-256-GCM-Secret-Vault mit 256-Bit-Masterkey in einer Host-Datei **außerhalb von PostgreSQL**. Nonce und Auth-Tag werden pro Secret gespeichert, AAD bindet Scope, Benutzer und Namen.
 - Secret-Listen zeigen nur Namen; gespeichert wird ausschließlich Ciphertext. User-Secrets sind durch die authentifizierte User-ID isoliert, globale Mutationen benötigen Adminrechte und CSRF.
 - Master-Key muss separat gesichert und bewusst rotiert werden. Bei verlorenem Schlüssel sind Geheimnisse nicht wiederherstellbar.
-- Eine eigene interne CA muss auf Clients als vertrauenswürdig installiert werden; Zertifikatsprüfung nicht deaktivieren.
+- Bei intern signierten Zertifikaten muss die ausstellende CA auf den Clients als vertrauenswürdig installiert werden; Zertifikatsprüfung niemals deaktivieren. Bei FQDN ist ein passender DNS-Eintrag erforderlich.
 - **Restarbeiten:** Schlüsselrotation, DataProtection-Keyring-at-rest, Security-Audit, Backup/Restore sowie TLS-Abnahme auf dem tatsächlichen Host.
 - Betriebsanleitung: [HTTPS_AND_VAULT.md](HTTPS_AND_VAULT.md).
+
+**Proxy-IP:** Nur die feste NGINX-IP `172.29.213.10` darf Forwarded Headers liefern. In HTTP- und HTTPS-Betrieb wird damit die echte Client-IP für Rate-Limits ermittelt. Sicherheitskonzept und Anleitung: [HTTPS_AND_VAULT.md](HTTPS_AND_VAULT.md).
