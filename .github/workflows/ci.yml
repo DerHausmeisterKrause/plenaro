@@ -33,6 +33,7 @@ jobs:
           POSTGRES_PASSWORD: ci-only-not-for-production
         run: |
           set -euo pipefail
+          mkdir -p secrets
           trap 'docker compose down -v --remove-orphans || true' EXIT
           docker compose up -d --build --wait --wait-timeout 180
           API=http://127.0.0.1
