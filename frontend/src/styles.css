@@ -319,3 +319,9 @@ h1,h2,h3,p { margin-top: 0; }
 .um-secret-row span { display: inline-flex; align-items: center; gap: 9px; overflow-wrap: anywhere; font-size: 12px; }
 .um-secret-row svg { color: var(--blue); flex-shrink: 0; }
 .um-secret-row button { padding: 7px 10px; }
+
+/* Phase 4: optional single-tenant Entra SSO, no workspace chrome on login. */
+.auth-divider { display: flex; align-items: center; gap: 12px; margin: 24px 0 16px; color: var(--muted); font-size: 12px; }
+.auth-divider::before,.auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.auth-entra { display: flex; justify-content: center; width: 100%; text-decoration: none; }
+.auth-card > .um-hint { margin-top: 12px; text-align: center; }

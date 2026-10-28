@@ -11,6 +11,9 @@ beforeEach(() => {
     if (path === '/api/v1/settings/global') return {
       ok: true, status: 200, json: async () => ({ instanceName: 'Plenaro', supportEmail: '', defaultWeekStart: 'monday' }),
     };
+    if (path === '/api/v1/auth/entra/status') return {
+      ok: true, status: 200, json: async () => ({ enabled: false, linked: false }),
+    };
     if (path === '/api/v1/auth/csrf') return {
       ok: true, status: 200, json: async () => ({ token: 'test-token' }),
     };
@@ -64,6 +67,18 @@ describe('Plenaro web shell', () => {
     expect(await screen.findByRole('heading', { name: 'Instanzeinstellungen' })).toBeTruthy();
     expect(screen.getByLabelText('Darstellung')).toBeTruthy();
     expect(screen.getByLabelText('Instanzname')).toBeTruthy();
+  });
+
+  it('versteckt Microsoft SSO wenn Entra nicht eingerichtet ist', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (path: string) =>
+      path === '/api/v1/auth/me' ? { ok: false, status: 401 } :
+      path === '/api/v1/setup/status' ? { ok: true, status: 200, json: async () => ({ required: false }) } :
+      path === '/api/v1/auth/entra/status' ? { ok: true, status: 200, json: async () => ({ enabled: false, linked: false }) } :
+      { ok: true, status: 200 },
+    ));
+    renderAt('/login');
+    expect(await screen.findByRole('heading', { name: 'Willkommen zurück.' })).toBeTruthy();
+    expect(screen.queryByText('Mit Microsoft anmelden')).toBeNull();
   });
 
   it('zeigt unbekannte URLs als Fehlerseite', async () => {

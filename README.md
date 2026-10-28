@@ -134,3 +134,9 @@ NGINX läuft **immer mit Docker Compose**. Über `PLENARO_HTTPS_ENABLED=false` (
 Der verschlüsselte Integrations-Vault nutzt bei Aktivierung eine separate Schlüsseldatei unter `./secrets/vault.key`. Sie muss separat gesichert werden.
 
 Siehe [NGINX, HTTPS und Secret-Vault](docs/HTTPS_AND_VAULT.md).
+
+## Microsoft Entra ID – optionaler Single-Tenant-SSO-Login (Phase 4)
+
+Neben dem lokalen Login kann die Microsoft-Anmeldung zugeschaltet werden, **nur bei HTTPS**. Per `.env` werden Tenant-ID und Client-ID hinterlegt; der Client-Secret-Wert bleibt ausschließlich in einer separaten, gemounteten Datei unter `secrets/`. Microsoft-Konten werden **nicht** automatisch angelegt oder per E-Mail zugeordnet: Benutzer melden sich zuerst lokal an und verknüpfen ihr bestehendes Konto unter Einstellungen mit ihrer Microsoft-Identität.
+
+Anleitung: [Microsoft Entra SSO](docs/ENTRA_SSO.md). Der CI-Test prüft den standardmäßig deaktivierten Zustand, ein vollständiger Authentifizierungs-Test mit einem echten Entra-Tenant ist noch offen. **Microsoft Graph/Outlook ist noch nicht implementiert.**
