@@ -31,3 +31,13 @@ async function update(path: string): Promise<void> {
 
 export const confirmEntraLink = () => update('/api/v1/auth/entra/link/confirm');
 export const unlinkEntra = () => update('/api/v1/auth/entra/unlink');
+
+export type PendingEntraIdentity = { account: string; tenantId: string };
+
+export async function pendingEntraIdentity(): Promise<PendingEntraIdentity> {
+  const result = await fetch('/api/v1/auth/entra/link/pending', {
+    credentials: 'same-origin', cache: 'no-store',
+  });
+  if (!result.ok) throw new Error('Microsoft-Verknüpfung abgelaufen. Bitte erneut beginnen.');
+  return await result.json() as PendingEntraIdentity;
+}
