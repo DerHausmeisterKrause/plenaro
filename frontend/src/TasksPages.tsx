@@ -150,7 +150,6 @@ export function TasksPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [refresh, setRefresh] = useState(0);
 
   const load = useCallback(async () => {
     const result = await listTasks(query, filter);
@@ -164,7 +163,7 @@ export function TasksPage() {
     void listTasks(query, filter).then(result => { if (active) { setTasks(result); setLoading(false); } })
       .catch(reason => { if (active) { setError(reason instanceof Error ? reason.message : 'Aufgaben nicht erreichbar.'); setLoading(false); } });
     return () => { active = false; };
-  }, [query, filter, refresh]);
+  }, [query, filter]);
 
   async function save(value: TaskInput) {
     if (busy) return;
