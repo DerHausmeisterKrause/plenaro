@@ -11,6 +11,9 @@ beforeEach(() => {
     if (path === '/api/v1/settings/global') return {
       ok: true, status: 200, json: async () => ({ instanceName: 'Plenaro', supportEmail: '', defaultWeekStart: 'monday' }),
     };
+    if (path.startsWith('/api/v1/tasks/')) return {
+      ok: true, status: 200, json: async () => ([]),
+    };
     if (path === '/api/v1/graph/status') return {
       ok: true, status: 200, json: async () => ({
         enabled: false, linked: false, vaultReady: false, connected: false,
@@ -90,6 +93,21 @@ describe('Plenaro web shell', () => {
     renderAt('/week');
     expect(await screen.findByRole('heading', { name: 'Microsoft Graph ist noch nicht eingerichtet' })).toBeTruthy();
     expect(screen.queryByText('Outlook verbinden')).toBeNull();
+  });
+
+  it('zeigt die neue Aufgabenansicht ohne Beispielaufgaben', async () => {
+    renderAt('/tasks');
+    expect(await screen.findByRole('heading', { name: 'Aufgaben' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Keine Aufgaben gefunden' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Neue Aufgabe' }));
+    expect(await screen.findByLabelText('Titel')).toBeTruthy();
+  });
+
+  it('zeigt die Heute-Ansicht ohne Aufgaben verständlich an', async () => {
+    renderAt('/today');
+    expect(await screen.findByRole('heading', { name: 'Heute' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Aktuell' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Erledigt' })).toBeTruthy();
   });
 
   it('zeigt unbekannte URLs als Fehlerseite', async () => {
