@@ -16,7 +16,7 @@ Kopiere den ausgegebenen Code in den Assistenten. Er ist **15 Minuten gültig** 
 
 Nach erfolgreicher Einrichtung erscheint unter `/login` **nur die Loginmaske**, ohne Seitenleiste oder sonstige App-Navigation.
 
-**Wichtig:** HTTP im LAN ist unverschlüsselt. Vor Eingabe echter Passwörter einen HTTPS-Reverse-Proxy mit gültigem Zertifikat nutzen; keine WAN-Portweiterleitungen!
+**HTTPS ist inzwischen als optionaler Docker-Overlay vorbereitet:** siehe [HTTPS und Secret-Vault](docs/HTTPS_AND_VAULT.md). HTTP im LAN ist unverschlüsselt. Vor Eingabe echter Passwörter einen HTTPS-Reverse-Proxy mit gültigem Zertifikat nutzen; keine WAN-Portweiterleitungen!
 
 ## Schnellstart (Docker Compose)
 
@@ -129,3 +129,9 @@ Unter **Einstellungen** kann jeder angemeldete Benutzer sein Hell-/Dunkel-Design
 - Änderungen verlangen einen CSRF-Token; die Datenbankmigration `0006_user_preferences.sql` wird beim Containerstart automatisch ausgeführt.
 
 Der Wochenbeginn dient als vorbereitete Einstellung für die spätere Planung, eine Kalenderansicht nutzt ihn noch nicht. **Keine Passwörter, Graph-Tokens, API-Schlüssel oder andere Secrets in die Einstellungen eingeben!** Deren Verschlüsselung und sichere Speicherung erfolgen als gesonderter Schritt. Betrieb mit echten Konten nur über HTTPS.
+
+## Optionaler sicherer LAN-Betrieb (HTTPS + Secret-Vault)
+
+Mit `compose.secure.yaml` und Caddy lässt sich der Host-Port von HTTP auf HTTPS umstellen. Dazu muss zunächst das **externe Secret-Master-Keyfile** erzeugt und geschützt sowie die lokale Zertifizierungsstelle auf den eigenen Geräten als vertrauenswürdig installiert werden. Ein normaler `docker compose up` aktiviert diesen Modus bewusst **nicht automatisch**.
+
+Die Anleitung mit vollständigen Befehlen und Sicherheitsgrenzen steht unter [HTTPS und Secret-Vault](docs/HTTPS_AND_VAULT.md).

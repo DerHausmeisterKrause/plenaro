@@ -97,3 +97,13 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 
 ## CI-Strategie
 - [x] Ein GitHub-Actions-Workflow nur für PRs und manuell, mit Build und einem Docker-Smoke-Test (statt redundanter Testschritte/Läufe)
+
+## Sicherheitsgrundlage für Phasen 3/4 – Stand dieses Schritts
+
+- [x] Optionaler Caddy-LAN-HTTPS-Overlay mit Host-Port nur 443, interner CA und explizitem KnownProxy
+- [x] `Secure`-Cookies, HTTPS-Pflicht im sicheren Modus, interne HTTP-Health-Ausnahme
+- [x] Verschlüsselter Secret-Vault mit PostgreSQL-Migration 0007, externem Masterkey, User-/Admin-Scopes und CSRF
+- [x] Verwaltung der Secret-Namen, Erstellung/Aktualisierung/Löschung im Web (ohne Klartextabruf)
+- [ ] LAN-HTTPS und Zertifikatvertrauen auf dem Zielhost manuell abnehmen
+- [ ] Master-Key-Rotation, verschlüsselter DataProtection-Keyring und Secret-Recovery-Konzept
+- [ ] Vollständige Phase-3-Sicherheitsprüfung inklusive Backup-Restore und Bedrohungsmodell

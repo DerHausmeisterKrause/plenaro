@@ -1,0 +1,46 @@
+# Optional production-style LAN HTTPS & vault overlay.
+# Requires Docker Compose >= 2.24.4 (!override) and a local key file:
+# secrets/vault.key (64 hex chars; only accessible to container UID 1654).
+services:
+  web:
+    ports: !override []
+    environment:
+      Security__RequireHttps: "true"
+      Security__TrustedProxyIp: "172.29.213.10"
+      PLENARO_VAULT_KEY_FILE: /run/secrets/plenaro_vault_key
+    secrets:
+      - plenaro_vault_key
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "${PLENARO_HTTPS_BIND_IP:-0.0.0.0}:443:443"
+    environment:
+      PLENARO_HTTPS_HOST: ${PLENARO_HTTPS_HOST:-plenaro.home.arpa}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      edge:
+        ipv4_address: 172.29.213.10
+    security_opt:
+      - no-new-privileges:true
+
+secrets:
+  plenaro_vault_key:
+    file: ./secrets/vault.key
+
+networks:
+  edge:
+    ipam:
+      config:
+        - subnet: 172.29.213.0/24
+
+volumes:
+  caddy_data:
+  caddy_config:

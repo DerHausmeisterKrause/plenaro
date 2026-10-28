@@ -65,3 +65,14 @@
 - JSON-Payloads sind auf wenige typisierte Felder und begrenzte Werte beschränkt; **keine sensiblen Secrets** in `system_settings` oder `user_preferences` speichern.
 - Kontentrennung wird im Docker-Smoke-Test mit zwei echten Konten geprüft: normale Benutzer sehen ihre eigenen Einstellungen; globale Änderungen liefern 403. Persistenz wird nach Webcontainer-Neustart geprüft.
 - Weiter offen: verschlüsselte Secrets für Entra/Graph/Ticketsysteme, umfassende Autorisierung der zukünftigen Datenendpunkte, DSGVO-Konzept und verpflichtender TLS-Reverse-Proxy.
+
+## HTTPS-Overlay und verschlüsselte Integration-Secrets (Phase 3)
+
+- Der optionale `compose.secure.yaml`-Overlay entfernt mit `!override` die HTTP-Hostfreigabe, setzt Caddy HTTPS (`tls internal`), HSTS und `Secure`-Cookies ein.
+- Forwarded-Proto/For wird ausschließlich von der explizit hinterlegten Proxy-IP akzeptiert; andere HTTP-Aufrufe als die interne Loopback-Gesundheitsprüfung werden im sicheren Modus mit 426 abgelehnt.
+- AES-256-GCM-Secret-Vault mit 256-Bit-Masterkey in einer Host-Datei **außerhalb von PostgreSQL**. Nonce und Auth-Tag werden pro Secret gespeichert, AAD bindet Scope, Benutzer und Namen.
+- Secret-Listen zeigen nur Namen; gespeichert wird ausschließlich Ciphertext. User-Secrets sind durch die authentifizierte User-ID isoliert, globale Mutationen benötigen Adminrechte und CSRF.
+- Master-Key muss separat gesichert und bewusst rotiert werden. Bei verlorenem Schlüssel sind Geheimnisse nicht wiederherstellbar.
+- Eine eigene interne CA muss auf Clients als vertrauenswürdig installiert werden; Zertifikatsprüfung nicht deaktivieren.
+- **Restarbeiten:** Schlüsselrotation, DataProtection-Keyring-at-rest, Security-Audit, Backup/Restore sowie TLS-Abnahme auf dem tatsächlichen Host.
+- Betriebsanleitung: [HTTPS_AND_VAULT.md](HTTPS_AND_VAULT.md).
