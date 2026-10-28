@@ -80,6 +80,24 @@ public static class EntraEndpoints
             return Results.Challenge(properties, authenticationSchemes: [EntraConfiguration.Scheme]);
         }).RequireAuthorization().RequireRateLimiting("login");
 
+        api.MapGet("/link/pending", async (HttpContext context, EntraConfiguration config,
+            UserManager<ApplicationUser> users) =>
+        {
+            if (!config.Enabled) return Results.NotFound();
+            var local = await users.GetUserAsync(context.User);
+            if (local is null || local.IsDisabled) return Results.Unauthorized();
+            var external = await context.AuthenticateAsync(IdentityConstants.ExternalScheme);
+            if (!external.Succeeded || external.Principal is null ||
+                external.Properties?.Items.TryGetValue("linkUserId", out var initiatingUserId) != true ||
+                initiatingUserId != local.Id.ToString("D") ||
+                !TryExternalKey(external.Principal, config, out _))
+                return Results.BadRequest(new { error = "Verknüpfung abgelaufen. Bitte erneut starten." });
+
+            var account = external.Principal.FindFirst("preferred_username")?.Value ??
+                external.Principal.FindFirst("name")?.Value ?? "Microsoft-Konto";
+            return Results.Ok(new { account, tenantId = config.TenantId });
+        }).RequireAuthorization();
+
         api.MapPost("/link/confirm", async (HttpContext context, IAntiforgery antiforgery,
             EntraConfiguration config, UserManager<ApplicationUser> users) =>
         {
