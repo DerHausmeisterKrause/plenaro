@@ -2,7 +2,7 @@
 
 **Self-hosted Aufgaben-, Zeit- und ITSM-Plattform.** Dieses Repository ist der neue, plattformunabhängige Web-Nachfolger von [Plenaro Desktop / project_tool](https://github.com/DerHausmeisterKrause/project_tool).
 
-> **Entwicklungsstand:** Phase 3 – Responsive Weboberfläche mit React/TypeScript, ASP.NET-Core-Backend und PostgreSQL. Die Navigation ist nutzbar, aber **noch keine produktiven Aufgaben, Tickets oder Benutzerverwaltung**. Nur in einem vertrauenswürdigen LAN verwenden; nicht ins Internet freigeben.
+> **Entwicklungsstand:** Phase 3 – Responsive Weboberfläche mit React/TypeScript, ASP.NET-Core-Backend und PostgreSQL. Die Navigation ist nutzbar, aber **noch keine produktiven Aufgaben oder Tickets**. Nur in einem vertrauenswürdigen LAN verwenden; nicht ins Internet freigeben.
 
 ## Lokale Benutzeranmeldung und einmaliger Administrator
 
@@ -109,3 +109,12 @@ Die sieben Phasen, die erledigten Teilaufgaben und die Abnahmekriterien stehen i
 ## CI
 
 Ein einziger GitHub-Actions-Workflow startet **nur für Pull Requests oder manuell**. Er führt einen Build mit den vorhandenen Frontendtests und einen kompakten Docker-Smoke-Test mit Admin-Einrichtung und Login aus. Kein zusätzlicher Lauf beim Merge nach `main`.
+
+
+## Benutzerverwaltung
+
+Nach Anmeldung als Administrator unter **Einstellungen** Benutzer anlegen, Anzeigenamen bearbeiten, Rollen Admin/User vergeben und Konten sperren/entsperren. Admins können Passwörter zurücksetzen; alle Benutzer ihr eigenes Passwort ändern. Benutzer können nicht gelöscht werden, um spätere Besitzerbezüge zu erhalten. Der eigene Administratoraccount kann nicht deaktiviert oder herabgestuft werden.
+
+**Vor echten Passwort-Eingaben HTTPS einrichten!** Über die Host-IP mit HTTP sind Zugangsdaten unverschlüsselt.
+
+API: \`GET/POST /api/v1/admin/users/\`, \`PUT /api/v1/admin/users/{id}\`, \`POST /api/v1/admin/users/{id}/reset-password\`, \`POST /api/v1/auth/change-password\`. Alle Mutationen mit CSRF, Admin-Funktionen serverseitig rollenbeschränkt.

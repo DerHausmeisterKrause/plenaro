@@ -39,10 +39,10 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [x] Versioniertes PostgreSQL-Basisschema für Aufgaben, Segmente und Zeiten (Vorarbeit aus Phase 1)
 - [x] ASP.NET-Identity-Schema/Versionierung für Nutzer, Rollen und Sessions (inkl. Eigentümer-FKs)
 - [x] Einmalige Ersteinrichtung: automatischer Browser-Assistent mit hostseitig erzeugtem Einmalcode (15 Minuten), gesicherter Admin-Erstellung und serverseitiger Sperre nach Installation
-- [ ] Lokale Benutzer anlegen, sperren, Kennwort wechseln/resetten
+- [x] Adminoberfläche: lokale Benutzer anlegen, Anzeigename ändern, sperren/entsperren, Kennwort ändern/resetten
 - [x] Identity-Passworthashes, Cookie-Sessions, CSRF, Login-Rate-Limit/Lockout und grundlegende API-Autorisierung
-- [x] Rollenbasis Admin/User und serverseitiger Admin-Testendpunkt; vollständige Rollenverwaltung noch offen
-- [ ] Pro-User-Datentrennung, Einstellungs-/Secret-API und umfassende Rechteprüfung zukünftiger Fachendpunkte
+- [x] Admin/User-Rollenverwaltung mit serverseitiger RBAC-Prüfung und Schutz des letzten aktiven Admins
+- [ ] Per-User-Secret-/Einstellungs-API, fachliche Datentrennung und Rechteprüfung künftiger Datenendpunkte
 - [x] CI-Integrationstests: Admin-Bootstrap, Login/Logout, CSRF, Zugriffscheck und Session-Neustart
 
 **Abnahme:** Zwei Nutzer sehen ohne ausdrückliche Freigabe nicht gegenseitig Daten.

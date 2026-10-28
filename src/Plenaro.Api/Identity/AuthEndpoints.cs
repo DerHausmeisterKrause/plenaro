@@ -57,6 +57,7 @@ public static class AuthEndpoints
                 return Results.Unauthorized();
             }
 
+            if (user.IsDisabled) return Results.Unauthorized();
             var result = await signIn.PasswordSignInAsync(user, request.Password, isPersistent: false, lockoutOnFailure: true);
             return result.Succeeded ? Results.NoContent() : Results.Unauthorized();
         }).RequireRateLimiting("login");
@@ -66,7 +67,7 @@ public static class AuthEndpoints
             UserManager<ApplicationUser> users) =>
         {
             var user = await users.GetUserAsync(principal);
-            if (user is null) return Results.Unauthorized();
+            if (user is null || user.IsDisabled) return Results.Unauthorized();
             var roles = await users.GetRolesAsync(user);
             return Results.Ok(new
             {
@@ -83,6 +84,25 @@ public static class AuthEndpoints
             if (!await CsrfIsValid(context, antiforgery))
                 return Results.BadRequest(new { error = "Ungültiger Sicherheitstoken." });
             await signIn.SignOutAsync();
+            return Results.NoContent();
+        }).RequireAuthorization();
+
+        group.MapPost("/change-password", async (ChangePasswordRequest request,
+            HttpContext context, IAntiforgery antiforgery,
+            System.Security.Claims.ClaimsPrincipal principal, UserManager<ApplicationUser> users,
+            SignInManager<ApplicationUser> signIn) =>
+        {
+            if (!await CsrfIsValid(context, antiforgery))
+                return Results.BadRequest(new { error = "Ungültiger Sicherheitstoken." });
+            var user = await users.GetUserAsync(principal);
+            if (user is null || user.IsDisabled) return Results.Unauthorized();
+            if (string.IsNullOrEmpty(request.CurrentPassword) ||
+                request.NewPassword is not { Length: >= 12 and <= 1024 })
+                return Results.BadRequest(new { error = "Ungültige Passworteingabe." });
+            var result = await users.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+            if (!result.Succeeded)
+                return Results.BadRequest(new { error = string.Join(" ", result.Errors.Select(e => e.Description)) });
+            await signIn.RefreshSignInAsync(user);
             return Results.NoContent();
         }).RequireAuthorization();
 
@@ -105,4 +125,5 @@ public static class AuthEndpoints
     }
 
     private sealed record LoginRequest(string Email, string Password);
+    private sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 }

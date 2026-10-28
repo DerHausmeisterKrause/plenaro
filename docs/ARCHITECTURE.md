@@ -69,3 +69,8 @@ Eine WPF-XAML-Oberfläche kann nicht direkt im Browser ausgeführt werden. Outlo
 - Die React-App fragt `/api/v1/setup/status` ab und schaltet bei fehlenden Benutzern ausschließlich den Setup-Assistenten frei. Login und Assistent sind unabhängig von der Workspace-Shell.
 - Der Administrator wird im Browser angelegt, jedoch nur mit einem vom Host erzeugten, einmaligen Code. Nach Erstellung ist das Setup serverseitig gesperrt.
 - GitHub Actions: ein PR-only Workflow mit Build und kleinem Docker-Smoke-Test.
+
+
+## Benutzerverwaltung (Phase 3)
+
+Migration \`0005_user_management.sql\` ergänzt das administrative Deaktivierungsflag \`AspNetUsers.IsDisabled\`. Rollen- und Statusänderungen laufen transaktional unter Advisory Lock, um parallel ausgeführte Änderungen des letzten aktiven Admins zu verhindern. Cookies werden per Security-Stamp-Rotation widerrufen. Alle Admin-User-Endpunkte verlangen serverseitige Rolle Admin und CSRF für Schreibzugriffe. Eigenes Passwort kann über \`/api/v1/auth/change-password\` geändert werden. Keine Benutzerlöschung, keine fachlichen CRUD-Endpunkte.

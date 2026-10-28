@@ -44,7 +44,7 @@ describe('Plenaro web shell', () => {
 
   it('bietet den Dunkelmodus mit umschaltbarem Zustand', async () => {
     renderAt('/settings');
-    const themeButton = await screen.findByRole('button', { name: /Design wechseln/i });
+    const themeButton = await screen.findByRole('button', { name: /Dunkelmodus aktivieren/i });
     fireEvent.click(themeButton);
     expect(document.documentElement.dataset.theme).toBe('dark');
   });
