@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           mkdir -p secrets
           trap 'docker compose down -v --remove-orphans || true' EXIT
-          docker compose up -d --build --wait --wait-timeout 180
+          docker compose up -d --build --wait --wait-timeout 180 || { docker compose logs --no-color --tail=120 web database; exit 1; }
           API=http://127.0.0.1
           curl -fsS "$API/health/ready" | grep -q '"schema":"current"'
           curl -fsS "$API/api/v1/setup/status" | grep -q '"required":true'
