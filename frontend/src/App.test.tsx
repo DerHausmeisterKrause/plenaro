@@ -4,7 +4,15 @@ import { MemoryRouter } from 'react-router-dom';
 import { AppContent } from './App';
 
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true })));
+  vi.stubGlobal('fetch', vi.fn(async (path: string) => {
+    if (path === '/api/v1/auth/me') return {
+      ok: true, status: 200, json: async () => ({
+        id: '00000000-0000-0000-0000-000000000001',
+        email: 'test@example.invalid', name: 'Test', roles: ['Admin'],
+      }),
+    };
+    return { ok: true, status: 200 };
+  }));
   window.localStorage.clear();
 });
 afterEach(() => {
@@ -19,21 +27,21 @@ function renderAt(path: string) {
 describe('Plenaro web shell', () => {
   it('zeigt die Übersicht und prüft beide Health-Endpunkte', async () => {
     renderAt('/');
-    expect(screen.getByRole('heading', { name: /Willkommen bei Plenaro/i })).toBeTruthy();
-    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole('heading', { name: /Willkommen bei Plenaro/i })).toBeTruthy();
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3));
     expect(vi.mocked(fetch)).toHaveBeenCalledWith('/health/live', expect.any(Object));
     expect(vi.mocked(fetch)).toHaveBeenCalledWith('/health/ready', expect.any(Object));
   });
 
-  it('navigiert in einen Modul-Platzhalter und meldet keine erfundenen Daten', () => {
+  it('navigiert in einen Modul-Platzhalter und meldet keine erfundenen Daten', async () => {
     renderAt('/tickets');
-    expect(screen.getByRole('heading', { name: /Dieser Bereich wird aufgebaut/i })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: /Dieser Bereich wird aufgebaut/i })).toBeTruthy();
     expect(screen.getByText(/Geplant für Phase 6/)).toBeTruthy();
   });
 
-  it('bietet den Dunkelmodus mit umschaltbarem Zustand', () => {
+  it('bietet den Dunkelmodus mit umschaltbarem Zustand', async () => {
     renderAt('/settings');
-    const themeButton = screen.getByRole('button', { name: /Design wechseln/i });
+    const themeButton = await screen.findByRole('button', { name: /Design wechseln/i });
     fireEvent.click(themeButton);
     expect(document.documentElement.dataset.theme).toBe('dark');
   });
@@ -43,8 +51,17 @@ describe('Plenaro web shell', () => {
     expect(screen.getByRole('heading', { name: 'Seite nicht gefunden.' })).toBeTruthy();
   });
 
-  it('verspricht keine bereits verfügbare Authentifizierung', () => {
+  it('zeigt die Login-Maske', async () => {
     renderAt('/login');
-    expect(screen.getByRole('heading', { name: 'Anmeldung folgt.' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Willkommen zurück.' })).toBeTruthy();
+    expect(await screen.findByLabelText('E-Mail-Adresse')).toBeTruthy();
+  });
+
+  it('sperrt private Seiten ohne gültige Sitzung', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (path: string) =>
+      path === '/api/v1/auth/me' ? { ok: false, status: 401 } : { ok: true, status: 200 },
+    ));
+    renderAt('/tasks');
+    expect(await screen.findByRole('heading', { name: 'Willkommen zurück.' })).toBeTruthy();
   });
 });

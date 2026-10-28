@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   Activity, ArrowRight, ArrowUpRight, CalendarCheck2, CheckCircle2,
   ChevronRight, CircleAlert, Database, ExternalLink,

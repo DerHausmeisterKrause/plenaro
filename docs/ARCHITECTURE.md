@@ -52,3 +52,12 @@ Eine WPF-XAML-Oberfläche kann nicht direkt im Browser ausgeführt werden. Outlo
 - Basistabellen `tasks`, `task_segments`, `time_entries`, `system_settings` ohne Demo- oder Produktivdaten.
 - `owner_user_id` ist UUID und derzeit ohne User-FK: **ASP.NET Identity und die User-FK folgen als eigener Schritt**. Noch keine Schreib-API freischalten.
 - Details: [DATABASE.md](DATABASE.md).
+
+
+## Authentifizierung (Phase 3)
+
+- `0003_identity.sql` ergänzt Identity-Tabellen, Rollen, Claims, Logins, Token, `DataProtectionKeys` und Owner-Fremdschlüssel.
+- EF-Core `PlenaroIdentityDbContext` implementiert den ASP.NET-Identity-Store, Session-Cookie-Keys werden in PostgreSQL persistiert.
+- Einmaliges Admin-Bootstrap per `docker compose exec web dotnet Plenaro.Api.dll --bootstrap-admin`.
+- Endpunkte: `GET /api/v1/auth/csrf`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`, `POST /api/v1/auth/logout`, `GET /api/v1/admin/ping`.
+- Fachliche CRUD-Endpunkte dürfen erst mit geeigneter Autorisierung, Ownership-Prüfung und Rollenfreigabe online gehen.

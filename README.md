@@ -2,7 +2,19 @@
 
 **Self-hosted Aufgaben-, Zeit- und ITSM-Plattform.** Dieses Repository ist der neue, plattformunabhängige Web-Nachfolger von [Plenaro Desktop / project_tool](https://github.com/DerHausmeisterKrause/project_tool).
 
-> **Entwicklungsstand:** Phase 2 – Responsive Weboberfläche mit React/TypeScript, ASP.NET-Core-Backend und PostgreSQL. Die Navigation ist nutzbar, aber **noch keine Benutzeranmeldung und keine produktiven Aufgaben, Tickets oder Benutzer-Daten**. Nur in einem vertrauenswürdigen LAN verwenden; nicht ins Internet freigeben.
+> **Entwicklungsstand:** Phase 2 – Responsive Weboberfläche mit React/TypeScript, ASP.NET-Core-Backend und PostgreSQL. Die Navigation ist nutzbar, aber **noch keine produktiven Aufgaben, Tickets oder Benutzerverwaltung**. Nur in einem vertrauenswürdigen LAN verwenden; nicht ins Internet freigeben.
+
+## Lokale Benutzeranmeldung und einmaliger Administrator
+
+Nach dem Update von `main` den ersten Admin **einmalig direkt auf dem Docker-Host** anlegen:
+
+```bash
+docker compose exec web dotnet Plenaro.Api.dll --bootstrap-admin
+```
+
+Der interaktive Befehl verlangt Admin-E-Mail, Anzeigename und Passwort (zweimal). Keine Kennwörter in Shell-Argumente, Konfigurationsdateien oder Git eintragen. Sobald mindestens ein Nutzer existiert, kann der Bootstrap nicht wiederholt werden. **Es gibt bewusst keinen öffentlichen Admin-Setup-Endpunkt.**
+
+Anschließend unter `http://HOST-IP:8080/login` anmelden. **Aber:** HTTP im LAN ist unverschlüsselt. Bevor du echte Passwörter verwendest, richte einen HTTPS-Reverse-Proxy mit gültigem Zertifikat ein; keine WAN-Portweiterleitungen!
 
 ## Schnellstart (Docker Compose)
 
@@ -77,7 +89,7 @@ Für `/health/ready` ist die Umgebungsvariable `ConnectionStrings__Plenaro` mit 
 - Backend: ASP.NET Core (.NET 10, C#), versionierte API wird in den nächsten Phasen aufgebaut.
 - Persistenz: PostgreSQL mit persistentem Docker-Volume und versionierten, transaktionalen SQL-Migrationen. Basistabellen: Aufgaben, Segmente, Zeitbuchungen, globale Einstellungen. Benutzer/Identity kommen als nächster Schritt. Details unter [Datenbankschema](docs/DATABASE.md).
 - Web: React 19 + TypeScript + Vite 8, vom ASP.NET-Core-Webserver als statische SPA ausgeliefert. Responsive Navigation, Dunkelmodus, Live-Status und Modul-Platzhalter für die noch nicht vorhandenen Funktionen.
-- Authentifizierung: später lokaler Admin und lokale Accounts, rollenbasierte Berechtigungen, optional Microsoft Entra ID (OIDC).
+- Authentifizierung: lokale ASP.NET-Identity-Anmeldung mit einmaligem Administrator, serverseitiger Adminrolle, CSRF-geschütztem Login/Logout, Cookie-Sitzung und Login-Rate-Limits. Verwaltung und Entra folgen.
 - Outlook: Microsoft Graph / Entra statt Windows-COM-Interop.
 - Ticketsysteme: Znuny/OTRS als erster Adapter; Adapter-Schnittstelle für weitere Systeme.
 - Der Datenbestand und die Desktop-Logik werden **gezielt migriert**, nicht unbesehen kopiert.

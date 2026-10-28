@@ -21,3 +21,16 @@
 - Versionierte SQL-Basismigrationen sind umgesetzt. Automatisierte **Backups und Restore-Tests**, Ausfall- und Updatekonzept sind weiterhin offen.
 - Secret-Rotation, Protokollierung ohne Tokens, Security-Tests, Dependency-Audits.
 - DSGVO-Rollen, Export/Löschung, Aufbewahrung, Löschkonzept bei Mehrbenutzerbetrieb.
+
+
+## Erste lokale Identity-Authentifizierung (Phase 3)
+
+- ASP.NET Identity mit gehashten Passwörtern (mindestens 12 Zeichen, Groß/Klein, Ziffer, Sonderzeichen).
+- Nach fünf fehlgeschlagenen Passwortversuchen 15 Minuten Kontosperre, zusätzlich Login-IP-Rate-Limit.
+- Cookie: HttpOnly, SameSite=Strict, acht Stunden Sliding Expiration. Secure bei HTTPS.
+- Login/Logout erfordern Antiforgery-Token im HTTP-Header `X-CSRF-TOKEN` plus CSRF-Cookie.
+- Adminrolle wird bei `/api/v1/admin/ping` serverseitig überprüft; ohne Login liefern private APIs 401.
+- Erstinstallation ausschließlich per interaktivem Container-CLI (Advisory Lock, Datenbanktransaktion), kein anonymer Netzwerk-Setup-Endpunkt.
+- DataProtection-Schlüssel liegen in PostgreSQL, Sessions überleben normale Webcontainer-Neustarts.
+
+**Weiterhin kritisch:** Die Host-IP nutzt standardmäßig HTTP. Dabei sind Login-Daten unverschlüsselt. Echte Konten erst über HTTPS; keine Internetfreigabe. Der DB-Keyring ist noch nicht gesondert verschlüsselt, und eine umfassende Prüfung aller zukünftigen Daten-APIs steht aus.

@@ -1,5 +1,13 @@
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Plenaro.Api.Database;
+using Plenaro.Api.Identity;
 
 if (args.Contains("--healthcheck", StringComparer.Ordinal))
 {
@@ -9,38 +17,117 @@ if (args.Contains("--healthcheck", StringComparer.Ordinal))
         using var response = await client.GetAsync("http://127.0.0.1:8080/health/ready");
         Environment.ExitCode = response.IsSuccessStatusCode ? 0 : 1;
     }
-    catch (HttpRequestException)
-    {
-        Environment.ExitCode = 1;
-    }
-    catch (TaskCanceledException)
-    {
-        Environment.ExitCode = 1;
-    }
-
+    catch (HttpRequestException) { Environment.ExitCode = 1; }
+    catch (TaskCanceledException) { Environment.ExitCode = 1; }
     return;
 }
 
-var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddSingleton<SchemaMigrator>();
-var app = builder.Build();
+var bootstrapAdmin = args.Contains("--bootstrap-admin", StringComparer.Ordinal);
+var builder = WebApplication.CreateBuilder(
+    args.Where(a => !string.Equals(a, "--bootstrap-admin", StringComparison.Ordinal)).ToArray());
 
-var connectionString = app.Configuration.GetConnectionString("Plenaro");
+var connectionString = builder.Configuration.GetConnectionString("Plenaro");
 if (string.IsNullOrWhiteSpace(connectionString))
-    throw new InvalidOperationException("ConnectionStrings:Plenaro is required for database migrations.");
+    throw new InvalidOperationException("ConnectionStrings:Plenaro is required.");
 
+builder.Services.AddSingleton<SchemaMigrator>();
+builder.Services.AddDbContext<PlenaroIdentityDbContext>(options => options.UseNpgsql(connectionString));
+
+builder.Services.AddDataProtection()
+    .SetApplicationName("Plenaro.Web")
+    .PersistKeysToDbContext<PlenaroIdentityDbContext>();
+
+builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
+{
+    options.User.RequireUniqueEmail = true;
+    options.Password.RequiredLength = 12;
+    options.Password.RequireDigit = true;
+    options.Password.RequireLowercase = true;
+    options.Password.RequireUppercase = true;
+    options.Password.RequireNonAlphanumeric = true;
+    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+    options.Lockout.MaxFailedAccessAttempts = 5;
+    options.Lockout.AllowedForNewUsers = true;
+})
+.AddEntityFrameworkStores<PlenaroIdentityDbContext>()
+.AddDefaultTokenProviders();
+
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Cookie.Name = "Plenaro.Session";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    // HTTPS sets Secure. For the existing HTTP-only development LAN the cookie works
+    // without Secure; do not use that deployment mode outside a trusted lab network.
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.Cookie.IsEssential = true;
+    options.ExpireTimeSpan = TimeSpan.FromHours(8);
+    options.SlidingExpiration = true;
+    options.LoginPath = "/login";
+    options.Events.OnRedirectToLogin = context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return Task.CompletedTask;
+    };
+    options.Events.OnRedirectToAccessDenied = context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return Task.CompletedTask;
+    };
+});
+
+builder.Services.Configure<SecurityStampValidatorOptions>(options =>
+    options.ValidationInterval = TimeSpan.FromMinutes(2));
+
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("AdminOnly", policy => policy.RequireAuthenticatedUser().RequireRole("Admin"));
+
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-CSRF-TOKEN";
+    options.Cookie.Name = "Plenaro.Antiforgery";
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 8,
+            Window = TimeSpan.FromMinutes(5),
+            QueueLimit = 0,
+            AutoReplenishment = true,
+        }));
+});
+
+var app = builder.Build();
 var migrator = app.Services.GetRequiredService<SchemaMigrator>();
-// Fail closed: the app will not start if the schema is missing, corrupt or newer than the code.
 await migrator.ApplyPendingAsync(connectionString, app.Logger, app.Lifetime.ApplicationStopping);
+
+if (bootstrapAdmin)
+{
+    Environment.ExitCode = await AdminBootstrap.RunAsync(
+        app.Services, connectionString, Console.In, Console.Out);
+    return;
+}
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
+app.UseRouting();
+app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapGet("/health/live", () => Results.Ok(new
 {
     status = "ok",
     service = "plenaro-web",
-    phase = 2
+    phase = 3
 }));
 
 app.MapGet("/health/ready", async (
@@ -58,15 +145,16 @@ app.MapGet("/health/ready", async (
     }
     catch (NpgsqlException ex)
     {
-        logger.LogWarning("PostgreSQL readiness check failed: {SqlState}", ex.SqlState);
+        logger.LogWarning("PostgreSQL readiness failed: {SqlState}", ex.SqlState);
         return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
     }
     catch (TimeoutException)
     {
-        logger.LogWarning("PostgreSQL readiness check timed out");
+        logger.LogWarning("PostgreSQL readiness timed out");
         return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
     }
 });
 
+app.MapPlenaroAuth();
 app.MapFallbackToFile("index.html");
 app.Run();

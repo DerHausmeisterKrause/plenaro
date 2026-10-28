@@ -48,3 +48,8 @@ docker compose exec -T database pg_dump -U plenaro -d plenaro -Fc > plenaro-back
 ```
 
 Diese Erstimplementierung enthält noch keinen automatisierten Backup-/Restore-Dienst.
+
+
+## Identity-Schema
+
+Migration `0003_identity.sql` legt ASP.NET-Identity-Benutzer und Rollen, Claims, UserLogins/Tokens und einen persistenten `DataProtectionKeys`-Speicher an. Eigentümer-UUIDs in Aufgaben, Segmenten und Zeiteinträgen erhalten echte Fremdschlüssel auf Identity-Benutzer. Keine Default-Anmeldekonten. Der erste Admin wird einmalig direkt im Docker-Container per interaktiver CLI angelegt. Die Datenschlüssel im DB-Backup besonders schützen.

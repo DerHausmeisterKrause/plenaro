@@ -29,20 +29,20 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [x] Öffentliche Startseite mit Live-Status und Lade-/Fehlerzuständen
 - [x] Responsive Mobile/Desktop-Darstellung und Hell-/Dunkelmodus
 - [x] UI-Komponententests und HTTP-Smoke-Tests
-- [ ] Geschützte Ansichten erst mit Phase 3 (Admin/Login/RBAC)
+- [x] Geschützte Placeholder-Ansichten mit Sessionprüfung und lokale Login-/Logout-Seiten
 - [ ] E2E-Browserprüfung und Accessibility-Audit
 
 **Abnahme:** Navigierbare Weboberfläche, geschützte Bereiche ohne Session nicht erreichbar.
 
 ## Phase 3 – Benutzer, Admin & Rechte
 - [x] Versioniertes PostgreSQL-Basisschema für Aufgaben, Segmente und Zeiten (Vorarbeit aus Phase 1)
-- [ ] ASP.NET-Identity-Schema/Versionierung für Nutzer, Rollen und Sessions (inkl. Eigentümer-FKs)
-- [ ] Ersteinrichtung mit lokalem Admin
+- [x] ASP.NET-Identity-Schema/Versionierung für Nutzer, Rollen und Sessions (inkl. Eigentümer-FKs)
+- [x] Einmalige Ersteinrichtung des lokalen Admin ausschließlich per Containerkonsole
 - [ ] Lokale Benutzer anlegen, sperren, Kennwort wechseln/resetten
-- [ ] Passwort-Hashing, Session-Cookies und sichere API-Autorisierung
-- [ ] Rollen: Admin / User; später erweiterbare Berechtigungen
-- [ ] Pro-User-Datentrennung, Einstellungen und sichere Secret-Speicherung
-- [ ] Session-/Login-/Berechtigungstests
+- [x] Identity-Passworthashes, Cookie-Sessions, CSRF, Login-Rate-Limit/Lockout und grundlegende API-Autorisierung
+- [x] Rollenbasis Admin/User und serverseitiger Admin-Testendpunkt; vollständige Rollenverwaltung noch offen
+- [ ] Pro-User-Datentrennung, Einstellungs-/Secret-API und umfassende Rechteprüfung zukünftiger Fachendpunkte
+- [x] CI-Integrationstests: Admin-Bootstrap, Login/Logout, CSRF, Zugriffscheck und Session-Neustart
 
 **Abnahme:** Zwei Nutzer sehen ohne ausdrückliche Freigabe nicht gegenseitig Daten.
 
