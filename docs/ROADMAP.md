@@ -30,6 +30,7 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [x] Responsive Mobile/Desktop-Darstellung und Hell-/Dunkelmodus
 - [x] UI-Komponententests und HTTP-Smoke-Tests
 - [x] Geschützte Placeholder-Ansichten mit Sessionprüfung und lokale Login-/Logout-Seiten
+- [x] Login ohne App-Navigation, Setup-Assistent automatisch bei leerer Datenbank
 - [ ] E2E-Browserprüfung und Accessibility-Audit
 
 **Abnahme:** Navigierbare Weboberfläche, geschützte Bereiche ohne Session nicht erreichbar.
@@ -37,7 +38,7 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 ## Phase 3 – Benutzer, Admin & Rechte
 - [x] Versioniertes PostgreSQL-Basisschema für Aufgaben, Segmente und Zeiten (Vorarbeit aus Phase 1)
 - [x] ASP.NET-Identity-Schema/Versionierung für Nutzer, Rollen und Sessions (inkl. Eigentümer-FKs)
-- [x] Einmalige Ersteinrichtung des lokalen Admin ausschließlich per Containerkonsole
+- [x] Einmalige Ersteinrichtung: automatischer Browser-Assistent mit hostseitig erzeugtem Einmalcode (15 Minuten), gesicherter Admin-Erstellung und serverseitiger Sperre nach Installation
 - [ ] Lokale Benutzer anlegen, sperren, Kennwort wechseln/resetten
 - [x] Identity-Passworthashes, Cookie-Sessions, CSRF, Login-Rate-Limit/Lockout und grundlegende API-Autorisierung
 - [x] Rollenbasis Admin/User und serverseitiger Admin-Testendpunkt; vollständige Rollenverwaltung noch offen
@@ -91,3 +92,6 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [ ] Kommerzielle Lizenz- und Betriebsbedingungen finalisieren
 
 **Abnahme:** Nachvollziehbar getestete produktionsreife Webversion mit Dokumentation und Updatepfad.
+
+## CI-Strategie
+- [x] Ein GitHub-Actions-Workflow nur für PRs und manuell, mit Build und einem Docker-Smoke-Test (statt redundanter Testschritte/Läufe)

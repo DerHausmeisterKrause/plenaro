@@ -34,3 +34,14 @@
 - DataProtection-Schlüssel liegen in PostgreSQL, Sessions überleben normale Webcontainer-Neustarts.
 
 **Weiterhin kritisch:** Die Host-IP nutzt standardmäßig HTTP. Dabei sind Login-Daten unverschlüsselt. Echte Konten erst über HTTPS; keine Internetfreigabe. Der DB-Keyring ist noch nicht gesondert verschlüsselt, und eine umfassende Prüfung aller zukünftigen Daten-APIs steht aus.
+
+
+## Browser-Ersteinrichtung – Phase 3
+
+- `GET /api/v1/setup/status` liefert ausschließlich, ob die Datenbank noch **keinen Benutzer** enthält.
+- Bei leerer Benutzer-Datenbank wird automatisch die separate Setup-UI gezeigt. Ein Admin-Setup über das Netzwerk erfordert zusätzlich einen 256-Bit-Einmalcode.
+- Den Code erzeugt ausschließlich eine Person mit Docker-Hostzugriff: `docker compose exec web dotnet Plenaro.Api.dll --setup-token`. Die Datenbank speichert nur SHA-256, der Code ist 15 Minuten gültig; erneute Ausgabe widerruft den alten Code.
+- `POST /api/v1/setup/complete` validiert CSRF und wird rate-limitiert; Prüfung und Identity-Erstellung laufen unter PostgreSQL-Transaktion und Advisory Lock. Nach Erfolg wird der Code gelöscht. Existiert bereits irgendein Benutzer, verweigert der Server das Setup.
+- Bei vorhandenen Benutzern erscheint nur die separate Login-Maske. **Benutzerverwaltung, Recovery bei verlorener Adminrolle und HTTPS-Härtung bleiben offen.**
+
+**Keine öffentliche Freigabe der HTTP-Instanz**; Einrichtung und Passwortanmeldung zunächst nur in einem kontrollierten Testnetz oder über HTTPS.

@@ -2,19 +2,21 @@
 
 **Self-hosted Aufgaben-, Zeit- und ITSM-Plattform.** Dieses Repository ist der neue, plattformunabhängige Web-Nachfolger von [Plenaro Desktop / project_tool](https://github.com/DerHausmeisterKrause/project_tool).
 
-> **Entwicklungsstand:** Phase 2 – Responsive Weboberfläche mit React/TypeScript, ASP.NET-Core-Backend und PostgreSQL. Die Navigation ist nutzbar, aber **noch keine produktiven Aufgaben, Tickets oder Benutzerverwaltung**. Nur in einem vertrauenswürdigen LAN verwenden; nicht ins Internet freigeben.
+> **Entwicklungsstand:** Phase 3 – Responsive Weboberfläche mit React/TypeScript, ASP.NET-Core-Backend und PostgreSQL. Die Navigation ist nutzbar, aber **noch keine produktiven Aufgaben, Tickets oder Benutzerverwaltung**. Nur in einem vertrauenswürdigen LAN verwenden; nicht ins Internet freigeben.
 
 ## Lokale Benutzeranmeldung und einmaliger Administrator
 
-Nach dem Update von `main` den ersten Admin **einmalig direkt auf dem Docker-Host** anlegen:
+Sobald du Plenaro erstmals öffnest, erscheint **automatisch der Einrichtungsassistent**, sofern noch keine Benutzerkonten vorhanden sind. Für die Einrichtung brauchst du einen Einmalcode, den du direkt auf dem Docker-Host erzeugst:
 
 ```bash
-docker compose exec web dotnet Plenaro.Api.dll --bootstrap-admin
+docker compose exec web dotnet Plenaro.Api.dll --setup-token
 ```
 
-Der interaktive Befehl verlangt Admin-E-Mail, Anzeigename und Passwort (zweimal). Keine Kennwörter in Shell-Argumente, Konfigurationsdateien oder Git eintragen. Sobald mindestens ein Nutzer existiert, kann der Bootstrap nicht wiederholt werden. **Es gibt bewusst keinen öffentlichen Admin-Setup-Endpunkt.**
+Kopiere den ausgegebenen Code in den Assistenten. Er ist **15 Minuten gültig** und kann nur für die erste Admin-Erstellung verwendet werden. Ein erneut erzeugter Code macht den vorherigen ungültig. Auf der Webseite gibst du Anzeigename, E-Mail, Passwort und den Code ein. Ein beliebiger Netzwerkbesucher kann dadurch keinen Administrator ohne Hostzugriff anlegen. Existiert bereits ein Benutzer, erscheint kein Assistent mehr.
 
-Anschließend unter `http://HOST-IP:8080/login` anmelden. **Aber:** HTTP im LAN ist unverschlüsselt. Bevor du echte Passwörter verwendest, richte einen HTTPS-Reverse-Proxy mit gültigem Zertifikat ein; keine WAN-Portweiterleitungen!
+Nach erfolgreicher Einrichtung erscheint unter `/login` **nur die Loginmaske**, ohne Seitenleiste oder sonstige App-Navigation.
+
+**Wichtig:** HTTP im LAN ist unverschlüsselt. Vor Eingabe echter Passwörter einen HTTPS-Reverse-Proxy mit gültigem Zertifikat nutzen; keine WAN-Portweiterleitungen!
 
 ## Schnellstart (Docker Compose)
 
@@ -103,3 +105,7 @@ Details: [Roadmap](docs/ROADMAP.md), [Architektur](docs/ARCHITECTURE.md), [Funkt
 ## Entwicklungsstand
 
 Die sieben Phasen, die erledigten Teilaufgaben und die Abnahmekriterien stehen in [docs/ROADMAP.md](docs/ROADMAP.md). Ein Häkchen bedeutet **Code umgesetzt**, nicht zwangsläufig schon produktiv abgenommen. Phase 2 zeigt derzeit nur die Web-Shell, keine Geschäftsfunktionen.
+
+## CI
+
+Ein einziger GitHub-Actions-Workflow startet **nur für Pull Requests oder manuell**. Er führt einen Build mit den vorhandenen Frontendtests und einen kompakten Docker-Smoke-Test mit Admin-Einrichtung und Login aus. Kein zusätzlicher Lauf beim Merge nach `main`.

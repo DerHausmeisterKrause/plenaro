@@ -61,3 +61,11 @@ Eine WPF-XAML-Oberfläche kann nicht direkt im Browser ausgeführt werden. Outlo
 - Einmaliges Admin-Bootstrap per `docker compose exec web dotnet Plenaro.Api.dll --bootstrap-admin`.
 - Endpunkte: `GET /api/v1/auth/csrf`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`, `POST /api/v1/auth/logout`, `GET /api/v1/admin/ping`.
 - Fachliche CRUD-Endpunkte dürfen erst mit geeigneter Autorisierung, Ownership-Prüfung und Rollenfreigabe online gehen.
+
+
+## Browserbasierter First-Run (Phase 3)
+
+- Neue Migration `0004_setup_tokens.sql` verwaltet einen einzigen zeitlich beschränkten Einrichtungscode-Hash.
+- Die React-App fragt `/api/v1/setup/status` ab und schaltet bei fehlenden Benutzern ausschließlich den Setup-Assistenten frei. Login und Assistent sind unabhängig von der Workspace-Shell.
+- Der Administrator wird im Browser angelegt, jedoch nur mit einem vom Host erzeugten, einmaligen Code. Nach Erstellung ist das Setup serverseitig gesperrt.
+- GitHub Actions: ein PR-only Workflow mit Build und kleinem Docker-Smoke-Test.
