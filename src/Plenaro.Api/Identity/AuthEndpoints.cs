@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace Plenaro.Api.Identity;
@@ -9,6 +10,24 @@ public static class AuthEndpoints
     public static void MapPlenaroAuth(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/auth");
+
+        app.MapGet("/api/v1/setup/status", async (
+            PlenaroIdentityDbContext db, CancellationToken ct) =>
+        {
+            var required = !await db.Users.AnyAsync(ct);
+            return Results.Ok(new { required });
+        });
+
+        app.MapPost("/api/v1/setup/complete", async (
+            SetupRequest request, HttpContext context, IAntiforgery antiforgery,
+            PlenaroIdentityDbContext db, UserManager<ApplicationUser> users,
+            RoleManager<IdentityRole<Guid>> roles, CancellationToken ct) =>
+        {
+            if (!await CsrfIsValid(context, antiforgery))
+                return Results.BadRequest(new { error = "Ungültiger Sicherheitstoken." });
+
+            return await InitialSetup.CompleteAsync(request, db, users, roles, ct);
+        }).RequireRateLimiting("login");
 
         group.MapGet("/csrf", (HttpContext context, IAntiforgery antiforgery) =>
         {
