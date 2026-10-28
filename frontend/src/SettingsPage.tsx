@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { CheckCircle2, KeyRound, LockKeyhole, Plus, Save, Shield, ShieldCheck, UserRoundCog, Users } from 'lucide-react';
 import { type CurrentUser } from './authApi';
 import { PersonalPreferencesPanel, WorkspacePreferencesPanel } from './SettingsPreferences';
+import { SecretsSettings } from './SecretsSettings';
 import { type PersonalPreferences, type WorkspacePreferences } from './settingsApi';
 import { addUser, changePassword, listUsers, resetUserPassword, saveUser, type ManagedUser } from './userApi';
 
@@ -206,6 +207,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved }: {
       <PersonalPreferencesPanel onSaved={onPersonalSaved}/>
       <WorkspacePreferencesPanel admin={admin} onSaved={onWorkspaceSaved}/>
     </div>
+    <SecretsSettings admin={admin}/>
     <div className="um-layout">
       {admin && <AdminUsers currentId={user.id}/>}
       <PasswordSettings/>

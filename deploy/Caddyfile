@@ -1,0 +1,16 @@
+{
+    # The local CA persists in caddy_data, but never expose its private keys.
+    skip_install_trust
+}
+
+{$PLENARO_HTTPS_HOST:plenaro.home.arpa} {
+    tls internal
+    encode zstd gzip
+    header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Strict-Transport-Security "max-age=31536000"
+        -Server
+    }
+    reverse_proxy web:8080
+}

@@ -311,3 +311,11 @@ h1,h2,h3,p { margin-top: 0; }
 .app-settings-error { margin: 16px 48px 0; }
 @media (max-width: 1100px) { .um-settings-grid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .app-settings-error { margin: 14px 20px 0; } }
+
+/* Encrypted integration vault: names only, never echo plaintext. */
+.um-secret-list { display: grid; gap: 8px; margin: 18px 0 24px; }
+.um-secret-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; background: var(--surface-soft); border: 1px solid var(--border); border-radius: 9px; }
+.um-secret-row span { display: inline-flex; align-items: center; gap: 9px; overflow-wrap: anywhere; font-size: 12px; }
+.um-secret-row svg { color: var(--blue); flex-shrink: 0; }
+.um-secret-row button { padding: 7px 10px; }
