@@ -11,6 +11,7 @@ import { currentUser, setupRequired, type CurrentUser } from './authApi';
 import { SetupPage } from './SetupPage';
 import { SettingsPage } from './SettingsPage';
 import { WeekCalendarPage } from './WeekCalendarPage';
+import { TasksPage, TodayTasksPage } from './TasksPages';
 import { readPersonalPreferences, readWorkspacePreferences, savePersonalPreferences, type PersonalPreferences } from './settingsApi';
 import { checkHealth, type HealthState } from './api';
 import { navigation, type ModuleKey, type NavigationEntry } from './navigation';
@@ -156,7 +157,7 @@ function ModuleTile({ item }: { item: NavigationEntry }) {
       <div className="tile-icon"><Icon size={21} strokeWidth={1.8} aria-hidden="true" /></div>
       <div className="tile-details">
         <strong>{item.label}</strong>
-        <span>In Vorbereitung · Phase {item.phase}</span>
+        <span>{item.key === 'tasks' || item.key === 'today' ? 'Bereit · Aufgaben verwalten' : `In Vorbereitung · Phase ${item.phase}`}</span>
       </div>
       <ArrowUpRight className="tile-arrow" size={18} aria-hidden="true" />
     </Link>
@@ -172,13 +173,13 @@ function Dashboard({ web, database, instanceName }: { web: HealthState; database
           <h1>Willkommen bei {instanceName}<span className="h1-dot">.</span></h1>
           <p>Dein zentraler Arbeitsplatz für Aufgaben, Zeitplanung und IT-Service-Management.</p>
         </div>
-        <span className="preview-badge"><span className="preview-dot" /> Vorschau · Phase 3</span>
+        <span className="preview-badge"><span className="preview-dot" /> Dein Plenaro Workspace</span>
       </div>
       <div className="announcement">
         <div className="announcement-icon"><Sparkles size={22} aria-hidden="true" /></div>
         <div>
-          <strong>Die Webanwendung nimmt Gestalt an.</strong>
-          <p>Das neue Layout ist verfügbar. Die lokale Anmeldung ist eingebaut. Produktive Aufgaben und Tickets folgen in den nächsten Phasen.</p>
+          <strong>Aufgabenverwaltung ist jetzt verfügbar.</strong>
+          <p>Lege deine ersten eigenen Aufgaben an, plane Termine und behalte offene Aufgaben im Blick. Tickets folgen in einer späteren Phase.</p>
         </div>
         <Link to="/system" aria-label="Systemstatus öffnen"><ArrowRight size={21} aria-hidden="true" /></Link>
       </div>
@@ -197,7 +198,7 @@ function Dashboard({ web, database, instanceName }: { web: HealthState; database
           <div className="progress-line"><span>Phase 1 – Docker-Grundgerüst</span><span className="progress-check"><CheckCircle2 size={16} /> Implementiert</span></div>
           <div className="progress-line active"><span>Phase 2 – Weboberfläche</span><span>In Arbeit</span></div>
           <div className="progress-line"><span>Phase 3 – Lokaler Admin & User</span><span>In Arbeit</span></div>
-          <div className="progress-line"><span>Phase 4 – Entra & Outlook</span><span>Geplant</span></div>
+          <div className="progress-line"><span>Phase 4 – Entra & Outlook</span><span>Teilweise umgesetzt</span></div>
           <a className="text-link" href="https://github.com/DerHausmeisterKrause/plenaro/issues" target="_blank" rel="noopener noreferrer">Alle GitHub-Aufgaben anzeigen <ExternalLink size={15} aria-hidden="true" /></a>
         </section>
         <section className="content-card system-summary" aria-labelledby="health-heading">
@@ -351,8 +352,10 @@ export function AppContent() {
           {themeError && <p role="alert" className="um-feedback failure app-settings-error">{themeError}</p>}
           <Routes>
             <Route path="/" element={<PrivateArea user={user}><Dashboard web={web} database={database} instanceName={instanceName}/></PrivateArea>} />
-            {navigation.filter(item => item.key !== 'settings' && item.key !== 'week').map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
+            {navigation.filter(item => !['settings', 'week', 'tasks', 'today'].includes(item.key)).map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
             <Route path="/week" element={<PrivateArea user={user}><WeekCalendarPage/></PrivateArea>} />
+            <Route path="/tasks" element={<PrivateArea user={user}><TasksPage/></PrivateArea>} />
+            <Route path="/today" element={<PrivateArea user={user}><TodayTasksPage/></PrivateArea>} />
             <Route path="/settings" element={<PrivateArea user={user}><SettingsPage user={user} onPersonalSaved={value => { setPrefs(value); applyTheme(value.theme); setThemeError(''); }} onWorkspaceSaved={value => setInstanceName(value.instanceName)}/></PrivateArea>} />
             <Route path="/system" element={<SystemPage web={web} database={database}/>} />
             <Route path="*" element={<NotFound />} />

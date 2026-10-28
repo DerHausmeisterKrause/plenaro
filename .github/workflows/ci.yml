@@ -35,7 +35,7 @@ jobs:
           set -euo pipefail
           mkdir -p secrets
           trap 'docker compose down -v --remove-orphans || true' EXIT
-          docker compose up -d --build --wait --wait-timeout 180
+          docker compose up -d --build --wait --wait-timeout 180 || { docker compose logs --no-color --tail=120 web database; exit 1; }
           API=http://127.0.0.1
           curl -fsS "$API/health/ready" | grep -q '"schema":"current"'
           curl -fsS "$API/api/v1/setup/status" | grep -q '"required":true'
@@ -75,6 +75,30 @@ jobs:
             -X POST "$API/api/v1/auth/login" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' \
             -d '{"email":"user@example.invalid","password":"CiUserPassword123!"}')" = "204"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/admin/users/")" = "403"
+          USER_CSRF=$(curl -fsS -c "$USER_COOKIE" -b "$USER_COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+          # Phase 2 functional core: task CRUD, status transition and per-user isolation.
+          TASK_ID=$(curl -fsS -c "$COOKIE" -b "$COOKIE" -X POST "$API/api/v1/tasks/" \
+            -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
+            -d '{"title":"CI Aufgabe","description":"Nur eigener Benutzer","status":"planned","priority":2,"tags":["ci","task"],"plannedFor":"2026-10-28"}' \
+            | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+          test -n "$TASK_ID"
+          curl -fsS -b "$COOKIE" "$API/api/v1/tasks/" | grep -q '"CI Aufgabe"'
+          test "$(curl -fsS -b "$USER_COOKIE" "$API/api/v1/tasks/" | python3 -c 'import json,sys;print(len(json.load(sys.stdin)))')" = "0"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$USER_COOKIE" -b "$USER_COOKIE" \
+            -X POST "$API/api/v1/tasks/$TASK_ID/status" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"status":"completed"}')" = "404"
+          curl -fsS -b "$COOKIE" "$API/api/v1/tasks/today?date=2026-10-28" | grep -q '"CI Aufgabe"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" \
+            -X POST "$API/api/v1/tasks/$TASK_ID/status" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"status":"completed"}')" = "204"
+          curl -fsS -b "$COOKIE" "$API/api/v1/tasks/?status=completed" | grep -q '"CI Aufgabe"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" \
+            -X POST "$API/api/v1/tasks/$TASK_ID/status" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"status":"planned"}')" = "204"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" \
+            -X PUT "$API/api/v1/tasks/$TASK_ID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
+            -d '{"title":"Bearbeitet","description":"","status":"active","priority":1,"tags":["tag"],"plannedFor":"2026-10-28"}')" = "204"
+          curl -fsS -b "$COOKIE" "$API/api/v1/tasks/" | grep -q '"Bearbeitet"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$USER_COOKIE" -b "$USER_COOKIE" \
+            -X DELETE "$API/api/v1/tasks/$TASK_ID" -H "X-CSRF-TOKEN: $USER_CSRF")" = "404"
+          # Task data survives the database/web restart later in this same test.
           # One focused settings test: access control, account separation and persistence.
           test "$(curl -fsS -b "$COOKIE" "$API/api/v1/settings/me" | python3 -c 'import json,sys; assert json.load(sys.stdin)["theme"]=="light"; print("ok")')" = "ok"
           USER_CSRF=$(curl -fsS -c "$USER_COOKIE" -b "$USER_COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
@@ -88,6 +112,9 @@ jobs:
           docker compose up -d --wait --wait-timeout 120
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/settings/me" | grep -q '"theme":"dark"'
           curl -fsS -b "$COOKIE" "$API/api/v1/settings/global" | grep -q '"instanceName":"Plenaro CI"'
+          curl -fsS -b "$COOKIE" "$API/api/v1/tasks/" | grep -q '"Bearbeitet"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" \
+            -X DELETE "$API/api/v1/tasks/$TASK_ID" -H "X-CSRF-TOKEN: $CSRF")" = "204"
           test "$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" \
             -X PUT "$API/api/v1/admin/users/$ID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
             -d '{"displayName":"Test User","role":"User","disabled":true}')" = "204"
