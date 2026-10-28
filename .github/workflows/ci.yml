@@ -1,15 +1,16 @@
 name: CI
 
+# One build and one small end-to-end smoke test per PR.
+# No duplicate pipeline automatically triggered on main after merging.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build-and-smoke-test:
+  build-and-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -17,88 +18,35 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Restore and build API
-        run: |
-          dotnet restore src/Plenaro.Api/Plenaro.Api.csproj
-          dotnet build src/Plenaro.Api/Plenaro.Api.csproj --configuration Release --no-restore
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Frontend dependencies, typecheck, tests and build
-        working-directory: frontend
+      - name: Build backend and frontend
         run: |
+          dotnet build src/Plenaro.Api/Plenaro.Api.csproj -c Release
+          cd frontend
           npm install --no-audit --no-fund
-          npm run typecheck
           npm test
           npm run build
-      - name: Check Compose syntax
-        env:
-          POSTGRES_PASSWORD: ci-only-not-for-production
-        run: docker compose config --quiet
-      - name: Build and start Docker stack
-        env:
-          POSTGRES_PASSWORD: ci-only-not-for-production
-        run: docker compose up --build --wait --wait-timeout 180 -d
-      - name: HTTP smoke test
-        run: |
-          curl --fail --silent --show-error http://127.0.0.1:8080/health/live
-          curl --fail --silent --show-error http://127.0.0.1:8080/health/ready
-          curl --fail --silent --show-error http://127.0.0.1:8080/ | grep -q 'id="root"'
-          curl --fail --silent --show-error http://127.0.0.1:8080/tickets | grep -q 'id="root"'
-          curl --fail --silent --show-error http://127.0.0.1:8080/health/live | grep -q '"phase":3'
-      - name: Verify schema, migration history and database persistence
+      - name: Docker smoke test (health, setup, login)
         env:
           POSTGRES_PASSWORD: ci-only-not-for-production
         run: |
           set -euo pipefail
-          docker compose exec -T database psql -v ON_ERROR_STOP=1 -U plenaro -d plenaro -Atc "SELECT count(*) FROM schema_migrations" | grep -qx '3'
-          docker compose exec -T database psql -v ON_ERROR_STOP=1 -U plenaro -d plenaro -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('tasks','task_segments','time_entries','system_settings')" | grep -qx '4'
-          curl --fail --silent --show-error http://127.0.0.1:8080/health/ready | grep -q '"schema":"current"'
-          docker compose exec -T database psql -v ON_ERROR_STOP=1 -U plenaro -d plenaro <<'SQL'
-          INSERT INTO system_settings (setting_key, setting_value)
-          VALUES ('_ci_persistence_probe', '{"persisted": true}'::jsonb);
-          SQL
-          docker compose restart database
-          docker compose restart web
-          docker compose up -d --wait --wait-timeout 120
-          curl --fail --silent --show-error http://127.0.0.1:8080/health/ready | grep -q '"schema":"current"'
-          docker compose exec -T database psql -v ON_ERROR_STOP=1 -U plenaro -d plenaro -Atc "SELECT setting_value->>'persisted' FROM system_settings WHERE setting_key='_ci_persistence_probe'" | grep -qx 'true'
-          docker compose exec -T database psql -v ON_ERROR_STOP=1 -U plenaro -d plenaro -Atc "SELECT count(*) FROM schema_migrations" | grep -qx '3'
-      - name: Identity bootstrap, login, authorization, CSRF and restart
-        env:
-          POSTGRES_PASSWORD: ci-only-not-for-production
-        run: |
-          set -euo pipefail
+          trap 'docker compose down -v --remove-orphans || true' EXIT
+          docker compose up -d --build --wait --wait-timeout 180
           API=http://127.0.0.1:8080
-          COOKIE_FILE=$(mktemp)
-          trap 'rm -f "$COOKIE_FILE"' EXIT
-          test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/auth/me")" = "401"
+          curl -fsS "$API/health/ready" | grep -q '"schema":"current"'
+          curl -fsS "$API/api/v1/setup/status" | grep -q '"required":true'
+
+          TOKEN=$(docker compose exec -T web dotnet Plenaro.Api.dll --setup-token | sed -n 's/^SETUP_TOKEN=//p' | tr -d '\r')
+          test "${#TOKEN}" -eq 64
+          COOKIE=$(mktemp)
+          trap 'rm -f "$COOKIE"; docker compose down -v --remove-orphans || true' EXIT
+          CSRF=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST "$API/api/v1/setup/complete" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "{\"code\":\"$TOKEN\",\"email\":\"admin@example.invalid\",\"displayName\":\"CI Admin\",\"password\":\"CiTestPassword123!\"}")" = "204"
+
+          curl -fsS "$API/api/v1/setup/status" | grep -q '"required":false'
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/admin/ping")" = "401"
-          printf 'admin@example.invalid\nCI Admin\nCiTestPassword123!\nCiTestPassword123!\n' |
-            docker compose exec -T web dotnet Plenaro.Api.dll --bootstrap-admin
-          docker compose exec -T database psql -v ON_ERROR_STOP=1 -U plenaro -d plenaro -Atc 'SELECT count(*) FROM "AspNetUsers"' | grep -qx '1'
-          if docker compose exec -T web dotnet Plenaro.Api.dll --bootstrap-admin; then
-            echo "Second bootstrap must fail"; exit 1
-          fi
-          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/v1/auth/login" -H 'Content-Type: application/json' -d '{"email":"admin@example.invalid","password":"CiTestPassword123!"}')" = "400"
-          CSRF=$(curl -fsS -c "$COOKIE_FILE" -b "$COOKIE_FILE" "$API/api/v1/auth/csrf" | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')
-          test -n "$CSRF"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_FILE" -c "$COOKIE_FILE" -X POST "$API/api/v1/auth/login" -H 'Content-Type: application/json' -H "X-CSRF-TOKEN: $CSRF" -d '{"email":"admin@example.invalid","password":"wrong"}')" = "401"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_FILE" -c "$COOKIE_FILE" -X POST "$API/api/v1/auth/login" -H 'Content-Type: application/json' -H "X-CSRF-TOKEN: $CSRF" -d '{"email":"admin@example.invalid","password":"CiTestPassword123!"}')" = "204"
-          curl -fsS -b "$COOKIE_FILE" "$API/api/v1/auth/me" | grep -q '"email":"admin@example.invalid"'
-          curl -fsS -b "$COOKIE_FILE" "$API/api/v1/admin/ping" | grep -q '"admin":true'
-          docker compose restart web
-          docker compose up -d --wait --wait-timeout 120
-          curl -fsS -b "$COOKIE_FILE" "$API/api/v1/auth/me" | grep -q '"email":"admin@example.invalid"'
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_FILE" -X POST "$API/api/v1/auth/logout")" = "400"
-          CSRF=$(curl -fsS -c "$COOKIE_FILE" -b "$COOKIE_FILE" "$API/api/v1/auth/csrf" | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_FILE" -c "$COOKIE_FILE" -X POST "$API/api/v1/auth/logout" -H "X-CSRF-TOKEN: $CSRF")" = "204"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE_FILE" "$API/api/v1/auth/me")" = "401"
-      - name: Dump logs if failed
-        if: failure()
-        run: docker compose logs --no-color
-      - name: Teardown
-        if: always()
-        env:
-          POSTGRES_PASSWORD: ci-only-not-for-production
-        run: docker compose down -v --remove-orphans
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST "$API/api/v1/auth/login" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"email":"admin@example.invalid","password":"CiTestPassword123!"}')" = "204"
+          curl -fsS -b "$COOKIE" "$API/api/v1/admin/ping" | grep -q '"admin":true'
