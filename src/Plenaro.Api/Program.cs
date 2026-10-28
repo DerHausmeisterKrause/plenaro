@@ -30,7 +30,7 @@ app.MapGet("/health/live", () => Results.Ok(new
 {
     status = "ok",
     service = "plenaro-web",
-    phase = 1
+    phase = 2
 }));
 
 app.MapGet("/health/ready", async (IConfiguration config, ILogger<Program> logger, CancellationToken cancellationToken) =>
@@ -62,5 +62,10 @@ app.MapGet("/health/ready", async (IConfiguration config, ILogger<Program> logge
         return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
     }
 });
+
+// Browser-Client-Routing: z. B. /today direkt oder nach Browser-Refresh.
+// Hier werden ausschließlich die öffentlichen Platzhalteransichten ausgeliefert.
+// Personenbezogene /api-Routen werden erst nach Authentifizierung ergänzt.
+app.MapFallbackToFile("index.html");
 
 app.Run();

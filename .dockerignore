@@ -13,3 +13,7 @@ artifacts
 *.log
 *.bak
 *.dump
+
+frontend/node_modules
+frontend/dist
+frontend/coverage

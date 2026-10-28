@@ -1,3 +1,10 @@
+FROM node:22-alpine AS frontend
+WORKDIR /frontend
+COPY frontend/package.json ./
+RUN npm install --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
+
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY src/Plenaro.Api/Plenaro.Api.csproj src/Plenaro.Api/
@@ -12,6 +19,8 @@ RUN dotnet publish src/Plenaro.Api/Plenaro.Api.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /app/publish .
+# React/Vite-Ausgabe ersetzt die Phase-1-Statusseite.
+COPY --from=frontend /frontend/dist/ /app/wwwroot/
 ENV ASPNETCORE_HTTP_PORTS=8080
 USER $APP_UID
 EXPOSE 8080

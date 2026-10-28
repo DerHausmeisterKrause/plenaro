@@ -4,17 +4,18 @@ Stand: 28.10.2026. Die ersten vier Meilensteine folgen dem bisherigen Gespräch 
 
 Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein grüner CI-Lauf und ein echter Starttest sind zusätzliche Abnahmekriterien.
 
-## Phase 1 – Repository & Docker-Basis (in Arbeit)
+## Phase 1 – Repository & Docker-Basis (CI bestanden, Zielhost teilweise geprüft)
 - [x] Neues getrenntes Plenaro-2.0-Repository, README und Architektur dokumentieren
 - [x] Source-Available-Community-Lizenz und gewerbliche Zweitlizenzierung dokumentieren (Vertragstext vor Vermarktung juristisch prüfen)
 - [x] .gitignore, .dockerignore, .env.example und Secret-Grundregeln
 - [x] .NET-10-Webdienst mit Live-/Datenbank-Readiness-Endpoints
 - [x] PostgreSQL 17, Docker-Volume, internes Netzwerk und Healthcheck
-- [x] Docker Compose mit Web/DB, localhost-Bindung und Startabhängigkeiten
+- [x] Docker Compose mit Web/DB, konfigurierbarer LAN-Bindung und Startabhängigkeiten
 - [x] Minimale Browser-Statusseite
 - [x] GitHub Actions CI: Build, Docker-Compose-Syntax, Build & HTTP-Smoke-Test (Workflow hinzugefügt, Lauf noch zu prüfen)
 - [x] GitHub Actions: .NET-Build, Compose-Syntax und Docker-HTTP-Smoke-Test erfolgreich ([CI #1](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/40755261974))
-- [ ] Lokalen `docker compose up --build --wait` und Datenpersistenz/Neustart auf dem Zielhost nachweisen
+- [x] Nutzer bestätigt: Docker läuft, Webseite per curl auf dem Host erreichbar (28.10.2026)
+- [ ] LAN-Zugriff via Host-IP nach Update und Datenpersistenz/Neustart am Zielhost prüfen
 - [ ] Lizenz juristisch final prüfen (vor kommerziellem Release)
 
 **Abnahme:** `http://127.0.0.1:8080` zeigt den Webstatus, `/health/ready` prüft PostgreSQL und Persistenz über Neustarts.

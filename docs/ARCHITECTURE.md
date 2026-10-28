@@ -32,3 +32,12 @@ Browser --(später HTTPS Reverse Proxy / SSO)--> ASP.NET Core Web/API
 ## Wichtige Grenzen
 
 Eine WPF-XAML-Oberfläche kann nicht direkt im Browser ausgeführt werden. Outlook COM, Windows Dispatcher, lokale Taskleiste, Clipboard und Autoupdate-EXE müssen ersetzt oder konzeptionell angepasst werden. Die Desktop-MIT-Lizenz bleibt unverändert.
+
+
+## Umsetzung Phase 2 – Frontend
+- React 19 + TypeScript + Vite 8 unter `frontend/`.
+- Vite baut in einem Node-22-Builder; fertige JS/CSS-Dateien liegen im ASP.NET-Core-Runtime-Image unter `/app/wwwroot`.
+- Browser-Routen werden durch `MapFallbackToFile("index.html")` auf die React-SPA umgeleitet.
+- `/health/live` und `/health/ready` bleiben separate Backend-Endpunkte und werden vom Browser abgefragt.
+- Navigation und Login-/Logout-Seiten sind Platzhalter **ohne Credentials, Session oder personenbezogene Daten**.
+- Docker-Portbindung ist per `PLENARO_BIND_IP` steuerbar; im vertrauenswürdigen LAN 0.0.0.0, bei Einzelhost 127.0.0.1.
