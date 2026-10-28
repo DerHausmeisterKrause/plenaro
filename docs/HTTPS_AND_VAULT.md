@@ -1,15 +1,83 @@
-# Plenaro: HTTPS im LAN und verschlüsselter Secret-Vault
+# Plenaro: NGINX, HTTP/HTTPS und Secret-Vault
 
-Diese Erweiterung ist **opt-in**, damit bestehende Docker-Installationen weiterhin ohne Unterbrechung starten.
+Seit dieser Änderung wird **NGINX automatisch mit der normalen `compose.yaml` gestartet**. Caddy und `compose.secure.yaml` werden nicht mehr benötigt. ASP.NET Core/Plenaro bleibt ausschließlich in einem Docker-Netz erreichbar (kein öffentlicher 8080-Port).
 
-## Voraussetzung
+## Betriebsarten
 
-- Docker Compose **v2.24.4 oder neuer**, da `!override` für die vollständige Entfernung der unsicheren Portfreigabe benötigt wird.
-- Auf dem Docker-Host muss Port **443/tcp** frei sein.
-- Das Caddy-Edge-Netzwerk verwendet `172.29.213.0/24` und den **exakt vertrauenswürdigen** Proxy `172.29.213.10`. Bei Subnetzkonflikten Netzwerk und `Security__TrustedProxyIp` gemeinsam anpassen.
-- Plenaro vor dem Update sichern (PostgreSQL-Dump); `docker compose down -v` niemals auf Datenbeständen ausführen.
+| Wert in `.env` | Aufruf | Verhalten |
+| --- | --- | --- |
+| `PLENARO_HTTPS_ENABLED=false` | `http://HOST-IP/` | NGINX liefert Plenaro über Port 80 |
+| `PLENARO_HTTPS_ENABLED=true` | `https://HOST-IP/` | NGINX liefert über 443; HTTP auf 80 leitet mit 301 zu HTTPS weiter |
+| Optional: `PLENARO_SERVER_NAME=plenaro.example.de` | `http(s)://plenaro.example.de/` | Funktioniert, **wenn** DNS/Hosts-Datei auf die Host-IP zeigt; bei HTTPS muss das Zertifikat zum Namen passen |
 
-## Schlüssel erzeugen und schützen (Linux/Debian)
+Es werden keine Ports in der URL benötigt. Die Compose-Datei reserviert auf dem Docker-Host standardmäßig **Port 80 und Port 443**, auch wenn der HTTPS-Listener bei `false` nicht aktiv ist. Wenn dort bereits NGINX, Apache, Traefik oder Caddy läuft, müssen die Portkonflikte zuerst behoben werden.
+
+## Update der bisherigen Docker-Installation
+
+**Vorher PostgreSQL sichern.** Der folgende Wechsel entfernt **keine** persistenten Datenbank-Volumes:
+
+```bash
+# Im Plenaro-Verzeichnis: alte Container (auch ggf. Caddy) beenden.
+docker compose down --remove-orphans
+git pull --ff-only
+docker compose up -d --build --wait --remove-orphans
+docker compose ps
+curl -f http://127.0.0.1/health/ready
+```
+
+**Wichtig:** Niemals `docker compose down -v` ausführen. Bei einem zuvor über `compose.secure.yaml` gestarteten Caddy-Stack den alten Stack zunächst gezielt mit `docker compose -f compose.yaml -f compose.secure.yaml down` beenden, **bevor** dessen Datei durch `git pull` entfernt wird.
+
+Die bisherige `.env` bleibt bestehen. Die alten Variablen `PLENARO_HTTP_PORT` und `PLENARO_HTTPS_HOST` werden nicht mehr verwendet. Falls du sie eingetragen hast, kannst du sie entfernen.
+
+## HTTP-Modus (Standard)
+
+```dotenv
+PLENARO_BIND_IP=0.0.0.0
+PLENARO_SERVER_NAME=_
+PLENARO_PUBLIC_HTTP_PORT=80
+PLENARO_PUBLIC_HTTPS_PORT=443
+PLENARO_HTTPS_ENABLED=false
+```
+
+Danach: `http://DEINE-SERVER-IP/`. `PLENARO_SERVER_NAME=_` bedeutet, dass NGINX als Default-Host sowohl IP-basierte als auch passend zugestellte Host-Anfragen bedient.
+
+**HTTP überträgt Passwörter unverschlüsselt!** Nur für kurzfristige Entwicklung in einem vollständig vertrauenswürdigen LAN verwenden; keine Router-Portweiterleitung.
+
+## HTTPS mit eigenem Zertifikat
+
+Du brauchst einen gültigen Zertifikats-/Schlüssel-Dateisatz auf dem **Docker-Host**. Dieser kann aus deiner internen PKI, aus Let's Encrypt oder einem anderen vertrauenswürdigen Aussteller stammen. Der Zertifikatsname muss mit dem verwendeten FQDN beziehungsweise der IP übereinstimmen (Subject Alternative Name).
+
+Beispiel-`.env`:
+
+```dotenv
+PLENARO_HTTPS_ENABLED=true
+PLENARO_SERVER_NAME=plenaro.example.de
+PLENARO_TLS_CERT_PATH=/etc/ssl/plenaro/fullchain.pem
+PLENARO_TLS_KEY_PATH=/etc/ssl/plenaro/privkey.pem
+```
+
+Wenn du stattdessen die IP verwendest, setze z. B. `PLENARO_SERVER_NAME=192.168.178.50` **und verwende ein Zertifikat mit IP-SAN für genau diese Adresse**. Für selbst signierte/interne Zertifikate muss der Client der ausstellenden CA vertrauen.
+
+`PLENARO_TLS_CERT_PATH` und `PLENARO_TLS_KEY_PATH` sind absolute **Host-Dateipfade** und werden nur lesbar nach NGINX gemountet. Die Zertifikatsdatei sollte die vollständige Zertifikatskette enthalten. Der private Schlüssel bleibt auf dem Host und darf **nicht** ins Git-Repository eingecheckt werden. Bei Let's Encrypt müssen die Quellpfade vom Docker-Daemon auflösbar sein; erneuerte Zertifikate erfordern `docker compose restart nginx`, damit NGINX sie erneut einliest.
+
+```bash
+docker compose config
+docker compose up -d --build --wait
+curl -I http://DEINE-SERVER-IP/
+# Erwartet: 301 Location: https://DEINE-SERVER-IP/
+```
+
+Danach im Browser `https://DEINE-SERVER-IP/` bzw. `https://plenaro.example.de/` aufrufen. Für HTTPS werden die Session-/Antiforgery-Cookies als `Secure` ausgestellt; ASP.NET akzeptiert Proxy-Header ausschließlich von der fest konfigurierten NGINX-Container-IP. NGINX leitet die ursprüngliche Client-IP für Login-Rate-Limits weiter.
+
+Ist HTTPS aktiv, fehlen aber gültige, lesbare Zertifikatsdateien, startet NGINX **absichtlich nicht**. Den Status mit `docker compose logs nginx` prüfen. Während HTTPS deaktiviert ist, werden die Zertifikatsdateien nicht benötigt.
+
+**DNS bei FQDN:** NGINX erstellt keine DNS-Einträge. Einen A-/AAAA-Eintrag oder einen lokalen DNS-/Hosts-Eintrag auf die Server-IP setzen.
+
+**Sicherheitsgrenzen:** HTTPS im LAN ist damit technisch vorhanden. Vor einer Internetfreigabe bleiben Sicherheits-/Rechte-Audits, Absicherung des Serverzugangs, Logging, Backups und Recovery erforderlich.
+
+## Verschlüsselte Integration-Secrets
+
+Der bisherige AES-256-GCM-Vault bleibt unverändert. Für seine Aktivierung auf dem Docker-Host:
 
 ```bash
 mkdir -p secrets
@@ -18,54 +86,23 @@ sudo chown root:1654 secrets/vault.key
 sudo chmod 0640 secrets/vault.key
 ```
 
-Der .NET-Container läuft standardmäßig mit UID 1654; die Gruppe 1654 erhält Leserechte. **Der Schlüssel ist unverzichtbar für die Entschlüsselung.** Separat vom Datenbankbackup geschützt sichern, niemals einchecken. Wenn der Schlüssel verloren geht, sind die verschlüsselten Integrationswerte unwiederbringlich verloren. Beim Hinzufügen weiterer App-Instanzen muss derselbe Schlüssel bereitstehen.
+Zusätzlich in der `.env`:
 
-*Docker Desktop und nichtstandardmäßige User-Namespaces:* Zugriffsrechte des gemounteten Secrets prüfen; Linux UID/GID muss ggf. zur tatsächlichen Container-UID passen.
-
-## Optionalen sicheren Stack starten
-
-Beispiel mit LAN-IP `192.168.178.50` (durch **deine** Host-IP ersetzen):
-
-```bash
-# In .env setzen:
-# PLENARO_HTTPS_HOST=192.168.178.50
-docker compose -f compose.yaml -f compose.secure.yaml up -d --build --wait
+```dotenv
+PLENARO_VAULT_KEY_FILE=/run/plenaro-secrets/vault.key
 ```
 
-Jetzt lauscht Caddy auf **HTTPS Port 443**. Die bisherige HTTP-Portfreigabe des Webcontainers wird durch `!override []` entfernt. Die ASP.NET-Core-Anwendung akzeptiert im sicheren Modus nur HTTPS-Proxynachrichten vom fest konfigurierten Caddy-IP-Endpunkt. Nur die lokale Container-Gesundheitsprüfung darf HTTP verwenden. Die Auth- und CSRF-Cookies sind `Secure`, `HttpOnly`, `SameSite=Strict`.
+Die Datei liegt auf dem Host unter `./secrets/vault.key` und wird nur lesbar nach `/run/plenaro-secrets/vault.key` im Webcontainer gemountet. Der Vault funktioniert unabhängig vom HTTPS-Schalter technisch in beiden Modi, aber **Secrets niemals über unverschlüsseltes HTTP eingeben**.
 
-Der lokale Caddy stellt über `tls internal` ein Zertifikat aus seiner internen CA bereit. Das Zertifikat wird **nicht** automatisch in Browsern anderer Geräte vertraut.
+In **Einstellungen** können Administratoren globale und Benutzer eigene Secrets ablegen. Gespeicherte Werte verlassen die Datenbank nicht als Klartext über die Web-API; nur Secret-Namen werden angezeigt. Der Schlüssel muss sicher und **getrennt vom Datenbankbackup** aufbewahrt werden. Ohne den Schlüssel sind die Werte nicht entschlüsselbar. Schlüsselrotation und vollständige Recovery bleiben eigene offene Aufgaben.
 
-### Interne CA auf eigenen Geräten vertrauen
-
-Nach dem ersten Start:
+## Diagnose
 
 ```bash
-docker compose -f compose.yaml -f compose.secure.yaml cp proxy:/data/caddy/pki/authorities/local/root.crt ./plenaro-lan-root.crt
+docker compose ps
+docker compose logs --tail=100 nginx web
+docker compose exec -T web dotnet Plenaro.Api.dll --healthcheck
+curl -f http://127.0.0.1/health/ready  # HTTP-Modus
 ```
 
-Dieses **öffentliche Root-Zertifikat** nur auf den eigenen, verwalteten Endgeräten als vertrauenswürdige Stammzertifizierungsstelle installieren. Nicht die CA-Private-Keys kopieren, versenden oder ins Git-Repository laden. Für Tests darf `curl -k` verwendet werden, aber **niemals** Zertifikatsprüfung in produktiven Clients deaktivieren. Bei Browsern mit eigener CA-Verwaltung ggf. separat importieren.
-
-Der HTTPS-Aufruf ist anschließend `https://192.168.178.50/` (bzw. der Name aus `PLENARO_HTTPS_HOST`). Verwende exakt den Hostnamen bzw. die IP aus dem Zertifikat.
-
-Für öffentlich vertrauenswürdige Zertifikate und Domains ist später ein gesonderter ACME-/DNS-Aufbau erforderlich. **Keine Router-Portweiterleitung** für die derzeitige Entwicklungsinstanz.
-
-### Vorhandene Reverse-Proxies (NGINX/Traefik)
-
-Alternativ kann ein bestehender HTTPS-Reverse-Proxy genutzt werden. Dann **keinen zweiten Caddy starten**. Den Webport auf Loopback oder ein nur für den Proxy erreichbares Netzwerk beschränken, `Security__RequireHttps=true` und `Security__TrustedProxyIp` exakt auf die tatsächliche Proxy-IP setzen. Vertrauenswürdige Forwarded-Header `X-Forwarded-Proto` und `X-Forwarded-For` müssen vom Proxy kommen. Kein `KnownNetworks` für das gesamte LAN freigeben.
-
-## Verschlüsselte Integration-Secrets
-
-Die SQL-Migration `0007_encrypted_secrets.sql` legt `encrypted_secrets` an. AES-256-GCM verschlüsselt Werte mit zufälligem 12-Byte-Nonce und authentifiziert Scope, Benutzer und Namen per AAD. **Das 256-Bit-Master-Key-Material liegt ausschließlich in der Host-Datei `secrets/vault.key`**, nicht in PostgreSQL.
-
-Unter **Einstellungen → Persönliche Zugangsdaten** kann jeder Nutzer eigene Schlüssel speichern/löschen. Unter **Globale Integrations-Zugangsdaten** kann nur ein Administrator Schlüssel hinterlegen. Der Browser sieht **nur die Namen**, niemals gespeicherten Klartext. Für die späteren Entra-/Znuny-Adapter existiert eine ausschließlich serverseitige Entschlüsselungsmethode, aber noch keine fertige Integration.
-
-API: `GET/PUT/DELETE /api/v1/secrets/me` und `/api/v1/admin/secrets` (für globale Werte). `GET` gibt nur `names` zurück, Schreiboperationen verlangen CSRF.
-
-### Notwendige Grenzen
-
-- Ohne `compose.secure.yaml` startet die Webapp weiterhin, die Vault-Endpunkte geben **HTTP 503** zurück. Dadurch wird der bestehende Entwicklungsbetrieb nicht unterbrochen.
-- Das Keyfile ist außerhalb des DB-Backups zu sichern; **Master-Key-Rotation** benötigt noch eine geplante Re-Encryption-Migration und ist nicht als Knopfdruck verfügbar.
-- AES-GCM schützt vor reinem Datenbankabfluss. Administratoren des Docker-Hosts mit Zugriff auf Keyfile und Datenbank können die Geheimnisse prinzipiell entschlüsseln.
-- Der bisherige ASP.NET-Core-DataProtection-Keyring für Sessions liegt weiterhin in PostgreSQL; seine Verschlüsselung-at-rest, Backup-Restore, Auditlogging und ausführliche Penetrationsprüfung stehen vor Produktivbetrieb aus.
-- Integrationstokens nicht in gewöhnliche `system_settings` oder `user_preferences` schreiben.
+**Keinen zweiten Reverse-Proxy parallel auf denselben Ports starten.** Für eine bestehende NGINX-/Traefik-Infrastruktur kann Plenaro auch hinter dem bereits betriebenen Proxy integriert werden; das wäre eine separate Konfiguration ohne den eingebauten NGINX-Hostport.

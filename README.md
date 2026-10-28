@@ -16,30 +16,27 @@ Kopiere den ausgegebenen Code in den Assistenten. Er ist **15 Minuten gültig** 
 
 Nach erfolgreicher Einrichtung erscheint unter `/login` **nur die Loginmaske**, ohne Seitenleiste oder sonstige App-Navigation.
 
-**HTTPS ist inzwischen als optionaler Docker-Overlay vorbereitet:** siehe [HTTPS und Secret-Vault](docs/HTTPS_AND_VAULT.md). HTTP im LAN ist unverschlüsselt. Vor Eingabe echter Passwörter einen HTTPS-Reverse-Proxy mit gültigem Zertifikat nutzen; keine WAN-Portweiterleitungen!
+**HTTPS ist jetzt direkt über den NGINX-Container in Compose aktivierbar:** siehe [HTTPS und Secret-Vault](docs/HTTPS_AND_VAULT.md). HTTP im LAN ist unverschlüsselt. Vor Eingabe echter Passwörter einen HTTPS-Reverse-Proxy mit gültigem Zertifikat nutzen; keine WAN-Portweiterleitungen!
 
-## Schnellstart (Docker Compose)
+## Schnellstart (Docker Compose – NGINX inklusive)
 
-Voraussetzungen: Docker Engine inkl. Compose Plugin (oder Docker Desktop).
+Voraussetzung: Docker Engine inklusive Docker Compose Plugin. NGINX, ASP.NET Core und PostgreSQL werden mit **einem** Befehl gestartet.
 
 ```bash
 git clone https://github.com/DerHausmeisterKrause/plenaro.git
 cd plenaro
 cp .env.example .env
-```
-
-In `.env` `POSTGRES_PASSWORD` mit einem **zufällig erzeugten, starken Passwort** befüllen, z. B. unter Linux mit `openssl rand -hex 32`. Die Beispiel-Datei enthält **absichtlich kein Passwort**.
-
-```bash
+# In .env ein starkes POSTGRES_PASSWORD setzen (z. B. openssl rand -hex 32).
 docker compose up -d --build --wait
 docker compose ps
-curl -f http://127.0.0.1:8080/health/live
-curl -f http://127.0.0.1:8080/health/ready
+curl -f http://127.0.0.1/health/ready
 ```
 
-Unter Windows/PowerShell: `Copy-Item .env.example .env` statt `cp`.
+Die Seite ist standardmäßig direkt unter **http://HOST-IP/** erreichbar, ohne `:8080`. Bei optional aktiviertem HTTPS unter **https://HOST-IP/**; Anfragen an HTTP werden dann automatisch nach HTTPS umgeleitet. Ein optionaler FQDN kann über `PLENARO_SERVER_NAME` angegeben werden, sofern der DNS-Eintrag auf die Server-IP zeigt.
 
-Weboberfläche: **http://HOST-IP:8080** (zum Beispiel `http://192.168.178.50:8080`). Der Compose-Port ist standardmäßig auf **0.0.0.0** gebunden, also auf allen Interfaces des Docker-Hosts. `PLENARO_BIND_IP=127.0.0.1` begrenzt auf den lokalen Host; `PLENARO_BIND_IP=192.168.178.50` begrenzt auf diese Host-IP. Die Host-IP muss tatsächlich auf dem Host vorhanden sein. **Kein Portforwarding ins Internet einrichten und keinen öffentlichen Server ohne HTTPS und Authentifizierung betreiben!** Falls der LAN-Zugriff fehlschlägt, Host-Firewall/TCP 8080 für das vertrauenswürdige LAN prüfen.
+**Bereits installierte Version:** Vor der Umstellung die bisherigen Container mit `docker compose down --remove-orphans` stoppen (ohne `-v`!), dann `git pull --ff-only` und `docker compose up -d --build --wait --remove-orphans`. Wer zuvor den Caddy-Overlay gestartet hat, beendet vor dem Update dessen Stack mit `docker compose -f compose.yaml -f compose.secure.yaml down`.
+
+Die HTTP-/HTTPS-Wahl sowie Hostpfade für Zertifikat und Schlüssel werden vollständig in der `.env` konfiguriert. Beispiele stehen in [NGINX, HTTPS und Secret-Vault](docs/HTTPS_AND_VAULT.md). Keine Internetfreigabe ohne Sicherheitsabnahme.
 
 ### Betrieb und Daten
 
@@ -55,7 +52,7 @@ Beim Web-Start werden neue SQL-Migrationen automatisch und transaktional eingesp
 
 ```bash
 docker compose exec -T database psql -U plenaro -d plenaro -c 'SELECT migration_id, applied_at FROM schema_migrations ORDER BY migration_id;'
-curl -f http://127.0.0.1:8080/health/ready
+curl -f http://127.0.0.1/health/ready
 ```
 
 Wenn Benutzername/DB-Name in `.env` angepasst wurden, auch den obigen psql-Befehl entsprechend anpassen. Die Migrationen liegen unter `src/Plenaro.Api/Database/Migrations`. Beim nächsten Code-Update bitte **vorher ein Datenbankbackup erstellen**. Ein fehlgeschlagenes Upgrade wird nicht automatisch rückwärts migriert.
@@ -130,8 +127,10 @@ Unter **Einstellungen** kann jeder angemeldete Benutzer sein Hell-/Dunkel-Design
 
 Der Wochenbeginn dient als vorbereitete Einstellung für die spätere Planung, eine Kalenderansicht nutzt ihn noch nicht. **Keine Passwörter, Graph-Tokens, API-Schlüssel oder andere Secrets in die Einstellungen eingeben!** Deren Verschlüsselung und sichere Speicherung erfolgen als gesonderter Schritt. Betrieb mit echten Konten nur über HTTPS.
 
-## Optionaler sicherer LAN-Betrieb (HTTPS + Secret-Vault)
+## NGINX, HTTPS und Secret-Vault
 
-Mit `compose.secure.yaml` und Caddy lässt sich der Host-Port von HTTP auf HTTPS umstellen. Dazu muss zunächst das **externe Secret-Master-Keyfile** erzeugt und geschützt sowie die lokale Zertifizierungsstelle auf den eigenen Geräten als vertrauenswürdig installiert werden. Ein normaler `docker compose up` aktiviert diesen Modus bewusst **nicht automatisch**.
+NGINX läuft **immer mit Docker Compose**. Über `PLENARO_HTTPS_ENABLED=false` (Standard) wird Port 80 für HTTP verwendet. Bei `true` werden das in der `.env` angegebene Zertifikat und der Schlüssel geladen, HTTPS auf 443 bedient und HTTP automatisch auf HTTPS umgeleitet. Kein zweiter Compose-Overlay und kein Caddy nötig.
 
-Die Anleitung mit vollständigen Befehlen und Sicherheitsgrenzen steht unter [HTTPS und Secret-Vault](docs/HTTPS_AND_VAULT.md).
+Der verschlüsselte Integrations-Vault nutzt bei Aktivierung eine separate Schlüsseldatei unter `./secrets/vault.key`. Sie muss separat gesichert werden.
+
+Siehe [NGINX, HTTPS und Secret-Vault](docs/HTTPS_AND_VAULT.md).

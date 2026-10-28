@@ -33,9 +33,10 @@ jobs:
           POSTGRES_PASSWORD: ci-only-not-for-production
         run: |
           set -euo pipefail
+          mkdir -p secrets
           trap 'docker compose down -v --remove-orphans || true' EXIT
           docker compose up -d --build --wait --wait-timeout 180
-          API=http://127.0.0.1:8080
+          API=http://127.0.0.1
           curl -fsS "$API/health/ready" | grep -q '"schema":"current"'
           curl -fsS "$API/api/v1/setup/status" | grep -q '"required":true'
 
@@ -86,24 +87,45 @@ jobs:
             -d '{"displayName":"Test User","role":"User","disabled":true}')" = "204"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/auth/me")" = "401"
 
-          # Verify the optional secure overlay in the SAME smoke job.
+          # NGINX HTTP is the default; web itself has NO exposed 8080 port.
+          curl -fsS "http://127.0.0.1/health/ready" | grep -q '"schema":"current"'
+          if curl -fsS --max-time 3 http://127.0.0.1:8080/health/live; then
+            echo "ASP.NET must not be published on 8080"; exit 1
+          fi
+
+          # Same CI job, now switch to HTTPS with an explicit certificate/key from env.
           mkdir -p secrets
           openssl rand -hex 32 > secrets/vault.key
-          chmod 0644 secrets/vault.key
-          docker compose -f compose.yaml -f compose.secure.yaml config --quiet
-          docker compose -f compose.yaml -f compose.secure.yaml up -d --build --wait --wait-timeout 180
-          docker compose -f compose.yaml -f compose.secure.yaml cp proxy:/data/caddy/pki/authorities/local/root.crt ./ci-ca.crt
-          curl --fail --silent --show-error --cacert ./ci-ca.crt \
-            --resolve plenaro.home.arpa:443:127.0.0.1 https://plenaro.home.arpa/health/ready \
-            | grep -q '"schema":"current"'
+          chmod 0644 secrets/vault.key   # CI-only file, see docs for production permissions.
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -subj '/CN=plenaro.test' -addext 'subjectAltName=DNS:plenaro.test' \
+            -keyout ci-tls.key -out ci-tls.crt
+          export PLENARO_HTTPS_ENABLED=true
+          export PLENARO_SERVER_NAME=plenaro.test
+          export PLENARO_TLS_CERT_PATH="$PWD/ci-tls.crt"
+          export PLENARO_TLS_KEY_PATH="$PWD/ci-tls.key"
+          export PLENARO_VAULT_KEY_FILE=/run/plenaro-secrets/vault.key
+          docker compose config --quiet
+          docker compose up -d --force-recreate --wait --wait-timeout 180
 
-          # One authenticated vault round-trip: API exposes names, not secret values.
-          secure() { curl -fsS --cacert ./ci-ca.crt --resolve plenaro.home.arpa:443:127.0.0.1 "$@"; }
+          # HTTP redirects; the TLS connection validates the self-signed test certificate.
+          HEADERS=$(curl -sSI -H 'Host: plenaro.test' http://127.0.0.1/health/ready)
+          echo "$HEADERS" | grep -q '301 Moved Permanently'
+          echo "$HEADERS" | grep -qi 'location: https://plenaro.test/health/ready'
+          secure() { curl -fsS --cacert ./ci-tls.crt --resolve plenaro.test:443:127.0.0.1 "$@"; }
+          HTTPS=https://plenaro.test
+          secure "$HTTPS/health/ready" | grep -q '"schema":"current"'
           JAR=$(mktemp)
-          HTTPS=https://plenaro.home.arpa
+          trap 'rm -f "$COOKIE" "$USER_COOKIE" "$JAR"; docker compose down -v --remove-orphans || true' EXIT
           T=$(secure -c "$JAR" -b "$JAR" "$HTTPS/api/v1/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
-          secure -c "$JAR" -b "$JAR" -X POST "$HTTPS/api/v1/auth/login" -H "X-CSRF-TOKEN: $T" -H 'Content-Type: application/json' -d '{"email":"admin@example.invalid","password":"CiTestPassword123!"}'
+          secure -c "$JAR" -b "$JAR" -D ./ci-headers -o /dev/null \
+            -X POST "$HTTPS/api/v1/auth/login" -H "X-CSRF-TOKEN: $T" \
+            -H 'Content-Type: application/json' -d '{"email":"admin@example.invalid","password":"CiTestPassword123!"}'
+          grep -i '^set-cookie: Plenaro.Session=.*secure' ci-headers
           T=$(secure -c "$JAR" -b "$JAR" "$HTTPS/api/v1/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
-          secure -c "$JAR" -b "$JAR" -X PUT "$HTTPS/api/v1/admin/secrets/ci.token" -H "X-CSRF-TOKEN: $T" -H 'Content-Type: application/json' -d '{"value":"CI_VALUE_ONLY"}'
+          secure -c "$JAR" -b "$JAR" -X PUT "$HTTPS/api/v1/admin/secrets/ci.token" \
+            -H "X-CSRF-TOKEN: $T" -H 'Content-Type: application/json' \
+            -d '{"value":"CI_VALUE_ONLY"}'
           secure -b "$JAR" "$HTTPS/api/v1/admin/secrets/" | grep -q '"ci.token"'
-          docker compose -f compose.yaml -f compose.secure.yaml exec -T database psql -U plenaro -d plenaro -Atc "SELECT ciphertext <> convert_to('CI_VALUE_ONLY', 'UTF8') FROM encrypted_secrets WHERE secret_name='ci.token'" | grep -qx 't'
+          docker compose exec -T database psql -U plenaro -d plenaro -Atc \
+            "SELECT ciphertext <> convert_to('CI_VALUE_ONLY', 'UTF8') FROM encrypted_secrets WHERE secret_name='ci.token'" | grep -qx 't'

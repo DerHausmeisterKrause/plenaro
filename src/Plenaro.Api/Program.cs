@@ -32,22 +32,19 @@ var builder = WebApplication.CreateBuilder(
     args.Where(a => a != "--bootstrap-admin" && a != "--setup-token").ToArray());
 
 var requireHttps = builder.Configuration.GetValue<bool>("Security:RequireHttps");
-if (requireHttps)
+// Always trust forwarded headers from exactly our own NGINX container, never from
+// arbitrary LAN clients. Correct client IPs are essential for login rate limits.
+var trustedProxy = builder.Configuration["Security:TrustedProxyIp"];
+if (!IPAddress.TryParse(trustedProxy, out var proxyIp))
+    throw new InvalidOperationException("NGINX requires Security:TrustedProxyIp.");
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
-    // Opt-in only. An exact known proxy IP prevents forged X-Forwarded-Proto headers
-    // from untrusted clients changing the scheme or origin of requests.
-    var trustedProxy = builder.Configuration["Security:TrustedProxyIp"];
-    if (!IPAddress.TryParse(trustedProxy, out var proxyIp))
-        throw new InvalidOperationException("HTTPS proxy mode requires Security:TrustedProxyIp.");
-    builder.Services.Configure<ForwardedHeadersOptions>(options =>
-    {
-        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-        options.ForwardLimit = 1;
-        options.KnownIPNetworks.Clear();
-        options.KnownProxies.Clear();
-        options.KnownProxies.Add(proxyIp);
-    });
-}
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+    options.KnownProxies.Add(proxyIp);
+});
 
 var connectionString = builder.Configuration.GetConnectionString("Plenaro");
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -145,9 +142,10 @@ if (setupToken)
     return;
 }
 
+app.UseForwardedHeaders();
+
 if (requireHttps)
 {
-    app.UseForwardedHeaders();
     // The Docker healthcheck connects directly over loopback; no other HTTP entry
     // point is permitted in secure mode (including API requests and static pages).
     app.Use(async (http, next) =>
