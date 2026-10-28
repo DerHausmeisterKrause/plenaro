@@ -11,6 +11,11 @@ beforeEach(() => {
     if (path === '/api/v1/settings/global') return {
       ok: true, status: 200, json: async () => ({ instanceName: 'Plenaro', supportEmail: '', defaultWeekStart: 'monday' }),
     };
+    if (path === '/api/v1/graph/status') return {
+      ok: true, status: 200, json: async () => ({
+        enabled: false, linked: false, vaultReady: false, connected: false,
+      }),
+    };
     if (path === '/api/v1/auth/entra/status') return {
       ok: true, status: 200, json: async () => ({ enabled: false, linked: false }),
     };
@@ -79,6 +84,12 @@ describe('Plenaro web shell', () => {
     renderAt('/login');
     expect(await screen.findByRole('heading', { name: 'Willkommen zurück.' })).toBeTruthy();
     expect(screen.queryByText('Mit Microsoft anmelden')).toBeNull();
+  });
+
+  it('zeigt im Wochenkalender ohne Entra einen nachvollziehbaren Einrichtungszustand', async () => {
+    renderAt('/week');
+    expect(await screen.findByRole('heading', { name: 'Microsoft Graph ist noch nicht eingerichtet' })).toBeTruthy();
+    expect(screen.queryByText('Outlook verbinden')).toBeNull();
   });
 
   it('zeigt unbekannte URLs als Fehlerseite', async () => {

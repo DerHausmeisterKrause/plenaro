@@ -53,8 +53,10 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [x] Entra App Registration: Tenant, Web Redirect URI, OIDC Authorization Code + PKCE, Minimal-Scopes dokumentieren (docs/ENTRA_SSO.md)
 - [x] Optionaler Single-Tenant-Entra-SSO-Login neben lokalen Benutzern (HTTPS, tenantgebundene ID-Token-Validierung, keine automatische Registrierung)
 - [x] Entra-Identität nur nach ausdrücklicher Kontoverknüpfung im lokalen Login via tid+oid und bestätigendem CSRF-POST zulassen; E-Mail-Matching ausgeschlossen
-- [ ] Tenant-/App-IDs derzeit per .env, Client Secret per Hostdatei; spätere Admin-UI-Konfiguration und sichere Graph-Tokenverwaltung offen
-- [ ] Microsoft Graph: Kalender lesen, Termin erstellen/ändern/löschen
+- [x] Serverseitige delegierte Graph-Tokenverwaltung: OAuth/PKCE und pro User AES-256-GCM-verschlüsselte Refresh-Tokens (Token-Rotation beim Abruf)
+- [ ] Tenant-/App-IDs derzeit per .env, Client Secret per Hostdatei; spätere Admin-UI-Konfiguration und realer Entra-Tenant-Test offen
+- [x] Graph-Kalender-Lese-API und Wochenansicht implementiert (eine Woche, maximal 100 Einträge; ohne echte Entra-Abnahme)
+- [ ] Microsoft Graph: Termine erstellen/ändern/löschen, Pagination und Mehrkalender-Auswahl
 - [ ] Busy-Anzeige, Teams-Einladungen und Fokusblock-Synchronisation
 - [ ] Echter Entra-Tenant-SSO-/Verknüpfungs-/Konflikttest auf dem Zielhost (ohne Microsoft-Credentials in CI)
 

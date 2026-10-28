@@ -140,3 +140,11 @@ Siehe [NGINX, HTTPS und Secret-Vault](docs/HTTPS_AND_VAULT.md).
 Neben dem lokalen Login kann die Microsoft-Anmeldung zugeschaltet werden, **nur bei HTTPS**. Per `.env` werden Tenant-ID und Client-ID hinterlegt; der Client-Secret-Wert bleibt ausschließlich in einer separaten, gemounteten Datei unter `secrets/`. Microsoft-Konten werden **nicht** automatisch angelegt oder per E-Mail zugeordnet: Benutzer melden sich zuerst lokal an und verknüpfen ihr bestehendes Konto unter Einstellungen mit ihrer Microsoft-Identität.
 
 Anleitung: [Microsoft Entra SSO](docs/ENTRA_SSO.md). Der CI-Test prüft den standardmäßig deaktivierten Zustand, ein vollständiger Authentifizierungs-Test mit einem echten Entra-Tenant ist noch offen. **Microsoft Graph/Outlook ist noch nicht implementiert.**
+
+## Microsoft Graph – Outlook-Wochenkalender (Phase 4)
+
+Die Ansicht **Woche** kann nach einer zusätzlichen, ausdrücklich bestätigten Microsoft-Freigabe den eigenen Outlook-Kalender **nur lesen**. Das Backend bindet die Kalenderberechtigung an die bereits verknüpfte Entra-`tid:oid`-Identität; ein delegierter Refresh-Token liegt AES-256-GCM-verschlüsselt pro Benutzer im Secret-Vault, **niemals im Browser-Cookie**. Ohne Entra oder Vault erscheint ein normaler Einrichtungszustand.
+
+**Noch nicht live mit Microsoft getestet.** Zur späteren Einrichtung sind die zweite Redirect-URI `/signin-graph`, delegierte `User.Read`/`Calendars.Read`-Berechtigungen und ein konfigurierter Vault nötig.
+
+Anleitung: [Microsoft Graph Outlook-Kalender](docs/GRAPH_CALENDAR.md).

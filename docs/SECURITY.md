@@ -89,3 +89,12 @@
 - Lokale Benutzer-Rollen bleiben die **einzigen** autoritativen Rollen. Microsoft-Claims oder E-Mail verleihen niemals Admin-Rechte.
 - Kein Token-Persistieren in Auth-Cookies (`SaveTokens=false`), minimale Scopes `openid profile email`; Client Secret ausschließlich per schreibgeschützter gemounteter Hostdatei.
 - Vollständige Abnahme mit echtem Entra-Tenant, Conditional-Access-Verhalten, Browser-Korrelation, Link-Race/Threat-Model sowie Graph-Delegated-Token-Speicher bleibt offen.
+
+## Phase 4 – Delegierte Graph-Kalenderberechtigungen
+
+- Delegierte Microsoft-Scopes `User.Read`, `Calendars.Read`, `offline_access`. Keine Anwendungsvollzugriffe, keine Schreibrechte.
+- Authentifizierter User startet die separate OAuth-Challenge; Korrelation/State wird vom ASP.NET-OAuth-Handler geschützt. Graph-`/me` liefert die Objekt-ID, die vor Token-Persistierung zu einem ausdrücklich verknüpften `tid:oid`-Account passen muss.
+- AES-256-GCM-Vault speichert rotierende Refresh-Tokens individuell je lokalem Benutzer. Keine Tokens in Redirect-URL, HTML, Cookies oder Graph-Status-API. Transienten Access-Token nur serverseitig für feste Microsoft-Endpunkte.
+- Browser erhält nur terminbezogene Minimalfelder; weder Microsoft-Token noch rohe Graph-Responses. Abfragen sind auf 14 Tage und 100 Termine begrenzt; `Cache-Control: no-store`.
+- Trennen des Kalenders und Entkoppeln der Microsoft-Identität löschen den gespeicherten Graph-Refresh-Token. Ein entferntes Secret widerruft nicht automatisch bereits bei Microsoft ausgegebene Tokens; Widerruf zusätzlich über Microsoft-Konto-/Tenant-Einstellungen möglich.
+- Offen: echte Identity-Provider-Tests, Token-Cache und parallele Refresh-Token-Rotation, mehrseitige Kalenderabfragen, striktere Retry-/Throttling-Strategie, Audit und Microsoft-Graph-Schreibrechte.
