@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { LoginPage, LogoutPage } from './AuthPage';
-import { currentUser, type CurrentUser } from './authApi';
+import { currentUser, setupRequired, type CurrentUser } from './authApi';
+import { SetupPage } from './SetupPage';
 import { checkHealth, type HealthState } from './api';
 import { navigation, type ModuleKey, type NavigationEntry } from './navigation';
 
@@ -247,6 +248,15 @@ export function AppContent() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const { web, database } = useHealth();
   const [user, setUser] = useState<CurrentUser | null | undefined>(undefined);
+  const [setupState, setSetupState] = useState<'loading' | 'required' | 'complete' | 'error'>('loading');
+
+  useEffect(() => {
+    let active = true;
+    void setupRequired().then(required => {
+      if (active) setSetupState(required ? 'required' : 'complete');
+    }).catch(() => { if (active) setSetupState('error'); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -266,6 +276,21 @@ export function AppContent() {
 
   const current = navigation.find((entry) => location.pathname === entry.path);
   const pageTitle = current?.label ?? (location.pathname === '/system' ? 'Systemstatus' : 'Übersicht');
+
+  // Auth and installation screens must not render sidebar, topbar or app footer.
+  if (setupState === 'loading')
+    return <main className="auth-standalone-main"><p role="status">Plenaro wird geladen …</p></main>;
+  if (setupState === 'error')
+    return <main className="auth-standalone-main"><p role="alert">Verbindung zum Server fehlgeschlagen. Bitte Seite neu laden.</p></main>;
+  if (setupState === 'required')
+    return <div className="auth-standalone"><SetupPage onCompleted={() => setSetupState('complete')} /></div>;
+  if (location.pathname === '/setup') return <Navigate to="/login" replace />;
+  if (location.pathname === '/login')
+    return user ? <Navigate to="/" replace /> :
+      <div className="auth-standalone"><LoginPage onLogin={setUser} user={null} /></div>;
+  if (location.pathname === '/logout')
+    return <div className="auth-standalone"><LogoutPage onLogout={() => setUser(null)} user={user ?? null} /></div>;
+  if (user === null && location.pathname !== '/system') return <Navigate to="/login" replace />;
 
   return (
     <div className="app-shell">
@@ -295,12 +320,10 @@ export function AppContent() {
             <Route path="/" element={<PrivateArea user={user}><Dashboard web={web} database={database}/></PrivateArea>} />
             {navigation.map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
             <Route path="/system" element={<SystemPage web={web} database={database}/>} />
-            <Route path="/login" element={<LoginPage onLogin={setUser} user={user ?? null} />} />
-            <Route path="/logout" element={<LogoutPage onLogout={() => setUser(null)} user={user ?? null} />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
-        <footer className="footer"><span>© 2026 Plenaro · Self-hosted Community Preview</span><span>Web v0.3.0 · <Link to="/system">Systemstatus</Link></span></footer>
+        <footer className="footer"><span>© 2026 Plenaro · Self-hosted Community Preview</span><span>Web v0.3.1 · <Link to="/system">Systemstatus</Link></span></footer>
       </div>
     </div>
   );
