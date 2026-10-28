@@ -1,0 +1,29 @@
+# Lokale Zugangsdaten
+.env
+.env.*
+!.env.example
+**/appsettings.Development.json
+**/appsettings.Production.json
+**/secrets.json
+
+# .NET
+**/bin/
+**/obj/
+**/TestResults/
+*.user
+*.suo
+.vs/
+.idea/
+.vscode/
+
+# Build / tools / backups
+artifacts/
+coverage/
+*.log
+*.db
+*.db-shm
+*.db-wal
+*.bak
+*.dump
+*.sql.gz
+.DS_Store
