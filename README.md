@@ -171,3 +171,13 @@ Unter **Einstellungen → UL- und BR-Kontingente** legt jeder Benutzer für sich
 Leer gelassene Felder bedeuten „nicht konfiguriert“, ausdrücklich `0` bedeutet ein ausgeschöpftes Kontingent. Die Übersicht zeigt verbrauchte und verbleibende Tage und eine Warnung bei **0 Resttagen oder einer Überschreitung**. Die Warnung blockiert keine Eintragungen, da nachträgliche Korrekturen möglich sein müssen. Nur wirklich markierte Tage werden gezählt, keine pauschalen Wochenenden/Feiertage. `AM` besitzt kein Kontingent. **Keine automatische Berücksichtigung von Feiertagen, Vorjahresüberträgen oder anteiligen Urlaubstagen** in dieser Version.
 
 Gespeichert wird pro lokalem Benutzer in PostgreSQL; andere Benutzer können weder Einstellungen noch Marker abrufen oder verändern. Eine neue additive Migration `0009_day_markers_budgets.sql` erhält die alten Tabellen. Die Weboberfläche meldet verbrauchte Kontingente, ohne automatisch echte Urlaubsansprüche zu berechnen.
+
+## Plenaro-Classic-Bedienoberfläche und lokaler Wochenkalender
+
+Die Weboberfläche übernimmt nun das gewohnte Arbeitsmuster des alten Desktop-Programms: **Aufgabenliste links und ausgewählte Aufgabe rechts** (Schnellerfassung, Suche, Filter, Detailaktionen). Das Ticketsystem hat dieselbe Zweiteilung, seine echten Ticketdaten folgen erst mit dem Znuny-Adapter.
+
+**Wochenplanung funktioniert ohne Entra ID oder Outlook:** lokales 06–18-Uhr-Kalenderraster mit PostgreSQL-Aufgaben, UL/AM/BR und Tagesdetails. Microsoft Graph fügt optional weitere Termine hinzu, darf aber die lokale Anzeige nicht blockieren.
+
+Die Einstellungen sind nach Allgemein, Aufgaben & Kalender, Microsoft 365, Ticketsystem, Konto & Sicherheit und Administration gegliedert. Hell-/Dunkelmodus und mobile Navigation bleiben erhalten.
+
+Details und offener Funktionsumfang: [Classic-UI-Referenz](docs/CLASSIC_UI.md).
