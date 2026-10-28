@@ -120,3 +120,9 @@ Migration \`0005_user_management.sql\` ergänzt das administrative Deaktivierung
 - Schreibaktionen benötigen gültigen CSRF-Token; Titel/Status/Priorität/Tags werden auf dem Server validiert. Fremde IDs liefern 404. Benutzerlöschung erfordert gesonderte Datenübernahme; Aufgabenlöschung nutzt bestehende FK-Regeln.
 - React `/tasks` mit CRUD, Suche, Statusfilter, Prioritäten/Tags; `/today` mit Aktuell/Geplant/Erledigt und datumsgebundener Filterung. Keine Dummy-Daten.
 - Die Nutzer-Checkliste nennt diesen Arbeitsschritt Phase 2, die ursprüngliche **technische 7-Phasen-Roadmap** führt Aufgaben/Zeit unter Phase 5. Beide bezeichnen dieselbe geplante Funktionsgruppe.
+
+## UL/AM/BR Marker und persönliche Kontingente
+
+Migration `0009_day_markers_budgets.sql` führt `day_markers(user_id,day,day_type,is_br)` und `day_marker_budgets(user_id,annual_ul_days,monthly_br_days)` ein. `Normal/UL/AM` sind exklusive Tagesarten; das unabhängige `is_br`-Flag bleibt frei kombinierbar wie in der Desktop-Version. Der Normalzustand ohne BR wird durch Entfernen des Eintrags dargestellt. Alle Daten sind per Identity-User-ID und FK isoliert; alle mutierenden Endpunkte prüfen Antiforgery.
+
+Die API `/api/v1/day-markers` stellt Monatsmarker, Budget, Zusammenfassung und Marker-Upsert bereit. UL wird pro Kalenderjahr, BR pro Kalendermonat gezählt. `NULL`-Budget unterscheidet nicht eingerichtet von ausdrücklich null verfügbaren Tagen. Quoten werden angezeigt und bei Erreichen/Überschreiten gewarnt – nicht als harte Schreibsperre umgesetzt.

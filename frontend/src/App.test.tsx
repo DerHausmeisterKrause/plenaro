@@ -11,6 +11,14 @@ beforeEach(() => {
     if (path === '/api/v1/settings/global') return {
       ok: true, status: 200, json: async () => ({ instanceName: 'Plenaro', supportEmail: '', defaultWeekStart: 'monday' }),
     };
+    if (path === '/api/v1/day-markers/budget') return { ok: true, status: 200, json: async () => ({ annualUlDays: null, monthlyBrDays: null }) };
+    if (path.startsWith('/api/v1/day-markers/summary?')) return { ok: true, status: 200, json: async () => ({
+      year: 2026, month: 10, annualUlDays: null, usedUlDays: 0,
+      remainingUlDays: null, ulExhausted: false, ulExceeded: false,
+      monthlyBrDays: null, usedBrDays: 0,
+      remainingBrDays: null, brExhausted: false, brExceeded: false,
+    }) };
+    if (path.startsWith('/api/v1/day-markers/?')) return { ok: true, status: 200, json: async () => [] };
     if (path.startsWith('/api/v1/tasks/')) return {
       ok: true, status: 200, json: async () => ([]),
     };
@@ -108,6 +116,12 @@ describe('Plenaro web shell', () => {
     expect(await screen.findByRole('heading', { name: 'Heute' })).toBeTruthy();
     expect(await screen.findByRole('heading', { name: 'Aktuell' })).toBeTruthy();
     expect(await screen.findByRole('heading', { name: 'Erledigt' })).toBeTruthy();
+  });
+
+  it('zeigt UL/AM/BR-Marker ohne falsche Kontingentwarnung', async () => {
+    renderAt('/today');
+    expect(await screen.findByRole('heading', { name: 'Tagesmarker · UL / AM / BR' })).toBeTruthy();
+    expect(await screen.findAllByText('Noch nicht konfiguriert')).toHaveLength(2);
   });
 
   it('zeigt unbekannte URLs als Fehlerseite', async () => {

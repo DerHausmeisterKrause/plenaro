@@ -158,3 +158,16 @@ Unter **Heute** erscheinen die aktiven Aufgaben, die bis heute geplanten noch of
 API `GET /api/v1/tasks/`, `GET /api/v1/tasks/today?date=YYYY-MM-DD`, `POST /api/v1/tasks/`, `PUT /api/v1/tasks/{id}`, `POST /api/v1/tasks/{id}/status` und `DELETE /api/v1/tasks/{id}`. Änderungen verlangen CSRF. Eine neue additive Migration `0008_task_planning.sql` erhält sämtliche bisherigen Daten.
 
 **Noch nicht fertig:** Abbildung aller Datenfelder des alten Desktopprogramms, historischer SQLite-Datenimport, Zeit-/Segmentplanung, Benachrichtigungen und Mehrbenutzerfreigaben. Aufgabenlöschung ist endgültig; zugeordnete Segmente werden laut Datenbankschema mit entfernt.
+
+## UL / AM / BR – Tagesmarker und Kontingente
+
+Unter **Heute** und **Wochenplanung** gibt es einen Monatskalender mit Tagesmarkern.
+`UL` (Urlaub) und `AM` entsprechen den **alternativen Tagesarten** der früheren Desktop-Version. `BR` ist wie im Desktopmodell ein **separater Marker**, der unabhängig an einem Tag gesetzt werden kann. Kommen/Gehen, Pausen und Sollzeit werden **nicht** in diese Funktion übernommen.
+
+Unter **Einstellungen → UL- und BR-Kontingente** legt jeder Benutzer für sich selbst fest:
+- **UL-Tage pro Kalenderjahr** (0–366); bei jedem neuen Jahr wird separat gezählt.
+- **BR-Tage pro Kalendermonat** (0–31); bei jedem neuen Monat wird separat gezählt.
+
+Leer gelassene Felder bedeuten „nicht konfiguriert“, ausdrücklich `0` bedeutet ein ausgeschöpftes Kontingent. Die Übersicht zeigt verbrauchte und verbleibende Tage und eine Warnung bei **0 Resttagen oder einer Überschreitung**. Die Warnung blockiert keine Eintragungen, da nachträgliche Korrekturen möglich sein müssen. Nur wirklich markierte Tage werden gezählt, keine pauschalen Wochenenden/Feiertage. `AM` besitzt kein Kontingent. **Keine automatische Berücksichtigung von Feiertagen, Vorjahresüberträgen oder anteiligen Urlaubstagen** in dieser Version.
+
+Gespeichert wird pro lokalem Benutzer in PostgreSQL; andere Benutzer können weder Einstellungen noch Marker abrufen oder verändern. Eine neue additive Migration `0009_day_markers_budgets.sql` erhält die alten Tabellen. Die Weboberfläche meldet verbrauchte Kontingente, ohne automatisch echte Urlaubsansprüche zu berechnen.

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, Link2, RefreshCw, Unplug } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { DayMarkersPanel } from './DayMarkersPanel';
 import {
   disconnectOutlook, graphStatus, readOutlookWeek,
   type GraphStatus, type OutlookWeek, type OutlookEvent,
@@ -91,6 +92,7 @@ export function WeekCalendarPage() {
       <h1>Meine Woche</h1>
       <p>Deine Outlook-Termine – sicher über Microsoft Graph synchronisiert.</p>
     </div>
+    <DayMarkersPanel/>
     {notice && <p role="status" className="um-feedback success">{notice}</p>}
     {error && <p role="alert" className="um-feedback failure">{error}</p>}
 
