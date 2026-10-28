@@ -70,6 +70,12 @@ describe('Plenaro web shell', () => {
   });
 
   it('versteckt Microsoft SSO wenn Entra nicht eingerichtet ist', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (path: string) =>
+      path === '/api/v1/auth/me' ? { ok: false, status: 401 } :
+      path === '/api/v1/setup/status' ? { ok: true, status: 200, json: async () => ({ required: false }) } :
+      path === '/api/v1/auth/entra/status' ? { ok: true, status: 200, json: async () => ({ enabled: false, linked: false }) } :
+      { ok: true, status: 200 },
+    ));
     renderAt('/login');
     expect(await screen.findByRole('heading', { name: 'Willkommen zurück.' })).toBeTruthy();
     expect(screen.queryByText('Mit Microsoft anmelden')).toBeNull();
