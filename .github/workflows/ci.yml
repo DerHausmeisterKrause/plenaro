@@ -68,6 +68,19 @@ jobs:
             -X POST "$API/api/v1/auth/login" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' \
             -d '{"email":"user@example.invalid","password":"CiUserPassword123!"}')" = "204"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/admin/users/")" = "403"
+          # One focused settings test: access control, account separation and persistence.
+          test "$(curl -fsS -b "$COOKIE" "$API/api/v1/settings/me" | python3 -c 'import json,sys; assert json.load(sys.stdin)["theme"]=="light"; print("ok")')" = "ok"
+          USER_CSRF=$(curl -fsS -c "$USER_COOKIE" -b "$USER_COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$USER_COOKIE" -b "$USER_COOKIE" -X PUT "$API/api/v1/settings/me" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"theme":"dark","weekStart":"sunday"}')" = "204"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/settings/me" | grep -q '"theme":"dark"'
+          curl -fsS -b "$COOKIE" "$API/api/v1/settings/me" | grep -q '"theme":"light"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$USER_COOKIE" -b "$USER_COOKIE" -X PUT "$API/api/v1/settings/global" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"instanceName":"Unauthorized","supportEmail":"","defaultWeekStart":"sunday"}')" = "403"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X PUT "$API/api/v1/settings/global" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"instanceName":"Plenaro CI","supportEmail":"support@example.invalid","defaultWeekStart":"sunday"}')" = "204"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/settings/global" | grep -q '"instanceName":"Plenaro CI"'
+          docker compose restart web
+          docker compose up -d --wait --wait-timeout 120
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/settings/me" | grep -q '"theme":"dark"'
+          curl -fsS -b "$COOKIE" "$API/api/v1/settings/global" | grep -q '"instanceName":"Plenaro CI"'
           test "$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" \
             -X PUT "$API/api/v1/admin/users/$ID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
             -d '{"displayName":"Test User","role":"User","disabled":true}')" = "204"
