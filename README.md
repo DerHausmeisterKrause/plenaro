@@ -148,3 +148,13 @@ Die Ansicht **Woche** kann nach einer zusätzlichen, ausdrücklich bestätigten 
 **Noch nicht live mit Microsoft getestet.** Zur späteren Einrichtung sind die zweite Redirect-URI `/signin-graph`, delegierte `User.Read`/`Calendars.Read`-Berechtigungen und ein konfigurierter Vault nötig.
 
 Anleitung: [Microsoft Graph Outlook-Kalender](docs/GRAPH_CALENDAR.md).
+
+## Eigene Aufgaben verwalten (funktionaler Meilenstein)
+
+Unter **Aufgaben** kannst du eigene Aufgaben mit Titel, Beschreibung, Status (Geplant/In Arbeit/Erledigt/Abgebrochen), Priorität 1–5, Tags und optionalem Planungsdatum anlegen, bearbeiten, erledigen, wieder öffnen und nach Bestätigung löschen. Über die Suchleiste und den Statusfilter lassen sich höchstens 200 Treffer auf einmal abrufen.
+
+Unter **Heute** erscheinen die aktiven Aufgaben, die bis heute geplanten noch offenen Aufgaben und die für heute geplanten erledigten Aufgaben. Aufgaben ohne Datum erscheinen hier nur, wenn sie bereits **In Arbeit** sind; ansonsten in **Aufgaben**. Es werden **keine** Demo-Datensätze angelegt. Aufgaben sind per lokaler Identity-Benutzer-ID serverseitig voneinander isoliert.
+
+API `GET /api/v1/tasks/`, `GET /api/v1/tasks/today?date=YYYY-MM-DD`, `POST /api/v1/tasks/`, `PUT /api/v1/tasks/{id}`, `POST /api/v1/tasks/{id}/status` und `DELETE /api/v1/tasks/{id}`. Änderungen verlangen CSRF. Eine neue additive Migration `0008_task_planning.sql` erhält sämtliche bisherigen Daten.
+
+**Noch nicht fertig:** Abbildung aller Datenfelder des alten Desktopprogramms, historischer SQLite-Datenimport, Zeit-/Segmentplanung, Benachrichtigungen und Mehrbenutzerfreigaben. Aufgabenlöschung ist endgültig; zugeordnete Segmente werden laut Datenbankschema mit entfernt.

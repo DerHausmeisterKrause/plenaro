@@ -18,6 +18,7 @@ using Plenaro.Api.Identity;
 using Plenaro.Api.Settings;
 using Plenaro.Api.Secrets;
 using Plenaro.Api.Graph;
+using Plenaro.Api.Tasks;
 
 if (args.Contains("--healthcheck", StringComparer.Ordinal))
 {
@@ -353,5 +354,6 @@ app.MapAdminUsers();
 app.MapPlenaroSettings();
 app.MapPlenaroSecrets();
 app.MapPlenaroGraph();
+app.MapPlenaroTasks();
 app.MapFallbackToFile("index.html");
 app.Run();

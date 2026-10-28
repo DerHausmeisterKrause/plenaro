@@ -112,3 +112,11 @@ Migration \`0005_user_management.sql\` ergänzt das administrative Deaktivierung
 - Geschützter Endpunkt `GET /api/v1/graph/calendar` für festes `/me/calendar/calendarView`: max. 14 Tage, maximal 100 ausgewählte Events, minimaler Datenausschnitt, keine fremden Kalender-URLs.
 - React `/week`: explizite Zustimmung und Widerruf, Wochenwechsel, Kalender-/Busy-Liste und sinnvolle Deaktivierungsansicht ohne Microsoft-Tenant.
 - Noch keine Schreibfunktion, Multi-Calendar-Funktion oder echten Microsoft-Tenant-End-to-End-Tests.
+
+## Funktionale Aufgabenverwaltung – Phase 2 der Nutzer-Checkliste
+
+- Das vorhandene `tasks`-Schema (owner_user_id, status, priority, tags, created/updated/completed) erhält über additive Migration `0008_task_planning.sql` das optionale `planned_for date` und passende ownerbasierte Indizes.
+- Unter `/api/v1/tasks` geschützte PostgreSQL-API. Jeder SQL-Zugriff filtert mit der serverseitig aufgelösten Identity-`owner_user_id` (kein übergebbarer Besitzerparameter).
+- Schreibaktionen benötigen gültigen CSRF-Token; Titel/Status/Priorität/Tags werden auf dem Server validiert. Fremde IDs liefern 404. Benutzerlöschung erfordert gesonderte Datenübernahme; Aufgabenlöschung nutzt bestehende FK-Regeln.
+- React `/tasks` mit CRUD, Suche, Statusfilter, Prioritäten/Tags; `/today` mit Aktuell/Geplant/Erledigt und datumsgebundener Filterung. Keine Dummy-Daten.
+- Die Nutzer-Checkliste nennt diesen Arbeitsschritt Phase 2, die ursprüngliche **technische 7-Phasen-Roadmap** führt Aufgaben/Zeit unter Phase 5. Beide bezeichnen dieselbe geplante Funktionsgruppe.

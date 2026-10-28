@@ -63,7 +63,9 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 **Abnahme:** Lokal-/SSO-Login parallel; Outlook funktioniert ohne lokal installiertes Outlook.
 
 ## Phase 5 – Aufgaben, Zeit, Berichte
-- [ ] Heute-Ansicht und Aufgaben-CRUD inkl. Status, Priorität, Tags und Suche
+- [x] Tasks-CRUD mit Status, Priorität, Tags, Suche und Fällig-/Planungsdatum; Eigentümerabfragen serverseitig abgesichert
+- [x] Lokale Heute-Ansicht: Aktuell/Geplant/Erledigt aus eigenen PostgreSQL-Aufgaben (ohne Demo-Daten)
+- [ ] Vollständige Funktionsparität/Migrationsmapping mit dem Desktop-Programm und weitere Aufgabenfilter
 - [ ] Tages-/Wochenplanung, Segmente und Kalenderdarstellung
 - [ ] Zeitbuchungen, Pausen, Arbeitszeiterfassung und Korrekturen
 - [ ] Monatsberichte und Export
