@@ -10,6 +10,7 @@ import { LoginPage, LogoutPage } from './AuthPage';
 import { currentUser, setupRequired, type CurrentUser } from './authApi';
 import { SetupPage } from './SetupPage';
 import { SettingsPage } from './SettingsPage';
+import { readPersonalPreferences, readWorkspacePreferences, savePersonalPreferences, type PersonalPreferences } from './settingsApi';
 import { checkHealth, type HealthState } from './api';
 import { navigation, type ModuleKey, type NavigationEntry } from './navigation';
 
@@ -161,13 +162,13 @@ function ModuleTile({ item }: { item: NavigationEntry }) {
   );
 }
 
-function Dashboard({ web, database }: { web: HealthState; database: HealthState }) {
+function Dashboard({ web, database, instanceName }: { web: HealthState; database: HealthState; instanceName: string }) {
   return (
     <div className="page">
       <div className="overview-header">
         <div>
           <span className="eyebrow">DEIN WORKSPACE</span>
-          <h1>Willkommen bei Plenaro<span className="h1-dot">.</span></h1>
+          <h1>Willkommen bei {instanceName}<span className="h1-dot">.</span></h1>
           <p>Dein zentraler Arbeitsplatz für Aufgaben, Zeitplanung und IT-Service-Management.</p>
         </div>
         <span className="preview-badge"><span className="preview-dot" /> Vorschau · Phase 3</span>
@@ -247,6 +248,9 @@ export function AppContent() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const [prefs, setPrefs] = useState<PersonalPreferences | null>(null);
+  const [instanceName, setInstanceName] = useState('Plenaro');
+  const [themeError, setThemeError] = useState('');
   const { web, database } = useHealth();
   const [user, setUser] = useState<CurrentUser | null | undefined>(undefined);
   const [setupState, setSetupState] = useState<'loading' | 'required' | 'complete' | 'error'>('loading');
@@ -266,13 +270,39 @@ export function AppContent() {
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    if (!user?.id) { setPrefs(null); setInstanceName('Plenaro'); return; }
+    let active = true;
+    void readPersonalPreferences().then(value => {
+      if (active) {
+        setPrefs(value);
+        setTheme(value.theme);
+        try { window.localStorage.setItem('plenaro-theme', value.theme); } catch { /* optional */ }
+      }
+    }).catch(() => { if (active) setThemeError('Deine gespeicherten Einstellungen konnten nicht geladen werden.'); });
+    void readWorkspacePreferences().then(value => {
+      if (active) setInstanceName(value.instanceName);
+    }).catch(() => { /* Instance name falls back to Plenaro. */ });
+    return () => { active = false; };
+  }, [user?.id]);
+
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
 
+  function applyTheme(next: Theme) {
+    setTheme(next);
+    try { window.localStorage.setItem('plenaro-theme', next); } catch { /* optional */ }
+  }
+
   function toggleTheme() {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    try { window.localStorage.setItem('plenaro-theme', next); } catch { /* session-only */ }
+    if (!user) { applyTheme(next); return; }
+    setThemeError('');
+    const value: PersonalPreferences = { theme: next, weekStart: prefs?.weekStart ?? 'inherit' };
+    void savePersonalPreferences(value).then(() => {
+      setPrefs(value);
+      applyTheme(next);
+    }).catch(() => setThemeError('Darstellung konnte nicht gespeichert werden. Bitte unter Einstellungen erneut versuchen.'));
   }
 
   const current = navigation.find((entry) => location.pathname === entry.path);
@@ -317,10 +347,11 @@ export function AppContent() {
           </div>
         </header>
         <main id="main-content">
+          {themeError && <p role="alert" className="um-feedback failure app-settings-error">{themeError}</p>}
           <Routes>
-            <Route path="/" element={<PrivateArea user={user}><Dashboard web={web} database={database}/></PrivateArea>} />
+            <Route path="/" element={<PrivateArea user={user}><Dashboard web={web} database={database} instanceName={instanceName}/></PrivateArea>} />
             {navigation.filter(item => item.key !== 'settings').map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
-            <Route path="/settings" element={<PrivateArea user={user}><SettingsPage user={user}/></PrivateArea>} />
+            <Route path="/settings" element={<PrivateArea user={user}><SettingsPage user={user} onPersonalSaved={value => { setPrefs(value); applyTheme(value.theme); setThemeError(''); }} onWorkspaceSaved={value => setInstanceName(value.instanceName)}/></PrivateArea>} />
             <Route path="/system" element={<SystemPage web={web} database={database}/>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
