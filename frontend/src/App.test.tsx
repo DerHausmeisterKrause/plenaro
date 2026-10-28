@@ -64,10 +64,12 @@ describe('Plenaro web shell', () => {
     expect(vi.mocked(fetch)).toHaveBeenCalledWith('/health/ready', expect.any(Object));
   });
 
-  it('navigiert in einen Modul-Platzhalter und meldet keine erfundenen Daten', async () => {
+  it('zeigt das klassische Ticketlayout ohne vorgetäuschte Tickets', async () => {
     renderAt('/tickets');
-    expect(await screen.findByRole('heading', { name: /Dieser Bereich wird aufgebaut/i })).toBeTruthy();
-    expect(screen.getByText(/Geplant für Phase 6/)).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Ticketsystem' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Ticketliste' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Ticketdetails' })).toBeTruthy();
+    expect(screen.getByText('Noch keine Tickets geladen')).toBeTruthy();
   });
 
   it('bietet den Dunkelmodus mit umschaltbarem Zustand', async () => {
@@ -85,6 +87,16 @@ describe('Plenaro web shell', () => {
     expect(screen.getByLabelText('Instanzname')).toBeTruthy();
   });
 
+  it('sortiert Kontingente, Microsoft und Verwaltung in passende Einstellungskategorien', async () => {
+    renderAt('/settings');
+    fireEvent.click(await screen.findByRole('button', { name: 'Aufgaben & Kalender' }));
+    expect(await screen.findByRole('heading', { name: 'UL- und BR-Kontingente' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Microsoft 365' }));
+    expect(screen.getByRole('heading', { name: 'Outlook-Kalender' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Administration' }));
+    expect(await screen.findByRole('heading', { name: 'Benutzerverwaltung' })).toBeTruthy();
+  });
+
   it('versteckt Microsoft SSO wenn Entra nicht eingerichtet ist', async () => {
     vi.stubGlobal('fetch', vi.fn(async (path: string) =>
       path === '/api/v1/auth/me' ? { ok: false, status: 401 } :
@@ -97,15 +109,21 @@ describe('Plenaro web shell', () => {
     expect(screen.queryByText('Mit Microsoft anmelden')).toBeNull();
   });
 
-  it('zeigt im Wochenkalender ohne Entra einen nachvollziehbaren Einrichtungszustand', async () => {
+  it('zeigt den echten lokalen Wochenkalender ohne Microsoft Entra', async () => {
     renderAt('/week');
-    expect(await screen.findByRole('heading', { name: 'Microsoft Graph ist noch nicht eingerichtet' })).toBeTruthy();
-    expect(screen.queryByText('Outlook verbinden')).toBeNull();
+    expect(await screen.findByRole('heading', { name: 'Meine Woche' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Wochenkalender' })).toBeTruthy();
+    expect(screen.getByText('Ohne Microsoft nutzbar')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Vorherige Woche' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Nächste Woche' })).toBeTruthy();
+    expect(screen.queryByText('Microsoft Graph ist noch nicht eingerichtet')).toBeNull();
   });
 
-  it('zeigt die neue Aufgabenansicht ohne Beispielaufgaben', async () => {
+  it('zeigt Aufgaben links und Details rechts statt Einzelkarten', async () => {
     renderAt('/tasks');
     expect(await screen.findByRole('heading', { name: 'Aufgaben' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Aufgabenliste' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Aufgabendetails' })).toBeTruthy();
     expect(await screen.findByRole('heading', { name: 'Keine Aufgaben gefunden' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Neue Aufgabe' }));
     expect(await screen.findByLabelText('Titel')).toBeTruthy();

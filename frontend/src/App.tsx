@@ -11,7 +11,9 @@ import { currentUser, setupRequired, type CurrentUser } from './authApi';
 import { SetupPage } from './SetupPage';
 import { SettingsPage } from './SettingsPage';
 import { WeekCalendarPage } from './WeekCalendarPage';
-import { TasksPage, TodayTasksPage } from './TasksPages';
+import { TodayTasksPage } from './TasksPages';
+import { ClassicTasksPage } from './ClassicTasksPage';
+import { TicketsWorkspacePage } from './TicketsWorkspacePage';
 import { readPersonalPreferences, readWorkspacePreferences, savePersonalPreferences, type PersonalPreferences } from './settingsApi';
 import { checkHealth, type HealthState } from './api';
 import { navigation, type ModuleKey, type NavigationEntry } from './navigation';
@@ -352,9 +354,10 @@ export function AppContent() {
           {themeError && <p role="alert" className="um-feedback failure app-settings-error">{themeError}</p>}
           <Routes>
             <Route path="/" element={<PrivateArea user={user}><Dashboard web={web} database={database} instanceName={instanceName}/></PrivateArea>} />
-            {navigation.filter(item => !['settings', 'week', 'tasks', 'today'].includes(item.key)).map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
+            {navigation.filter(item => !['settings', 'week', 'tasks', 'today', 'tickets'].includes(item.key)).map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
             <Route path="/week" element={<PrivateArea user={user}><WeekCalendarPage/></PrivateArea>} />
-            <Route path="/tasks" element={<PrivateArea user={user}><TasksPage/></PrivateArea>} />
+            <Route path="/tasks" element={<PrivateArea user={user}><ClassicTasksPage/></PrivateArea>} />
+            <Route path="/tickets" element={<PrivateArea user={user}><TicketsWorkspacePage/></PrivateArea>} />
             <Route path="/today" element={<PrivateArea user={user}><TodayTasksPage/></PrivateArea>} />
             <Route path="/settings" element={<PrivateArea user={user}><SettingsPage user={user} onPersonalSaved={value => { setPrefs(value); applyTheme(value.theme); setThemeError(''); }} onWorkspaceSaved={value => setInstanceName(value.instanceName)}/></PrivateArea>} />
             <Route path="/system" element={<SystemPage web={web} database={database}/>} />

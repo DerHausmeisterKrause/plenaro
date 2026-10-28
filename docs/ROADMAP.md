@@ -31,6 +31,7 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [x] UI-Komponententests und HTTP-Smoke-Tests
 - [x] Geschützte Placeholder-Ansichten mit Sessionprüfung und lokale Login-/Logout-Seiten
 - [x] Login ohne App-Navigation, Setup-Assistent automatisch bei leerer Datenbank
+- [x] Classic-Layout für Aufgaben und Ticketansicht (Liste links, Detailbereich rechts) mit responsivem Theme, horizontal kategorisierte Einstellungen
 - [ ] E2E-Browserprüfung und Accessibility-Audit
 
 **Abnahme:** Navigierbare Weboberfläche, geschützte Bereiche ohne Session nicht erreichbar.
@@ -66,7 +67,8 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [x] Tasks-CRUD mit Status, Priorität, Tags, Suche und Fällig-/Planungsdatum; Eigentümerabfragen serverseitig abgesichert
 - [x] Lokale Heute-Ansicht: Aktuell/Geplant/Erledigt aus eigenen PostgreSQL-Aufgaben (ohne Demo-Daten)
 - [ ] Vollständige Funktionsparität/Migrationsmapping mit dem Desktop-Programm und weitere Aufgabenfilter
-- [ ] Tages-/Wochenplanung, Segmente und Kalenderdarstellung
+- [x] Lokales 7-Tage-Kalenderraster (06–18 Uhr) mit geplanten Aufgaben und UL/AM/BR, **auch ohne Entra/Outlook**
+- [ ] Aufgaben mit konkreten Uhrzeiten/Segmenten und Drag-and-drop in Stundenplanung einplanen
 - [ ] Optionaler Aufgaben-Timer und manuelle aufgabenbezogene Zeitbuchung (separat von gestrichener Kommen/Gehen-/Pausenerfassung)
 - [ ] Monatsberichte und Export
 - [ ] Homeoffice-Workflows
@@ -76,6 +78,7 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 **Abnahme:** Kernabläufe der Desktop-Aufgaben-/Zeitverwaltung funktionieren im Browser.
 
 ## Phase 6 – Ticketsysteme / ITSM
+- [x] Ticket-Zwei-Spalten-Weboberfläche als leeres Grundlayout (noch **ohne** Ticketdaten/Adapter)
 - [ ] Adapter-Interface und konfigurierbare Verbindung je Ticketsystem
 - [ ] Znuny/OTRS als Standard: sichere Anmeldung, Session, TicketSearch/Get
 - [ ] Tickets zuweisen, aktualisieren, beantworten, schließen und Zeiten buchen
@@ -123,3 +126,14 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [ ] Feiertage/Halbtage/Übertrag von Resturlaub (nur falls später ausdrücklich gewünscht)
 
 **Entfallen nach Nutzerentscheidung:** Kommen, Gehen, Pausen, Sollzeit und Arbeitszeiterfassung in diesem Aufgabenbereich. Die vorhandenen neutralen Datenbanktabellen für Zeitbuchungen werden nicht gelöscht, um bestehende Daten und spätere optional gewünschte Funktionen nicht zu beschädigen.
+
+## UI-Referenz – Desktop Plenaro Classic
+
+- [x] Classic-Bedienmuster für Aufgaben: kompakte Datensatzliste links, Detail/Editor rechts, Schnellhinzufügen, Statusfilter und Suchfeld
+- [x] Gleiches Layout als datenehrliche Vorlage für Ticketansicht (ohne angebundenen Znuny-Adapter)
+- [x] Lokaler Kalender als Standard statt blockierender Entra-Einrichtungsseite; Microsoft Graph nur als optionale Quelle
+- [x] Einstellungsbereiche über horizontale Kategorien sortiert; bestehende Light-/Dark-Variablen genutzt
+- [ ] Echte Ticketliste/Details aus Znuny/OTRS und Desktop-Feldparität
+- [ ] Heute/Task-Detailbereiche vollständig an Classic-Referenz angleichen, Zeitsegmente und Reports ergänzen
+
+Siehe [Classic UI](CLASSIC_UI.md).
