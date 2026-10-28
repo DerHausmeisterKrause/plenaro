@@ -6,7 +6,8 @@
 - PostgreSQL nur im internen Docker-Netz; kein Port 5432 am Host.
 - Passwort wird ausschließlich aus `.env` gelesen; `.env` ist gitignored.
 - Container läuft als unprivilegierter Nutzer (`APP_UID`).
-- Backend gibt bei DB-Ausfall HTTP 503 zurück, ohne das Connection-Secret an den Browser zu senden.
+- Backend gibt bei DB-Ausfall oder veralteter/inkonsistenter Migrationshistorie HTTP 503 zurück, ohne das Connection-Secret an den Browser zu senden.
+- Migrationen sind transaktional, per Advisory Lock gegen parallelen Start geschützt und durch SHA-256-Prüfsummen überwacht.
 - Noch **keine** Identität und Autorisierung: es gibt nur eine öffentliche SPA-Vorschau mit leeren Modulen und Statusabfragen. **Kein öffentliches Deployment**, keine produktiven Daten.
 
 **Netzwerk:** Host-Firewall auf vertrauenswürdiges LAN begrenzen. Auf keinen Fall Router-Portfreigabe, UPnP/öffentliche Reverse-Proxies oder Public-IP-Bindung vor Phase 3.
@@ -17,6 +18,6 @@
 - RBAC und Datenzugriffsschutz auf API- und Datenbankebene.
 - Entra OIDC-Validierung (Issuer, Audience, Nonce, State und PKCE); Graph-Tokens verschlüsselt, minimale Scopes.
 - TLS / Reverse Proxy, überprüfte Forwarded Headers, sicherer Cookie-/CORS-Betrieb.
-- Datenbankmigrationen, automatisierte Backups **und** Restore-Tests, Ausfall- und Updatekonzept.
+- Versionierte SQL-Basismigrationen sind umgesetzt. Automatisierte **Backups und Restore-Tests**, Ausfall- und Updatekonzept sind weiterhin offen.
 - Secret-Rotation, Protokollierung ohne Tokens, Security-Tests, Dependency-Audits.
 - DSGVO-Rollen, Export/Löschung, Aufbewahrung, Löschkonzept bei Mehrbenutzerbetrieb.

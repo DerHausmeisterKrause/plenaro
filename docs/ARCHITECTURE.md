@@ -41,3 +41,14 @@ Eine WPF-XAML-Oberfläche kann nicht direkt im Browser ausgeführt werden. Outlo
 - `/health/live` und `/health/ready` bleiben separate Backend-Endpunkte und werden vom Browser abgefragt.
 - Navigation und Login-/Logout-Seiten sind Platzhalter **ohne Credentials, Session oder personenbezogene Daten**.
 - Docker-Portbindung ist per `PLENARO_BIND_IP` steuerbar; im vertrauenswürdigen LAN 0.0.0.0, bei Einzelhost 127.0.0.1.
+
+
+## Datenbankschema und Migrationen (Phase-1-Abschluss)
+
+- PostgreSQL-SQL-Dateien unter `src/Plenaro.Api/Database/Migrations`, als EmbeddedResources in der API enthalten.
+- `SchemaMigrator` führt ausstehende Migrationen beim Start **innerhalb einer Transaktion** mit PostgreSQL Advisory Lock aus; alle Versionen und SHA-256-Hashes in `schema_migrations`.
+- Migrationen werden **nicht nachträglich bearbeitet**. Zusätzliche Tabellen/Spalten über eine neue nummerierte Datei einführen.
+- `/health/ready` verlangt DB-Verfügbarkeit, exakte Versionshistorie und Kern-Tabellen. Die Anwendung startet bei inkonsistenter History bewusst nicht.
+- Basistabellen `tasks`, `task_segments`, `time_entries`, `system_settings` ohne Demo- oder Produktivdaten.
+- `owner_user_id` ist UUID und derzeit ohne User-FK: **ASP.NET Identity und die User-FK folgen als eigener Schritt**. Noch keine Schreib-API freischalten.
+- Details: [DATABASE.md](DATABASE.md).
