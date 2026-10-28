@@ -49,9 +49,9 @@ describe('Plenaro web shell', () => {
     expect(document.documentElement.dataset.theme).toBe('dark');
   });
 
-  it('zeigt unbekannte URLs als Fehlerseite', () => {
+  it('zeigt unbekannte URLs als Fehlerseite', async () => {
     renderAt('/nicht-vorhanden');
-    expect(screen.getByRole('heading', { name: 'Seite nicht gefunden.' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Seite nicht gefunden.' })).toBeTruthy();
   });
 
   it('zeigt am Login nur das Loginformular und keine Navigation', async () => {
