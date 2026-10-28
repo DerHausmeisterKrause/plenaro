@@ -23,8 +23,9 @@ if (args.Contains("--healthcheck", StringComparer.Ordinal))
 }
 
 var bootstrapAdmin = args.Contains("--bootstrap-admin", StringComparer.Ordinal);
+var setupToken = args.Contains("--setup-token", StringComparer.Ordinal);
 var builder = WebApplication.CreateBuilder(
-    args.Where(a => !string.Equals(a, "--bootstrap-admin", StringComparison.Ordinal)).ToArray());
+    args.Where(a => a != "--bootstrap-admin" && a != "--setup-token").ToArray());
 
 var connectionString = builder.Configuration.GetConnectionString("Plenaro");
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -113,6 +114,11 @@ if (bootstrapAdmin)
 {
     Environment.ExitCode = await AdminBootstrap.RunAsync(
         app.Services, connectionString, Console.In, Console.Out);
+    return;
+}
+if (setupToken)
+{
+    Environment.ExitCode = await InitialSetup.IssueAsync(connectionString);
     return;
 }
 
