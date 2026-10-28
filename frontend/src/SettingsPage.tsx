@@ -185,36 +185,68 @@ function AdminUsers({ currentId }: { currentId: string }) {
   </section>;
 }
 
+type SettingsSection = 'general' | 'planning' | 'microsoft' | 'ticket' | 'security' | 'admin';
+
 export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved }: {
   user: CurrentUser | null | undefined;
   onPersonalSaved: (value: PersonalPreferences) => void;
   onWorkspaceSaved: (value: WorkspacePreferences) => void;
 }) {
+  const [section, setSection] = useState<SettingsSection>('general');
   if (!user) return null;
   const admin = user.roles.includes('Admin');
+  const tabs: { key: SettingsSection; label: string }[] = [
+    { key: 'general', label: 'Allgemein' },
+    { key: 'planning', label: 'Aufgaben & Kalender' },
+    { key: 'microsoft', label: 'Microsoft 365' },
+    { key: 'ticket', label: 'Ticketsystem' },
+    { key: 'security', label: 'Konto & Sicherheit' },
+    ...(admin ? [{ key: 'admin' as const, label: 'Administration' }] : []),
+  ];
 
   return <div className="page">
     <div className="page-heading">
       <span className="eyebrow">PLENARO / EINSTELLUNGEN</span>
       <h1>Einstellungen</h1>
-      <p>Persönliche Vorgaben, Instanzeinstellungen und Benutzerkonten getrennt verwalten.</p>
+      <p>Wie im klassischen Plenaro nach Arbeitsbereichen geordnet. Persönliche und globale Einstellungen bleiben getrennt.</p>
     </div>
-    <section className="content-card um-account">
-      <div className="um-section-title"><ShieldCheck size={20}/><h2>Mein Konto</h2></div>
-      <div className="um-account-data"><span>Name</span><strong>{user.name}</strong></div>
-      <div className="um-account-data"><span>E-Mail</span><strong>{user.email}</strong></div>
-      <div className="um-account-data"><span>Rolle</span><strong><Shield size={15}/>{admin ? 'Administrator' : 'Benutzer'}</strong></div>
-    </section>
-    <div className="um-settings-grid">
+    <nav className="classic-settings-tabs" aria-label="Einstellungskategorien">
+      {tabs.map(tab => <button key={tab.key} type="button"
+        className={`classic-settings-tab${section === tab.key ? ' active' : ''}`}
+        aria-current={section === tab.key ? 'page' : undefined}
+        onClick={() => setSection(tab.key)}>{tab.label}</button>)}
+    </nav>
+    {section === 'general' && <div className="um-settings-grid">
       <PersonalPreferencesPanel onSaved={onPersonalSaved}/>
       <WorkspacePreferencesPanel admin={admin} onSaved={onWorkspaceSaved}/>
-    </div>
-    <DayMarkerBudgetSettings/>
-    <EntraAccountPanel/>
-    <SecretsSettings admin={admin}/>
-    <div className="um-layout">
-      {admin && <AdminUsers currentId={user.id}/>}
+    </div>}
+    {section === 'planning' && <DayMarkerBudgetSettings/>}
+    {section === 'microsoft' && <>
+      <EntraAccountPanel/>
+      <section className="content-card um-panel">
+        <h2>Outlook-Kalender</h2>
+        <p>Die lokale Wochenplanung ist immer verfügbar. Wenn Microsoft verbunden wird, ergänzt Outlook dort die Termine.</p>
+        <a href="/week" className="button button-secondary">Wochenplanung öffnen</a>
+      </section>
+    </>}
+    {section === 'ticket' && <section className="content-card um-panel">
+      <h2>Ticketsysteme</h2>
+      <p>Die Znuny/OTRS-Verbindung und weitere Adapter folgen in der Ticketsystem-Phase.
+        Die Oberfläche ist bereits nach der klassischen Liste-links/Details-rechts-Struktur vorbereitet.</p>
+      <a className="button button-secondary" href="/tickets">Ticketansicht öffnen</a>
+    </section>}
+    {section === 'security' && <>
+      <section className="content-card um-account">
+        <div className="um-section-title"><ShieldCheck size={20}/><h2>Mein Konto</h2></div>
+        <div className="um-account-data"><span>Name</span><strong>{user.name}</strong></div>
+        <div className="um-account-data"><span>E-Mail</span><strong>{user.email}</strong></div>
+        <div className="um-account-data"><span>Rolle</span><strong><Shield size={15}/>{admin ? 'Administrator' : 'Benutzer'}</strong></div>
+      </section>
       <PasswordSettings/>
-    </div>
+    </>}
+    {section === 'admin' && admin && <>
+      <AdminUsers currentId={user.id}/>
+      <SecretsSettings admin={admin}/>
+    </>}
   </div>;
 }
