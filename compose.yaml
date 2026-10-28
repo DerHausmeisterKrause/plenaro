@@ -1,0 +1,55 @@
+name: plenaro
+
+services:
+  database:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-plenaro}
+      POSTGRES_USER: ${POSTGRES_USER:-plenaro}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Setze POSTGRES_PASSWORD in der .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  web:
+    build:
+      context: .
+      dockerfile: src/Plenaro.Api/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Plenaro: "Host=database;Port=5432;Database=${POSTGRES_DB:-plenaro};Username=${POSTGRES_USER:-plenaro};Password=${POSTGRES_PASSWORD:?Setze POSTGRES_PASSWORD in der .env};Pooling=true"
+    depends_on:
+      database:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${PLENARO_HTTP_PORT:-8080}:8080"
+    networks:
+      - backend
+      - edge
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "dotnet", "Plenaro.Api.dll", "--healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+networks:
+  backend:
+    internal: true
+  edge:
+
+volumes:
+  postgres_data:
+    name: plenaro_postgres_data

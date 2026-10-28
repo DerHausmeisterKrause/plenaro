@@ -1,0 +1,53 @@
+Plenaro Community License v0.1
+
+Copyright (c) 2026 DerHausmeisterKrause. All rights reserved.
+
+1. Scope and acceptance
+This license applies to original software and documentation distributed in this
+repository ("Plenaro 2.0"). Using, copying, modifying, or redistributing this
+software is permitted only under the following conditions. If you do not accept
+these conditions, no license is granted.
+
+2. Permission for private individuals
+The copyright holder grants natural persons a worldwide, non-exclusive,
+royalty-free, revocable upon breach license to use, study, reproduce, modify,
+and redistribute Plenaro 2.0 exclusively for their own private,
+non-commercial, non-professional purposes. Redistribution must include this
+license and preserve copyright notices, and modifications must be clearly
+identified. No sublicensing or trademark rights are granted.
+
+3. Uses requiring a separate commercial agreement
+The permission in section 2 does NOT cover use:
+- by or for businesses, employers, sole proprietorships, government agencies,
+  public bodies, nonprofits, associations, or other organizations;
+- in the course of any professional, employment, or revenue-related activity,
+  even when no fee is directly charged for Plenaro;
+- to offer hosting, managed services, SaaS, paid support, resale, or licensing
+  to third parties.
+Such uses require prior written permission or a separate commercial license
+from the copyright holder.
+
+4. No circumvention
+You may not remove or misrepresent copyright or license notices or claim
+endorsement by the copyright holder. Any redistributed modifications are
+subject to the same limits in this license; you may not grant broader rights.
+
+5. Termination
+The license terminates on material breach. On termination, you must stop all
+restricted uses and distribution. Statutory rights that cannot be excluded
+remain unaffected.
+
+6. No warranty or liability
+TO THE EXTENT PERMITTED BY APPLICABLE LAW, PLENARO 2.0 IS PROVIDED "AS IS",
+WITHOUT WARRANTY OF ANY KIND. THE COPYRIGHT HOLDER DISCLAIMS LIABILITY TO
+THE EXTENT PERMITTED BY LAW. Mandatory consumer rights remain unaffected.
+
+7. Separate rights and legacy code
+The copyright holder may offer Plenaro 2.0 under other licenses. This license
+does not retroactively change or revoke the MIT license previously granted
+for the separate legacy repository DerHausmeisterKrause/project_tool.
+Third-party components retain their respective licenses.
+
+This is a custom SOURCE-AVAILABLE license, NOT an OSI-approved open-source
+license. Version 0.1 must receive legal review before external commercialization.
+For commercial licensing, contact the repository owner via GitHub.
