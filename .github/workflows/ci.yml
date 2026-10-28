@@ -75,6 +75,7 @@ jobs:
             -X POST "$API/api/v1/auth/login" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' \
             -d '{"email":"user@example.invalid","password":"CiUserPassword123!"}')" = "204"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/admin/users/")" = "403"
+          USER_CSRF=$(curl -fsS -c "$USER_COOKIE" -b "$USER_COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
           # Phase 2 functional core: task CRUD, status transition and per-user isolation.
           TASK_ID=$(curl -fsS -c "$COOKIE" -b "$COOKIE" -X POST "$API/api/v1/tasks/" \
             -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
