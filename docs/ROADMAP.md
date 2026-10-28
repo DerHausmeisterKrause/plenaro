@@ -13,7 +13,8 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [x] Docker Compose mit Web/DB, localhost-Bindung und Startabh채ngigkeiten
 - [x] Minimale Browser-Statusseite
 - [x] GitHub Actions CI: Build, Docker-Compose-Syntax, Build & HTTP-Smoke-Test (Workflow hinzugef체gt, Lauf noch zu pr체fen)
-- [ ] Erfolgreichen CI-Lauf und lokalen `docker compose up --build --wait` nachweisen
+- [x] GitHub Actions: .NET-Build, Compose-Syntax und Docker-HTTP-Smoke-Test erfolgreich ([CI #1](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/40755261974))
+- [ ] Lokalen `docker compose up --build --wait` und Datenpersistenz/Neustart auf dem Zielhost nachweisen
 - [ ] Lizenz juristisch final pr체fen (vor kommerziellem Release)
 
 **Abnahme:** `http://127.0.0.1:8080` zeigt den Webstatus, `/health/ready` pr체ft PostgreSQL und Persistenz 체ber Neustarts.
