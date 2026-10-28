@@ -4,6 +4,7 @@ import {
   Play, Plus, RotateCcw, Search, Trash2, X,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { DayMarkersPanel } from './DayMarkersPanel';
 import {
   changeTaskStatus, createTask, deleteTask, listTasks, localDate, taskStatusLabel,
   todayTasks, updateTask, type TaskInput, type TaskStatus, type WorkTask,
@@ -276,6 +277,7 @@ export function TodayTasksPage() {
         <p>{new Intl.DateTimeFormat('de-DE', { dateStyle: 'full' }).format(new Date())} · Deine geplanten und laufenden Aufgaben.</p></div>
       <Link className="button button-primary" to="/tasks"><Plus size={17}/>Aufgabe anlegen</Link>
     </div>
+    <DayMarkersPanel/>
     {error && <p className="um-feedback failure" role="alert">{error}</p>}
     {loading ? <p role="status">Lade Tagesübersicht …</p> : <div className="tasks-today-grid">
       {sections.map(section => <section key={section.name} className="tasks-today-section" aria-label={section.name}>

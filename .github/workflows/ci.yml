@@ -99,6 +99,17 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -c "$USER_COOKIE" -b "$USER_COOKIE" \
             -X DELETE "$API/api/v1/tasks/$TASK_ID" -H "X-CSRF-TOKEN: $USER_CSRF")" = "404"
           # Task data survives the database/web restart later in this same test.
+          # Day-marker quota smoke: annual UL, monthly BR, CSRF and user isolation.
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/day-markers/budget")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/day-markers/budget" -H 'Content-Type: application/json' -d '{"annualUlDays":2,"monthlyBrDays":1}')" = "400"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/day-markers/budget" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"annualUlDays":2,"monthlyBrDays":1}')" = "204"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/day-markers/2026-10-28" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"dayType":"UL","isBr":true}')" = "204"
+          curl -fsS -b "$COOKIE" "$API/api/v1/day-markers/summary?year=2026&month=10" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d["usedUlDays"]==1 and d["usedBrDays"]==1 and d["brExhausted"]'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/day-markers/2026-10-29" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"dayType":"UL","isBr":false}')" = "204"
+          curl -fsS -b "$COOKIE" "$API/api/v1/day-markers/summary?year=2026&month=10" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d["remainingUlDays"]==0 and d["ulExhausted"]'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/day-markers/summary?year=2026&month=10" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d["usedUlDays"]==0 and d["usedBrDays"]==0'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/day-markers/2026-10-28" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"dayType":"AM","isBr":false}')" = "204"
+          curl -fsS -b "$COOKIE" "$API/api/v1/day-markers/summary?year=2026&month=10" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d["usedUlDays"]==1 and d["usedBrDays"]==0 and not d["brExhausted"]'
           # One focused settings test: access control, account separation and persistence.
           test "$(curl -fsS -b "$COOKIE" "$API/api/v1/settings/me" | python3 -c 'import json,sys; assert json.load(sys.stdin)["theme"]=="light"; print("ok")')" = "ok"
           USER_CSRF=$(curl -fsS -c "$USER_COOKIE" -b "$USER_COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')

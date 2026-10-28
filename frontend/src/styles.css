@@ -393,3 +393,27 @@ h1,h2,h3,p { margin-top: 0; }
  .tasks-editor { padding: 18px; }
  .tasks-head .button { width: 100%; }
 }
+
+/* Local UL/AM/BR day markers and quota panels. */
+.day-marker-panel { display: grid; gap: 14px; padding: 24px; margin: 17px 0 24px; }
+.day-marker-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 15px; }
+.day-marker-head h2 { margin: 0 0 6px; font-size: 18px; }
+.day-marker-navigation { display: flex; align-items: center; gap: 8px; }
+.day-marker-navigation input { border: 1px solid var(--border); background: var(--surface-soft); color: var(--text); padding: 9px; border-radius: 8px; max-width: 170px; font: inherit; }
+.day-marker-quotas { display: flex; flex-wrap: wrap; gap: 12px; }
+.day-marker-quotas span { display: flex; flex-direction: column; gap: 5px; background: var(--surface-soft); border: 1px solid var(--border); border-radius: 10px; padding: 12px 15px; font-size: 12px; color: var(--muted-strong); flex: 1 1 190px; }
+.day-marker-quotas strong { color: var(--text); }
+.day-marker-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; max-width: 630px; }
+.day-marker-weekday { text-align: center; font-weight: 700; font-size: 11px; color: var(--muted); padding: 8px 0; }
+.day-marker-day { min-height: 54px; border: 1px solid var(--border); border-radius: 9px; padding: 6px; display: grid; align-content: start; justify-items: center; gap: 3px; background: var(--surface-soft); color: var(--text); cursor: pointer; }
+.day-marker-day.selected { border: 2px solid var(--blue); background: var(--blue-pale); }
+.day-marker-day:hover { border-color: var(--blue); }
+.day-marker-day strong { font-size: 13px; }
+.day-marker-label { font-size: 10px; font-weight: 700; color: var(--blue); text-align: center; word-break: break-word; }
+.day-marker-editor { border-top: 1px solid var(--border); display: grid; gap: 14px; padding-top: 18px; }
+.day-marker-editor > strong { font-size: 14px; }
+.day-marker-choices { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 14px; }
+.day-marker-choices legend { font-size: 12px; color: var(--muted-strong); font-weight: 700; margin-bottom: 8px; }
+.day-marker-choices label,.day-marker-br { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; }
+.day-marker-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+@media(max-width: 520px) { .day-marker-panel { padding: 15px; } .day-marker-day { min-height: 47px; padding: 4px; } .day-marker-label { font-size: 9px; } }
