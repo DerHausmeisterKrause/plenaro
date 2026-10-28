@@ -2,12 +2,14 @@
 
 ## Aktuell
 
-- Web nur an localhost gebunden: `127.0.0.1:8080`.
+- Web-Port standardmäßig auf `0.0.0.0:8080` gebunden (LAN-Zugriff auf Host-IP möglich). **Ausschließlich in vertrauenswürdigem LAN verwenden; keine Internet-Freigabe!** Mit `PLENARO_BIND_IP=127.0.0.1` kann der Zugang wieder lokal begrenzt werden.
 - PostgreSQL nur im internen Docker-Netz; kein Port 5432 am Host.
 - Passwort wird ausschließlich aus `.env` gelesen; `.env` ist gitignored.
 - Container läuft als unprivilegierter Nutzer (`APP_UID`).
 - Backend gibt bei DB-Ausfall HTTP 503 zurück, ohne das Connection-Secret an den Browser zu senden.
-- Noch **keine** Identität und Autorisierung: die Statusseite ist absichtlich die einzige Oberfläche. **Kein öffentliches Deployment**.
+- Noch **keine** Identität und Autorisierung: es gibt nur eine öffentliche SPA-Vorschau mit leeren Modulen und Statusabfragen. **Kein öffentliches Deployment**, keine produktiven Daten.
+
+**Netzwerk:** Host-Firewall auf vertrauenswürdiges LAN begrenzen. Auf keinen Fall Router-Portfreigabe, UPnP/öffentliche Reverse-Proxies oder Public-IP-Bindung vor Phase 3.
 
 ## Muss vor Produktivbetrieb erledigt sein
 

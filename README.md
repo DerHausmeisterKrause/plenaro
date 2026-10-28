@@ -2,7 +2,7 @@
 
 **Self-hosted Aufgaben-, Zeit- und ITSM-Plattform.** Dieses Repository ist der neue, plattformunabhängige Web-Nachfolger von [Plenaro Desktop / project_tool](https://github.com/DerHausmeisterKrause/project_tool).
 
-> **Entwicklungsstand:** Phase 1 (Grundlage). Der Docker-Stack startet einen ASP.NET-Core-Webdienst und PostgreSQL. **Noch kein Benutzer-Login, keine Aufgabenverwaltung und keine Migration produktiver Daten.** Nicht öffentlich ohne vorgeschaltete Zugriffskontrolle bereitstellen.
+> **Entwicklungsstand:** Phase 2 – Responsive Weboberfläche mit React/TypeScript, ASP.NET-Core-Backend und PostgreSQL. Die Navigation ist nutzbar, aber **noch keine Benutzeranmeldung und keine produktiven Aufgaben, Tickets oder Benutzer-Daten**. Nur in einem vertrauenswürdigen LAN verwenden; nicht ins Internet freigeben.
 
 ## Schnellstart (Docker Compose)
 
@@ -25,7 +25,7 @@ curl -f http://127.0.0.1:8080/health/ready
 
 Unter Windows/PowerShell: `Copy-Item .env.example .env` statt `cp`.
 
-Weboberfläche: **http://127.0.0.1:8080** (Statusseite, noch keine Anwendungsfunktionen). Standardmäßig ist der Port **nur an 127.0.0.1** gebunden. Für den Zugriff über das Netzwerk später ausschließlich HTTPS-Reverse-Proxy mit Zugriffsschutz nutzen. Ein bloßes Ändern der Host-Bindung ist noch **keine** sichere Veröffentlichung.
+Weboberfläche: **http://HOST-IP:8080** (zum Beispiel `http://192.168.178.50:8080`). Der Compose-Port ist standardmäßig auf **0.0.0.0** gebunden, also auf allen Interfaces des Docker-Hosts. `PLENARO_BIND_IP=127.0.0.1` begrenzt auf den lokalen Host; `PLENARO_BIND_IP=192.168.178.50` begrenzt auf diese Host-IP. Die Host-IP muss tatsächlich auf dem Host vorhanden sein. **Kein Portforwarding ins Internet einrichten und keinen öffentlichen Server ohne HTTPS und Authentifizierung betreiben!** Falls der LAN-Zugriff fehlschlägt, Host-Firewall/TCP 8080 für das vertrauenswürdige LAN prüfen.
 
 ### Betrieb und Daten
 
@@ -37,7 +37,22 @@ docker compose down
 
 Die Datenbank bleibt im benannten Docker-Volume `plenaro_postgres_data` bestehen. **`docker compose down -v` löscht auch Datenbankdaten!** Backups und Restore-Tests werden vor dem Produktivbetrieb ergänzt. PostgreSQL ist nicht auf dem Host veröffentlicht.
 
-### Entwicklung (ohne Docker)
+### Frontend-Entwicklung
+
+Voraussetzung: Node.js 22 und npm. Die Browser-App liegt in `frontend/`.
+
+```bash
+cd frontend
+npm install
+npm run dev
+# neues Terminal: Backend fuer /health auf http://127.0.0.1:5080 starten:
+# im Repository-Root:
+ASPNETCORE_URLS=http://127.0.0.1:5080 dotnet run --project src/Plenaro.Api
+```
+
+Für Tests: `cd frontend && npm test && npm run build`. Die Node-Abhängigkeiten bekommen in einem nachfolgenden Schritt einen festen Lockfile-Stand (derzeit `npm install`).
+
+## Entwicklung (ohne Docker)
 
 ```bash
 dotnet restore src/Plenaro.Api/Plenaro.Api.csproj
@@ -50,7 +65,7 @@ Für `/health/ready` ist die Umgebungsvariable `ConnectionStrings__Plenaro` mit 
 
 - Backend: ASP.NET Core (.NET 10, C#), versionierte API wird in den nächsten Phasen aufgebaut.
 - Persistenz: PostgreSQL (mit persistentem Docker-Volume), später versionierte Migrationen.
-- Web: Browseroberfläche; im Grundgerüst eine einfache Statusseite, später ein separates responsives Frontend.
+- Web: React 19 + TypeScript + Vite 8, vom ASP.NET-Core-Webserver als statische SPA ausgeliefert. Responsive Navigation, Dunkelmodus, Live-Status und Modul-Platzhalter für die noch nicht vorhandenen Funktionen.
 - Authentifizierung: später lokaler Admin und lokale Accounts, rollenbasierte Berechtigungen, optional Microsoft Entra ID (OIDC).
 - Outlook: Microsoft Graph / Entra statt Windows-COM-Interop.
 - Ticketsysteme: Znuny/OTRS als erster Adapter; Adapter-Schnittstelle für weitere Systeme.
@@ -64,4 +79,4 @@ Details: [Roadmap](docs/ROADMAP.md), [Architektur](docs/ARCHITECTURE.md), [Funkt
 
 ## Entwicklungsstand
 
-Die sieben Phasen, die erledigten Teilaufgaben und die Abnahmekriterien stehen in [docs/ROADMAP.md](docs/ROADMAP.md). Ein Häkchen bedeutet **Code umgesetzt**; die vollständige Abnahme von Phase 1 erfordert außerdem einen erfolgreichen Docker-Smoke-Test.
+Die sieben Phasen, die erledigten Teilaufgaben und die Abnahmekriterien stehen in [docs/ROADMAP.md](docs/ROADMAP.md). Ein Häkchen bedeutet **Code umgesetzt**, nicht zwangsläufig schon produktiv abgenommen. Phase 2 zeigt derzeit nur die Web-Shell, keine Geschäftsfunktionen.
