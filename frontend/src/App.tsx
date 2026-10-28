@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   Activity, ArrowRight, ArrowUpRight, CalendarCheck2, CheckCircle2,
   ChevronRight, CircleAlert, Database, ExternalLink,
   LayoutGrid, LockKeyhole, LogIn, Menu, Moon,
   Server, ShieldCheck, Sparkles, Sun, X,
 } from 'lucide-react';
-import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { LoginPage, LogoutPage } from './AuthPage';
+import { currentUser, type CurrentUser } from './authApi';
 import { checkHealth, type HealthState } from './api';
 import { navigation, type ModuleKey, type NavigationEntry } from './navigation';
 
@@ -76,7 +78,7 @@ function Sidebar({ onNavigate }: { onNavigate: () => void }) {
           <div className="build-card-icon"><Sparkles size={18} aria-hidden="true" /></div>
           <strong>Plenaro 2.0</strong>
           <span>Web-Neuentwicklung</span>
-          <span className="build-stage">Phase 2 / 7</span>
+          <span className="build-stage">Phase 3 / 7</span>
         </div>
         <Link className="sidebar-footer-link" to="/system" onClick={onNavigate}>
           <Activity size={17} aria-hidden="true" /> Systemstatus <ChevronRight size={16} aria-hidden="true" />
@@ -128,7 +130,7 @@ function EmptyModule({ item, theme, toggleTheme }: { item: NavigationEntry; them
           <span className="eyebrow">ENTWICKLUNGSSTATUS</span>
           <h3>Nächste Schritte</h3>
           <div className="milestone"><span className="milestone-dot complete"><CheckCircle2 size={16} /></span><div><strong>Weboberfläche</strong><span>Layout & Navigation</span></div></div>
-          <div className="milestone"><span className="milestone-dot"><LockKeyhole size={16} /></span><div><strong>Lokale Anmeldung</strong><span>Folgt in Phase 3</span></div></div>
+          <div className="milestone"><span className="milestone-dot"><LockKeyhole size={16} /></span><div><strong>Lokale Anmeldung</strong><span>Admin-Login verfügbar</span></div></div>
           <div className="milestone"><span className="milestone-dot"><CalendarCheck2 size={16} /></span><div><strong>Funktionen</strong><span>Werden schrittweise migriert</span></div></div>
           {item.key === 'settings' && (
             <div className="theme-panel">
@@ -166,13 +168,13 @@ function Dashboard({ web, database }: { web: HealthState; database: HealthState 
           <h1>Willkommen bei Plenaro<span className="h1-dot">.</span></h1>
           <p>Dein zentraler Arbeitsplatz für Aufgaben, Zeitplanung und IT-Service-Management.</p>
         </div>
-        <span className="preview-badge"><span className="preview-dot" /> Vorschau · Phase 2</span>
+        <span className="preview-badge"><span className="preview-dot" /> Vorschau · Phase 3</span>
       </div>
       <div className="announcement">
         <div className="announcement-icon"><Sparkles size={22} aria-hidden="true" /></div>
         <div>
           <strong>Die Webanwendung nimmt Gestalt an.</strong>
-          <p>Das neue Layout ist verfügbar. Die Anmeldung und alle produktiven Funktionen werden in den nächsten Phasen ergänzt.</p>
+          <p>Das neue Layout ist verfügbar. Die lokale Anmeldung ist eingebaut. Produktive Aufgaben und Tickets folgen in den nächsten Phasen.</p>
         </div>
         <Link to="/system" aria-label="Systemstatus öffnen"><ArrowRight size={21} aria-hidden="true" /></Link>
       </div>
@@ -190,7 +192,7 @@ function Dashboard({ web, database }: { web: HealthState; database: HealthState 
           <div className="card-heading"><div className="card-heading-icon"><LayoutGrid size={19} aria-hidden="true" /></div><h2 id="steps-heading">Entwicklungsfahrplan</h2></div>
           <div className="progress-line"><span>Phase 1 – Docker-Grundgerüst</span><span className="progress-check"><CheckCircle2 size={16} /> Implementiert</span></div>
           <div className="progress-line active"><span>Phase 2 – Weboberfläche</span><span>In Arbeit</span></div>
-          <div className="progress-line"><span>Phase 3 – Lokaler Admin & User</span><span>Geplant</span></div>
+          <div className="progress-line"><span>Phase 3 – Lokaler Admin & User</span><span>In Arbeit</span></div>
           <div className="progress-line"><span>Phase 4 – Entra & Outlook</span><span>Geplant</span></div>
           <a className="text-link" href="https://github.com/DerHausmeisterKrause/plenaro/issues" target="_blank" rel="noopener noreferrer">Alle GitHub-Aufgaben anzeigen <ExternalLink size={15} aria-hidden="true" /></a>
         </section>
@@ -214,23 +216,15 @@ function SystemPage({ web, database }: { web: HealthState; database: HealthState
         <div className="content-card system-service"><div className="service-icon"><Server size={24}/></div><h2>Webserver</h2><StatusPill state={web} label="API" /><p>HTTP-Endpunkt: <code>/health/live</code></p></div>
         <div className="content-card system-service"><div className="service-icon"><Database size={24}/></div><h2>Datenbank</h2><StatusPill state={database} label="PostgreSQL" /><p>HTTP-Endpunkt: <code>/health/ready</code></p></div>
       </div>
-      <div className="warning-note"><ShieldCheck size={20} aria-hidden="true" /><p><strong>Lokale Entwicklungsversion.</strong> Ohne Benutzeranmeldung und Rollenprüfung darf diese Instanz nicht öffentlich ins Internet gestellt werden. LAN-Zugriff nur im vertrauenswürdigen Netz.</p></div>
+      <div className="warning-note"><ShieldCheck size={20} aria-hidden="true" /><p><strong>Lokale Entwicklungsversion.</strong> Die lokale Anmeldung und der Adminrollen-Check sind eingebaut. Bis HTTPS und vollständige Sicherheitsprüfung vorhanden sind, nicht öffentlich ins Internet stellen. LAN-Zugriff nur im vertrauenswürdigen Netz.</p></div>
     </div>
   );
 }
 
-function AuthPreview({ mode }: { mode: 'login' | 'logout' }) {
-  return (
-    <div className="auth-wrap">
-      <div className="content-card auth-card">
-        <div className="empty-icon"><LockKeyhole size={28} aria-hidden="true" /></div>
-        <span className="eyebrow">PHASE 3 / BENUTZERVERWALTUNG</span>
-        <h1>{mode === 'login' ? 'Anmeldung folgt.' : 'Abmeldung noch nicht verfügbar.'}</h1>
-        <p>Es gibt momentan noch keine Benutzerkonten oder Sitzungen. Lokale Accounts und Microsoft-Entra-SSO werden in den nächsten Phasen umgesetzt.</p>
-        <Link className="button button-primary" to="/"><ArrowRight size={17} /> Zur Übersicht</Link>
-      </div>
-    </div>
-  );
+function PrivateArea({ user, children }: { user: CurrentUser | null | undefined; children: ReactNode }) {
+  if (user === undefined) return <div className="auth-wrap"><p role="status">Sitzung wird geprüft …</p></div>;
+  if (!user) return <Navigate to="/login" replace />;
+  return <>{children}</>;
 }
 
 function NotFound() {
@@ -252,6 +246,14 @@ export function AppContent() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const { web, database } = useHealth();
+  const [user, setUser] = useState<CurrentUser | null | undefined>(undefined);
+
+  useEffect(() => {
+    let active = true;
+    void currentUser().then((result) => { if (active) setUser(result); })
+      .catch(() => { if (active) setUser(null); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
@@ -283,20 +285,22 @@ export function AppContent() {
             <span className="topbar-environment"><span /> Lokaler Server</span>
             <button type="button" className="icon-button" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Hellmodus aktivieren' : 'Dunkelmodus aktivieren'} title="Design ändern">{theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}</button>
             <Link to="/system" className="icon-button" aria-label="Systemstatus" title="Systemstatus"><Activity size={19}/></Link>
-            <Link to="/login" className="login-button"><LogIn size={17} /> Anmelden</Link>
+            {user
+              ? <Link to="/logout" className="login-button"><LogIn size={17} /> {user.name || user.email} · Abmelden</Link>
+              : <Link to="/login" className="login-button"><LogIn size={17} /> Anmelden</Link>}
           </div>
         </header>
         <main id="main-content">
           <Routes>
-            <Route path="/" element={<Dashboard web={web} database={database}/>} />
-            {navigation.map((item) => <Route key={item.key} path={item.path} element={<EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/>} />)}
+            <Route path="/" element={<PrivateArea user={user}><Dashboard web={web} database={database}/></PrivateArea>} />
+            {navigation.map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
             <Route path="/system" element={<SystemPage web={web} database={database}/>} />
-            <Route path="/login" element={<AuthPreview mode="login" />} />
-            <Route path="/logout" element={<AuthPreview mode="logout" />} />
+            <Route path="/login" element={<LoginPage onLogin={setUser} user={user ?? null} />} />
+            <Route path="/logout" element={<LogoutPage onLogout={() => setUser(null)} user={user ?? null} />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
-        <footer className="footer"><span>© 2026 Plenaro · Self-hosted Community Preview</span><span>Web v0.2.0 · <Link to="/system">Systemstatus</Link></span></footer>
+        <footer className="footer"><span>© 2026 Plenaro · Self-hosted Community Preview</span><span>Web v0.3.0 · <Link to="/system">Systemstatus</Link></span></footer>
       </div>
     </div>
   );
