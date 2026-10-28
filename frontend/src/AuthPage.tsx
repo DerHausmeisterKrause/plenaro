@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { ArrowRight, LockKeyhole, LogOut, ShieldAlert } from 'lucide-react';
+import { ArrowRight, LogOut, ShieldAlert } from 'lucide-react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { login, logout, type CurrentUser } from './authApi';
 
