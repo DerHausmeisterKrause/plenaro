@@ -56,3 +56,12 @@
 - Administratoren dürfen ihr eigenes Konto weder sperren noch herabstufen. Parallel ausgeführte Änderungen sind mittels PostgreSQL Advisory Lock serialisiert; der letzte aktive Admin wird geschützt.
 - Es existiert keine Benutzer-Löschfunktion, um spätere Aufgaben-Besitzerbezüge nicht unbemerkt zu verlieren.
 - Offen: zwingende Passwortänderung bei erster Anmeldung, Passwort-Recovery bei komplett verlorenem Admin-Zugriff, Auditlogs und verpflichtendes HTTPS.
+
+
+## Phase 3 – Einstellungen ohne Secrets
+
+- Persönliche `GET/PUT /api/v1/settings/me` sind an die durch ASP.NET Identity authentifizierte Nutzer-ID gebunden. Beliebige Nutzer-IDs aus HTTP-Parametern werden **nicht** angenommen.
+- Globale Einstellungen: Lesen nur mit Anmeldung; Ändern mit `AdminOnly`, geprüft am Backend. Mutationen benötigen CSRF-Schutz.
+- JSON-Payloads sind auf wenige typisierte Felder und begrenzte Werte beschränkt; **keine sensiblen Secrets** in `system_settings` oder `user_preferences` speichern.
+- Kontentrennung wird im Docker-Smoke-Test mit zwei echten Konten geprüft: normale Benutzer sehen ihre eigenen Einstellungen; globale Änderungen liefern 403. Persistenz wird nach Webcontainer-Neustart geprüft.
+- Weiter offen: verschlüsselte Secrets für Entra/Graph/Ticketsysteme, umfassende Autorisierung der zukünftigen Datenendpunkte, DSGVO-Konzept und verpflichtender TLS-Reverse-Proxy.

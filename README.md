@@ -118,3 +118,14 @@ Nach Anmeldung als Administrator unter **Einstellungen** Benutzer anlegen, Anzei
 **Vor echten Passwort-Eingaben HTTPS einrichten!** Über die Host-IP mit HTTP sind Zugangsdaten unverschlüsselt.
 
 API: \`GET/POST /api/v1/admin/users/\`, \`PUT /api/v1/admin/users/{id}\`, \`POST /api/v1/admin/users/{id}/reset-password\`, \`POST /api/v1/auth/change-password\`. Alle Mutationen mit CSRF, Admin-Funktionen serverseitig rollenbeschränkt.
+
+
+## Persönliche und globale Einstellungen (Phase 3)
+
+Unter **Einstellungen** kann jeder angemeldete Benutzer sein Hell-/Dunkel-Design und den künftigen Wochenbeginn dauerhaft speichern. Die Werte liegen in PostgreSQL pro Benutzer, unabhängig vom verwendeten Browser. Administratoren können zusätzlich Instanzname, optionalen Supportkontakt und Standard-Wochenbeginn ändern. Normale Benutzer dürfen diese Instanzwerte nur einsehen.
+
+- Persönlich: `GET/PUT /api/v1/settings/me`
+- Global: `GET/PUT /api/v1/settings/global`; **PUT nur für Admin**
+- Änderungen verlangen einen CSRF-Token; die Datenbankmigration `0006_user_preferences.sql` wird beim Containerstart automatisch ausgeführt.
+
+Der Wochenbeginn dient als vorbereitete Einstellung für die spätere Planung, eine Kalenderansicht nutzt ihn noch nicht. **Keine Passwörter, Graph-Tokens, API-Schlüssel oder andere Secrets in die Einstellungen eingeben!** Deren Verschlüsselung und sichere Speicherung erfolgen als gesonderter Schritt. Betrieb mit echten Konten nur über HTTPS.
