@@ -103,3 +103,12 @@ Migration \`0005_user_management.sql\` ergänzt das administrative Deaktivierung
 - Der Schlüssel `tid:oid` wird über Identity-`AspNetUserLogins` mit genau einem bestehenden lokalen Konto verbunden. Es gibt weder Auto-Provisioning noch E-Mail-Matching.
 - Der lokale Benutzer muss vor der Verknüpfung angemeldet sein und nach dem Entra-Redirect eine ausdrücklich bestätigte CSRF-geschützte POST-Anfrage ausführen; bestehende Rollen verbleiben bei Identity.
 - `SaveTokens=false`: Keine Entra-/Graph-Tokens landen im Plenaro-Cookie. Graph und dynamische Tenant-Adminoberfläche folgen später.
+
+## Phase 4 – Delegierter Outlook-Kalender (erste lesende Implementierung)
+
+- Optionales Microsoft Graph OAuth-2.0-Schema mit Authorization Code, PKCE, geschütztem State und gesondertem Callback `/signin-graph`.
+- Zusätzlicher `User.Read`-Abruf von `/me` bindet jeden Graph-Zustimmungsprozess an die bereits verknüpfte lokale Identity/Entra-`tid:oid`. Keine Zuordnung nach Mail.
+- Refresh-Token im bestehenden, AES-GCM-verschlüsselten User-Vault `graph.refresh`, Token-Erneuerung ausschließlich im Backend. `SaveTokens=false`, kein Token im Browser/Cookie.
+- Geschützter Endpunkt `GET /api/v1/graph/calendar` für festes `/me/calendar/calendarView`: max. 14 Tage, maximal 100 ausgewählte Events, minimaler Datenausschnitt, keine fremden Kalender-URLs.
+- React `/week`: explizite Zustimmung und Widerruf, Wochenwechsel, Kalender-/Busy-Liste und sinnvolle Deaktivierungsansicht ohne Microsoft-Tenant.
+- Noch keine Schreibfunktion, Multi-Calendar-Funktion oder echten Microsoft-Tenant-End-to-End-Tests.

@@ -1,6 +1,10 @@
 using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.OAuth;
+using System.Net.Http.Headers;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
@@ -13,6 +17,7 @@ using Plenaro.Api.Database;
 using Plenaro.Api.Identity;
 using Plenaro.Api.Settings;
 using Plenaro.Api.Secrets;
+using Plenaro.Api.Graph;
 
 if (args.Contains("--healthcheck", StringComparer.Ordinal))
 {
@@ -55,6 +60,11 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 builder.Services.AddSingleton<SchemaMigrator>();
 builder.Services.AddSingleton<SecretVault>();
+builder.Services.AddHttpClient("Plenaro.Graph", http =>
+{
+    http.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddScoped<GraphCalendarService>();
 builder.Services.AddDbContext<PlenaroIdentityDbContext>(options => options.UseNpgsql(connectionString));
 
 builder.Services.AddDataProtection()
@@ -105,6 +115,104 @@ if (entra.Enabled)
                 // No exception strings, tokens or sensitive claim details in URLs/logs.
                 context.HandleResponse();
                 context.Response.Redirect("/login?entra=failed");
+                return Task.CompletedTask;
+            }
+        };
+    });
+}
+
+if (entra.Enabled)
+{
+    builder.Services.AddAuthentication().AddOAuth(GraphCalendarService.Scheme, options =>
+    {
+        options.ClientId = entra.ClientId;
+        options.ClientSecret = entra.ClientSecret;
+        options.AuthorizationEndpoint =
+            $"https://login.microsoftonline.com/{entra.TenantId}/oauth2/v2.0/authorize";
+        options.TokenEndpoint =
+            $"https://login.microsoftonline.com/{entra.TenantId}/oauth2/v2.0/token";
+        options.CallbackPath = "/signin-graph";
+        options.SignInScheme = IdentityConstants.ExternalScheme;
+        options.UsePkce = true;
+        options.SaveTokens = false; // Access/refresh tokens NEVER go in auth cookies.
+        options.Scope.Clear();
+        options.Scope.Add("User.Read");
+        options.Scope.Add("Calendars.Read");
+        options.Scope.Add("offline_access");
+        options.Events = new OAuthEvents
+        {
+            OnCreatingTicket = async context =>
+            {
+                if (context.Properties.Items.TryGetValue("graphLocalUser", out var localId) != true ||
+                    !Guid.TryParse(localId, out var userId) ||
+                    string.IsNullOrWhiteSpace(context.AccessToken) ||
+                    string.IsNullOrWhiteSpace(context.RefreshToken))
+                {
+                    context.Fail("Graph consent state or tokens missing");
+                    return;
+                }
+                var users = context.HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+                var user = await users.FindByIdAsync(userId.ToString("D"));
+                if (user is null || user.IsDisabled)
+                {
+                    context.Fail("No active linked local user");
+                    return;
+                }
+
+                // Ask Microsoft Graph for the authenticated object ID. Do not use
+                // email/UPN or decode unvalidated access-token JWTs for account binding.
+                using var request = new HttpRequestMessage(HttpMethod.Get,
+                    "https://graph.microsoft.com/v1.0/me?$select=id");
+                request.Headers.Authorization =
+                    new AuthenticationHeaderValue("Bearer", context.AccessToken);
+                using var response = await context.Backchannel.SendAsync(request,
+                    context.HttpContext.RequestAborted);
+                if (!response.IsSuccessStatusCode)
+                {
+                    context.Fail("Cannot validate Graph account");
+                    return;
+                }
+                using var body = await JsonDocument.ParseAsync(
+                    await response.Content.ReadAsStreamAsync(context.HttpContext.RequestAborted),
+                    cancellationToken: context.HttpContext.RequestAborted);
+                var graphId = body.RootElement.TryGetProperty("id", out var idElement)
+                    ? idElement.GetString() : null;
+                if (!Guid.TryParse(graphId, out var objectId))
+                {
+                    context.Fail("Invalid Graph account");
+                    return;
+                }
+                var expectedKey = $"{entra.TenantId}:{objectId:D}";
+                var linked = (await users.GetLoginsAsync(user)).Any(login =>
+                    login.LoginProvider == EntraConfiguration.Provider &&
+                    string.Equals(login.ProviderKey, expectedKey, StringComparison.Ordinal));
+                if (!linked)
+                {
+                    context.Fail("Graph account differs from the linked Entra identity");
+                    return;
+                }
+
+                var vault = context.HttpContext.RequestServices.GetRequiredService<SecretVault>();
+                if (!vault.IsConfigured)
+                {
+                    context.Fail("Encrypted token store unavailable");
+                    return;
+                }
+                await vault.SetAsync("user", user.Id, GraphCalendarService.RefreshSecretName,
+                    context.RefreshToken, context.HttpContext.RequestAborted);
+            },
+            // OAuth handler must NOT write a temporary external login cookie: the
+            // refresh token is already encrypted at rest and no token is browser-visible.
+            OnTicketReceived = context =>
+            {
+                context.HandleResponse();
+                context.Response.Redirect("/week?graph=connected");
+                return Task.CompletedTask;
+            },
+            OnRemoteFailure = context =>
+            {
+                context.HandleResponse();
+                context.Response.Redirect("/week?graph=failed");
                 return Task.CompletedTask;
             }
         };
@@ -244,5 +352,6 @@ app.MapPlenaroEntra();
 app.MapAdminUsers();
 app.MapPlenaroSettings();
 app.MapPlenaroSecrets();
+app.MapPlenaroGraph();
 app.MapFallbackToFile("index.html");
 app.Run();

@@ -41,6 +41,7 @@ jobs:
           curl -fsS "$API/api/v1/setup/status" | grep -q '"required":true'
           # Entra is optional and disabled by default: no Microsoft credentials in CI.
           curl -fsS "$API/api/v1/auth/entra/status" | grep -q '"enabled":false'
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/graph/status")" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/auth/entra/start")" = "404"
 
           TOKEN=$(docker compose exec -T web dotnet Plenaro.Api.dll --setup-token | sed -n 's/^SETUP_TOKEN=//p' | tr -d '\r')
@@ -54,6 +55,8 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/admin/ping")" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST "$API/api/v1/auth/login" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"email":"admin@example.invalid","password":"CiTestPassword123!"}')" = "204"
           curl -fsS -b "$COOKIE" "$API/api/v1/admin/ping" | grep -q '"admin":true'
+          curl -fsS -b "$COOKIE" "$API/api/v1/graph/status" | grep -q '"enabled":false'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" "$API/api/v1/graph/calendar?start=2026-10-28T00%3A00%3A00Z&end=2026-10-29T00%3A00%3A00Z")" = "404"
 
           # A CSRF token is tied to the authenticated principal, refresh after login.
           CSRF=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$API/api/v1/auth/csrf" \

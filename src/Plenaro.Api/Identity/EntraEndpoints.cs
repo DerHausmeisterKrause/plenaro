@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
+using Plenaro.Api.Secrets;
+using Plenaro.Api.Graph;
 
 namespace Plenaro.Api.Identity;
 
@@ -138,7 +140,7 @@ public static class EntraEndpoints
 
         api.MapPost("/unlink", async (HttpContext context, IAntiforgery antiforgery,
             EntraConfiguration config, UserManager<ApplicationUser> users,
-            SignInManager<ApplicationUser> signIn) =>
+            SignInManager<ApplicationUser> signIn, SecretVault vault) =>
         {
             if (!config.Enabled) return Results.NotFound();
             if (!await CsrfIsValid(context, antiforgery))
@@ -155,6 +157,10 @@ public static class EntraEndpoints
 
             var result = await users.RemoveLoginAsync(user, link.LoginProvider, link.ProviderKey);
             if (!result.Succeeded) return Results.Conflict(new { error = "Verknüpfung konnte nicht entfernt werden." });
+            // An unlinked Microsoft account must not retain delegated calendar access.
+            if (vault.IsConfigured)
+                await vault.DeleteAsync("user", user.Id,
+                    GraphCalendarService.RefreshSecretName, context.RequestAborted);
             await users.UpdateSecurityStampAsync(user);
             await signIn.RefreshSignInAsync(user);
             return Results.NoContent();

@@ -10,6 +10,7 @@ import { LoginPage, LogoutPage } from './AuthPage';
 import { currentUser, setupRequired, type CurrentUser } from './authApi';
 import { SetupPage } from './SetupPage';
 import { SettingsPage } from './SettingsPage';
+import { WeekCalendarPage } from './WeekCalendarPage';
 import { readPersonalPreferences, readWorkspacePreferences, savePersonalPreferences, type PersonalPreferences } from './settingsApi';
 import { checkHealth, type HealthState } from './api';
 import { navigation, type ModuleKey, type NavigationEntry } from './navigation';
@@ -81,7 +82,7 @@ function Sidebar({ onNavigate }: { onNavigate: () => void }) {
           <div className="build-card-icon"><Sparkles size={18} aria-hidden="true" /></div>
           <strong>Plenaro 2.0</strong>
           <span>Web-Neuentwicklung</span>
-          <span className="build-stage">Phase 3 / 7</span>
+          <span className="build-stage">Phase 4 / 7</span>
         </div>
         <Link className="sidebar-footer-link" to="/system" onClick={onNavigate}>
           <Activity size={17} aria-hidden="true" /> Systemstatus <ChevronRight size={16} aria-hidden="true" />
@@ -350,7 +351,8 @@ export function AppContent() {
           {themeError && <p role="alert" className="um-feedback failure app-settings-error">{themeError}</p>}
           <Routes>
             <Route path="/" element={<PrivateArea user={user}><Dashboard web={web} database={database} instanceName={instanceName}/></PrivateArea>} />
-            {navigation.filter(item => item.key !== 'settings').map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
+            {navigation.filter(item => item.key !== 'settings' && item.key !== 'week').map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
+            <Route path="/week" element={<PrivateArea user={user}><WeekCalendarPage/></PrivateArea>} />
             <Route path="/settings" element={<PrivateArea user={user}><SettingsPage user={user} onPersonalSaved={value => { setPrefs(value); applyTheme(value.theme); setThemeError(''); }} onWorkspaceSaved={value => setInstanceName(value.instanceName)}/></PrivateArea>} />
             <Route path="/system" element={<SystemPage web={web} database={database}/>} />
             <Route path="*" element={<NotFound />} />
