@@ -67,7 +67,7 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [x] Lokale Heute-Ansicht: Aktuell/Geplant/Erledigt aus eigenen PostgreSQL-Aufgaben (ohne Demo-Daten)
 - [ ] Vollständige Funktionsparität/Migrationsmapping mit dem Desktop-Programm und weitere Aufgabenfilter
 - [ ] Tages-/Wochenplanung, Segmente und Kalenderdarstellung
-- [ ] Zeitbuchungen, Pausen, Arbeitszeiterfassung und Korrekturen
+- [ ] Optionaler Aufgaben-Timer und manuelle aufgabenbezogene Zeitbuchung (separat von gestrichener Kommen/Gehen-/Pausenerfassung)
 - [ ] Monatsberichte und Export
 - [ ] Homeoffice-Workflows
 - [ ] Aufgaben teilen, Einladungen und Besitzerrechte
