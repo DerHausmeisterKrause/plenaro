@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Plenaro.Api.Database;
 using Plenaro.Api.Identity;
+using Plenaro.Api.Settings;
 
 if (args.Contains("--healthcheck", StringComparer.Ordinal))
 {
@@ -163,5 +164,6 @@ app.MapGet("/health/ready", async (
 
 app.MapPlenaroAuth();
 app.MapAdminUsers();
+app.MapPlenaroSettings();
 app.MapFallbackToFile("index.html");
 app.Run();

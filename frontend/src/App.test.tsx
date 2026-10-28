@@ -5,6 +5,15 @@ import { AppContent } from './App';
 
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async (path: string) => {
+    if (path === '/api/v1/settings/me') return {
+      ok: true, status: 200, json: async () => ({ theme: 'light', weekStart: 'inherit' }),
+    };
+    if (path === '/api/v1/settings/global') return {
+      ok: true, status: 200, json: async () => ({ instanceName: 'Plenaro', supportEmail: '', defaultWeekStart: 'monday' }),
+    };
+    if (path === '/api/v1/auth/csrf') return {
+      ok: true, status: 200, json: async () => ({ token: 'test-token' }),
+    };
     if (path === '/api/v1/setup/status') return {
       ok: true, status: 200, json: async () => ({ required: false }),
     };
@@ -31,7 +40,7 @@ describe('Plenaro web shell', () => {
   it('zeigt die Übersicht und prüft beide Health-Endpunkte', async () => {
     renderAt('/');
     expect(await screen.findByRole('heading', { name: /Willkommen bei Plenaro/i })).toBeTruthy();
-    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThanOrEqual(4));
     expect(vi.mocked(fetch)).toHaveBeenCalledWith('/health/live', expect.any(Object));
     expect(vi.mocked(fetch)).toHaveBeenCalledWith('/health/ready', expect.any(Object));
   });
@@ -46,7 +55,15 @@ describe('Plenaro web shell', () => {
     renderAt('/settings');
     const themeButton = await screen.findByRole('button', { name: /Dunkelmodus aktivieren/i });
     fireEvent.click(themeButton);
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));
+  });
+
+  it('zeigt getrennte Formulare für persönliche und globale Einstellungen', async () => {
+    renderAt('/settings');
+    expect(await screen.findByRole('heading', { name: 'Persönliche Einstellungen' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Instanzeinstellungen' })).toBeTruthy();
+    expect(screen.getByLabelText('Darstellung')).toBeTruthy();
+    expect(screen.getByLabelText('Instanzname')).toBeTruthy();
   });
 
   it('zeigt unbekannte URLs als Fehlerseite', async () => {

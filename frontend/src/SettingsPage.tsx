@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { CheckCircle2, KeyRound, LockKeyhole, Plus, Save, Shield, ShieldCheck, UserRoundCog, Users } from 'lucide-react';
 import { type CurrentUser } from './authApi';
+import { PersonalPreferencesPanel, WorkspacePreferencesPanel } from './SettingsPreferences';
+import { type PersonalPreferences, type WorkspacePreferences } from './settingsApi';
 import { addUser, changePassword, listUsers, resetUserPassword, saveUser, type ManagedUser } from './userApi';
 
 type Role = 'User' | 'Admin';
@@ -180,7 +182,11 @@ function AdminUsers({ currentId }: { currentId: string }) {
   </section>;
 }
 
-export function SettingsPage({ user }: { user: CurrentUser | null | undefined }) {
+export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved }: {
+  user: CurrentUser | null | undefined;
+  onPersonalSaved: (value: PersonalPreferences) => void;
+  onWorkspaceSaved: (value: WorkspacePreferences) => void;
+}) {
   if (!user) return null;
   const admin = user.roles.includes('Admin');
 
@@ -188,7 +194,7 @@ export function SettingsPage({ user }: { user: CurrentUser | null | undefined })
     <div className="page-heading">
       <span className="eyebrow">PLENARO / EINSTELLUNGEN</span>
       <h1>Einstellungen</h1>
-      <p>Dein Konto und die Benutzer deiner Plenaro-Instanz verwalten.</p>
+      <p>Persönliche Vorgaben, Instanzeinstellungen und Benutzerkonten getrennt verwalten.</p>
     </div>
     <section className="content-card um-account">
       <div className="um-section-title"><ShieldCheck size={20}/><h2>Mein Konto</h2></div>
@@ -196,6 +202,10 @@ export function SettingsPage({ user }: { user: CurrentUser | null | undefined })
       <div className="um-account-data"><span>E-Mail</span><strong>{user.email}</strong></div>
       <div className="um-account-data"><span>Rolle</span><strong><Shield size={15}/>{admin ? 'Administrator' : 'Benutzer'}</strong></div>
     </section>
+    <div className="um-settings-grid">
+      <PersonalPreferencesPanel onSaved={onPersonalSaved}/>
+      <WorkspacePreferencesPanel admin={admin} onSaved={onWorkspaceSaved}/>
+    </div>
     <div className="um-layout">
       {admin && <AdminUsers currentId={user.id}/>}
       <PasswordSettings/>

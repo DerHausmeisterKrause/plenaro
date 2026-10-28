@@ -74,3 +74,14 @@ Eine WPF-XAML-Oberfläche kann nicht direkt im Browser ausgeführt werden. Outlo
 ## Benutzerverwaltung (Phase 3)
 
 Migration \`0005_user_management.sql\` ergänzt das administrative Deaktivierungsflag \`AspNetUsers.IsDisabled\`. Rollen- und Statusänderungen laufen transaktional unter Advisory Lock, um parallel ausgeführte Änderungen des letzten aktiven Admins zu verhindern. Cookies werden per Security-Stamp-Rotation widerrufen. Alle Admin-User-Endpunkte verlangen serverseitige Rolle Admin und CSRF für Schreibzugriffe. Eigenes Passwort kann über \`/api/v1/auth/change-password\` geändert werden. Keine Benutzerlöschung, keine fachlichen CRUD-Endpunkte.
+
+
+## Phase 3 – Persistente persönliche und globale Einstellungen
+
+- SQL-Migration `0006_user_preferences.sql`: `user_preferences` pro Identity-Benutzer mit `user_id` als Primär- und Fremdschlüssel, `preferences` als JSONB. Bei Benutzerlöschung werden nur dessen Einstellungen gelöscht.
+- Bereits vorhandene Tabelle `system_settings` speichert unter `workspace.general` ausschließlich öffentliche, nicht geheime Instanzwerte.
+- `GET/PUT /api/v1/settings/me`: Identität wird aus dem gültigen Sitzungscookie ermittelt, keine frei wählbare Benutzer-ID in Query oder Payload.
+- `GET /api/v1/settings/global`: nur authentifiziert. `PUT /api/v1/settings/global`: zusätzliche `AdminOnly`-Policy. Alle PUT-Endpunkte mit CSRF.
+- Strikt definierte Felder: persönlich `theme` (light/dark), `weekStart` (inherit/monday/sunday); global `instanceName`, `supportEmail`, `defaultWeekStart`.
+- React lädt die gespeicherte Designvorgabe bei Anmeldung und zeigt für Admins bearbeitbare globale, für normale User nur lesbare globale Einstellungen. Wochenbeginn wird zunächst nur gespeichert; die Kalenderfunktion wird erst in Phase 5 implementiert.
+- Keine Passwörter, Tokens, Integrationssecrets oder beliebigen JSON-Schlüssel in dieser API; dafür ist ein separates verschlüsseltes Konzept erforderlich.
