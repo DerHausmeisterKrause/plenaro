@@ -9,6 +9,7 @@ import { Link, Navigate, NavLink, Route, Routes, useLocation } from 'react-route
 import { LoginPage, LogoutPage } from './AuthPage';
 import { currentUser, setupRequired, type CurrentUser } from './authApi';
 import { SetupPage } from './SetupPage';
+import { SettingsPage } from './SettingsPage';
 import { checkHealth, type HealthState } from './api';
 import { navigation, type ModuleKey, type NavigationEntry } from './navigation';
 
@@ -318,7 +319,8 @@ export function AppContent() {
         <main id="main-content">
           <Routes>
             <Route path="/" element={<PrivateArea user={user}><Dashboard web={web} database={database}/></PrivateArea>} />
-            {navigation.map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
+            {navigation.filter(item => item.key !== 'settings').map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
+            <Route path="/settings" element={<PrivateArea user={user}><SettingsPage user={user}/></PrivateArea>} />
             <Route path="/system" element={<SystemPage web={web} database={database}/>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

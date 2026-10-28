@@ -78,7 +78,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 });
 
 builder.Services.Configure<SecurityStampValidatorOptions>(options =>
-    options.ValidationInterval = TimeSpan.FromMinutes(2));
+    options.ValidationInterval = TimeSpan.Zero);
 
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy("AdminOnly", policy => policy.RequireAuthenticatedUser().RequireRole("Admin"));
@@ -162,5 +162,6 @@ app.MapGet("/health/ready", async (
 });
 
 app.MapPlenaroAuth();
+app.MapAdminUsers();
 app.MapFallbackToFile("index.html");
 app.Run();

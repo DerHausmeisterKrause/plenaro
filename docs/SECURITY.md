@@ -45,3 +45,14 @@
 - Bei vorhandenen Benutzern erscheint nur die separate Login-Maske. **Benutzerverwaltung, Recovery bei verlorener Adminrolle und HTTPS-Härtung bleiben offen.**
 
 **Keine öffentliche Freigabe der HTTP-Instanz**; Einrichtung und Passwortanmeldung zunächst nur in einem kontrollierten Testnetz oder über HTTPS.
+
+
+## Benutzerverwaltung – Phase 3
+
+- Admin-Benutzer-API: \`/api/v1/admin/users\`; benötigt serverseitig Rolle \`Admin\` und für Mutationen CSRF-Tokens.
+- Neue Nutzer erhalten sichere Identity-Passworthashes und eine lokale Rolle (Admin oder User).
+- Dauerhafte Sperre ist getrennt von automatischer zeitweiser Konto-Lockout-Sperre.
+- Änderungen an Rolle oder Sperre widerrufen bestehende Sitzungen durch Rotation des Security Stamps; dieser wird bei jedem Request geprüft.
+- Administratoren dürfen ihr eigenes Konto weder sperren noch herabstufen. Parallel ausgeführte Änderungen sind mittels PostgreSQL Advisory Lock serialisiert; der letzte aktive Admin wird geschützt.
+- Es existiert keine Benutzer-Löschfunktion, um spätere Aufgaben-Besitzerbezüge nicht unbemerkt zu verlieren.
+- Offen: zwingende Passwortänderung bei erster Anmeldung, Passwort-Recovery bei komplett verlorenem Admin-Zugriff, Auditlogs und verpflichtendes HTTPS.

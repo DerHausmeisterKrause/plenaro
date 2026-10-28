@@ -50,3 +50,22 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/admin/ping")" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST "$API/api/v1/auth/login" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"email":"admin@example.invalid","password":"CiTestPassword123!"}')" = "204"
           curl -fsS -b "$COOKIE" "$API/api/v1/admin/ping" | grep -q '"admin":true'
+
+          # User management coverage in the existing Docker smoke test (no new job).
+          ID=$(curl -fsS -c "$COOKIE" -b "$COOKIE" -X POST "$API/api/v1/admin/users/" -H "X-CSRF-TOKEN: $CSRF" \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"user@example.invalid","displayName":"Test User","role":"User","password":"CiUserPassword123!"}' \
+            | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
+          test -n "$ID"
+          USER_COOKIE=$(mktemp)
+          trap 'rm -f "$COOKIE" "$USER_COOKIE"; docker compose down -v --remove-orphans || true' EXIT
+          USER_CSRF=$(curl -fsS -c "$USER_COOKIE" -b "$USER_COOKIE" "$API/api/v1/auth/csrf" \
+            | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$USER_COOKIE" -b "$USER_COOKIE" \
+            -X POST "$API/api/v1/auth/login" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' \
+            -d '{"email":"user@example.invalid","password":"CiUserPassword123!"}')" = "204"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/admin/users/")" = "403"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" \
+            -X PUT "$API/api/v1/admin/users/$ID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
+            -d '{"displayName":"Test User","role":"User","disabled":true}')" = "204"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/auth/me")" = "401"

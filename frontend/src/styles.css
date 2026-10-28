@@ -262,3 +262,44 @@ h1,h2,h3,p { margin-top: 0; }
   .setup-card { padding: 28px 22px; }
   .auth-standalone .auth-card { padding: 30px 24px; }
 }
+
+
+/* Phase 3: administrator user management, separate from global app settings. */
+.um-account { margin-bottom: 22px; }
+.um-section-title { display: flex; gap: 11px; align-items: center; }
+.um-section-title svg { color: var(--blue); }
+.um-section-title h2 { margin: 0; font-size: 17px; }
+.um-account-data { display: flex; gap: 15px; justify-content: space-between; border-top: 1px solid var(--border); margin-top: 15px; padding-top: 15px; font-size: 13px; overflow-wrap: anywhere; }
+.um-account-data span { color: var(--muted); }
+.um-account-data strong { display: inline-flex; align-items: center; gap: 6px; text-align: right; }
+.um-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(290px, 1fr); align-items: start; gap: 20px; }
+.um-panel > p, .um-panel-head + p { margin: 16px 0; font-size: 13px; color: var(--muted-strong); line-height: 1.6; }
+.um-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.um-users { display: grid; gap: 5px; margin-top: 22px; max-height: 420px; overflow: auto; }
+.um-user { display: flex; align-items: center; gap: 11px; padding: 12px; width: 100%; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-soft); text-align: left; color: var(--text); }
+.um-user:hover, .um-user.chosen { border-color: var(--blue); background: var(--blue-pale); }
+.um-avatar { flex: 0 0 36px; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 11px; color: var(--blue); background: var(--surface); font-weight: 750; }
+.um-user-main { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.um-user-main strong { font-size: 13px; overflow-wrap: anywhere; }
+.um-user-main small { color: var(--muted); overflow-wrap: anywhere; font-size: 11px; }
+.um-role, .um-active { display: inline-flex; padding: 6px 8px; font-size: 11px; font-weight: 750; color: var(--muted-strong); background: var(--surface); border: 1px solid var(--border); border-radius: 7px; white-space: nowrap; }
+.um-role.admin { color: var(--blue); background: var(--blue-pale); }
+.um-active { color: var(--green); background: var(--green-pale); border: 0; }
+.um-active.blocked { color: var(--red); background: var(--red-pale); }
+.um-editor { border-top: 1px solid var(--border); margin-top: 26px; padding-top: 24px; }
+.um-editor h3 { font-size: 16px; margin: 0 0 18px; display: flex; gap: 9px; align-items: center; }
+.um-form { display: grid; gap: 9px; }
+.um-form label { color: var(--muted-strong); font-size: 12px; font-weight: 750; margin-top: 8px; }
+.um-form input:not([type=checkbox]), .um-form select { font: inherit; color: var(--text); padding: 12px 13px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-soft); min-width: 0; width: 100%; }
+.um-form button { justify-self: start; margin-top: 10px; }
+.um-form input:focus, .um-form select:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+.um-form .um-check { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; }
+.um-check input { width: 17px; height: 17px; accent-color: var(--blue); }
+.um-hint { color: var(--muted); font-size: 11px; line-height: 1.6; margin: 0; }
+.um-reset-form { margin-top: 27px; padding-top: 22px; border-top: 1px solid var(--border); }
+.um-reset-form h3 { margin-bottom: 3px; }
+.um-feedback { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 12px; margin: 15px 0 0; border-radius: 9px; line-height: 1.6; }
+.um-feedback.success { color: var(--green); background: var(--green-pale); }
+.um-feedback.failure { color: var(--red); background: var(--red-pale); }
+@media (max-width: 1120px) { .um-layout { grid-template-columns: 1fr; } }
+@media (max-width: 650px) { .um-user { flex-wrap: wrap; } .um-role { margin-left: 47px; } .um-user-main { flex: 1 1 calc(100% - 50px); } .um-panel-head .button { width: 100%; } }
