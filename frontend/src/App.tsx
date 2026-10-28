@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
-  Activity, ArrowRight, ArrowUpRight, Bell, CalendarCheck2, CheckCircle2,
-  ChevronRight, CircleAlert, Clock3, Database, ExternalLink, HelpCircle,
-  LayoutGrid, LockKeyhole, LogIn, Menu, Moon, PanelLeftClose,
-  Search, Server, ShieldCheck, Sparkles, Sun, X,
-  type LucideIcon,
+  Activity, ArrowRight, ArrowUpRight, CalendarCheck2, CheckCircle2,
+  ChevronRight, CircleAlert, Database, ExternalLink,
+  LayoutGrid, LockKeyhole, LogIn, Menu, Moon,
+  Server, ShieldCheck, Sparkles, Sun, X,
 } from 'lucide-react';
 import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { checkHealth, type HealthState } from './api';
@@ -270,7 +269,7 @@ export function AppContent() {
     <div className="app-shell">
       <a href="#main-content" className="skip-link">Zum Inhalt springen</a>
       {menuOpen && <button className="menu-overlay" type="button" onClick={() => setMenuOpen(false)} aria-label="Menü schließen" />}
-      <aside className={`sidebar${menuOpen ? ' open' : ''}`} aria-label="Seitenmenü">
+      <aside id="mobile-navigation" className={`sidebar${menuOpen ? ' open' : ''}`} aria-label="Seitenmenü">
         <div className="mobile-close"><button className="icon-button" onClick={() => setMenuOpen(false)} aria-label="Menü schließen"><X size={22} /></button></div>
         <Sidebar onNavigate={() => setMenuOpen(false)} />
       </aside>
