@@ -35,6 +35,17 @@ docker compose restart web
 docker compose down
 ```
 
+Beim Web-Start werden neue SQL-Migrationen automatisch und transaktional eingespielt. **Keine Produktivdaten importieren**, solange Login/Rollen fehlen.
+
+### Prüfen des Datenbankschemas
+
+```bash
+docker compose exec -T database psql -U plenaro -d plenaro -c 'SELECT migration_id, applied_at FROM schema_migrations ORDER BY migration_id;'
+curl -f http://127.0.0.1:8080/health/ready
+```
+
+Wenn Benutzername/DB-Name in `.env` angepasst wurden, auch den obigen psql-Befehl entsprechend anpassen. Die Migrationen liegen unter `src/Plenaro.Api/Database/Migrations`. Beim nächsten Code-Update bitte **vorher ein Datenbankbackup erstellen**. Ein fehlgeschlagenes Upgrade wird nicht automatisch rückwärts migriert.
+
 Die Datenbank bleibt im benannten Docker-Volume `plenaro_postgres_data` bestehen. **`docker compose down -v` löscht auch Datenbankdaten!** Backups und Restore-Tests werden vor dem Produktivbetrieb ergänzt. PostgreSQL ist nicht auf dem Host veröffentlicht.
 
 ### Frontend-Entwicklung
@@ -64,7 +75,7 @@ Für `/health/ready` ist die Umgebungsvariable `ConnectionStrings__Plenaro` mit 
 ## Architektur und Migration
 
 - Backend: ASP.NET Core (.NET 10, C#), versionierte API wird in den nächsten Phasen aufgebaut.
-- Persistenz: PostgreSQL (mit persistentem Docker-Volume), später versionierte Migrationen.
+- Persistenz: PostgreSQL mit persistentem Docker-Volume und versionierten, transaktionalen SQL-Migrationen. Basistabellen: Aufgaben, Segmente, Zeitbuchungen, globale Einstellungen. Benutzer/Identity kommen als nächster Schritt. Details unter [Datenbankschema](docs/DATABASE.md).
 - Web: React 19 + TypeScript + Vite 8, vom ASP.NET-Core-Webserver als statische SPA ausgeliefert. Responsive Navigation, Dunkelmodus, Live-Status und Modul-Platzhalter für die noch nicht vorhandenen Funktionen.
 - Authentifizierung: später lokaler Admin und lokale Accounts, rollenbasierte Berechtigungen, optional Microsoft Entra ID (OIDC).
 - Outlook: Microsoft Graph / Entra statt Windows-COM-Interop.

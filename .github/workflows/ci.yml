@@ -46,6 +46,24 @@ jobs:
           curl --fail --silent --show-error http://127.0.0.1:8080/ | grep -q 'id="root"'
           curl --fail --silent --show-error http://127.0.0.1:8080/tickets | grep -q 'id="root"'
           curl --fail --silent --show-error http://127.0.0.1:8080/health/live | grep -q '"phase":2'
+      - name: Verify schema, migration history and database persistence
+        env:
+          POSTGRES_PASSWORD: ci-only-not-for-production
+        run: |
+          set -euo pipefail
+          docker compose exec -T database psql -v ON_ERROR_STOP=1 -U plenaro -d plenaro -Atc "SELECT count(*) FROM schema_migrations" | grep -qx '2'
+          docker compose exec -T database psql -v ON_ERROR_STOP=1 -U plenaro -d plenaro -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('tasks','task_segments','time_entries','system_settings')" | grep -qx '4'
+          curl --fail --silent --show-error http://127.0.0.1:8080/health/ready | grep -q '"schema":"current"'
+          docker compose exec -T database psql -v ON_ERROR_STOP=1 -U plenaro -d plenaro <<'SQL'
+          INSERT INTO system_settings (setting_key, setting_value)
+          VALUES ('_ci_persistence_probe', '{"persisted": true}'::jsonb);
+          SQL
+          docker compose restart database
+          docker compose restart web
+          docker compose up -d --wait --wait-timeout 120
+          curl --fail --silent --show-error http://127.0.0.1:8080/health/ready | grep -q '"schema":"current"'
+          docker compose exec -T database psql -v ON_ERROR_STOP=1 -U plenaro -d plenaro -Atc "SELECT setting_value->>'persisted' FROM system_settings WHERE setting_key='_ci_persistence_probe'" | grep -qx 'true'
+          docker compose exec -T database psql -v ON_ERROR_STOP=1 -U plenaro -d plenaro -Atc "SELECT count(*) FROM schema_migrations" | grep -qx '2'
       - name: Dump logs if failed
         if: failure()
         run: docker compose logs --no-color

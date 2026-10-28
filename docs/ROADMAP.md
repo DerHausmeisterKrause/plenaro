@@ -10,28 +10,33 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [x] .gitignore, .dockerignore, .env.example und Secret-Grundregeln
 - [x] .NET-10-Webdienst mit Live-/Datenbank-Readiness-Endpoints
 - [x] PostgreSQL 17, Docker-Volume, internes Netzwerk und Healthcheck
+- [x] Versioniertes PostgreSQL-Basisschema (Tasks, Segmente, Zeitbuchungen, globale Einstellungen), Transaktionsmigrationen und Schema-Readiness hinzugefügt
+- [x] Migrationen gegen nachträgliche Änderungen, Downgrades und parallelen Containerstart abgesichert
 - [x] Docker Compose mit Web/DB, konfigurierbarer LAN-Bindung und Startabhängigkeiten
 - [x] Minimale Browser-Statusseite
 - [x] GitHub Actions CI: Build, Docker-Compose-Syntax, Build & HTTP-Smoke-Test (Workflow hinzugefügt, Lauf noch zu prüfen)
 - [x] GitHub Actions: .NET-Build, Compose-Syntax und Docker-HTTP-Smoke-Test erfolgreich ([CI #1](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/40755261974))
 - [x] Nutzer bestätigt: Docker läuft, Webseite per curl auf dem Host erreichbar (28.10.2026)
-- [ ] LAN-Zugriff via Host-IP nach Update und Datenpersistenz/Neustart am Zielhost prüfen
+- [ ] LAN-Zugriff via Host-IP nach Update und Datenpersistenz/Neustart am Zielhost prüfen (CI prüft Neustart und Persistenz automatisch)
 - [ ] Lizenz juristisch final prüfen (vor kommerziellem Release)
 
 **Abnahme:** `http://127.0.0.1:8080` zeigt den Webstatus, `/health/ready` prüft PostgreSQL und Persistenz über Neustarts.
 
-## Phase 2 – Browseroberfläche
-- [ ] Frontend-Framework, Routing und Layout-Grundstruktur aufbauen
-- [ ] Responsive Navigation: Heute, Woche, Aufgaben, Tickets, Wiki, KI, Berichte, Einstellungen
-- [ ] Login-, Logout- und Fehlerseiten gestalten (noch kein Auth-Backend aus Phase 3)
-- [ ] Geschützte Startseite und API-Client mit Fehler-/Loading-States
-- [ ] Barrierearme Desktop-/Mobile-Darstellung und Themes
-- [ ] UI-Tests und E2E-Grundtests
+## Phase 2 – Browseroberfläche (Web-Shell implementiert)
+- [x] React 19, TypeScript, Vite, Routing und Docker-Multi-Stage-Build
+- [x] Responsive Navigation: Heute, Woche, Aufgaben, Tickets, Wiki, KI, Berichte, Einstellungen
+- [x] Login-, Logout- und Fehlerseiten als noch funktionslose Platzhalter
+- [x] Öffentliche Startseite mit Live-Status und Lade-/Fehlerzuständen
+- [x] Responsive Mobile/Desktop-Darstellung und Hell-/Dunkelmodus
+- [x] UI-Komponententests und HTTP-Smoke-Tests
+- [ ] Geschützte Ansichten erst mit Phase 3 (Admin/Login/RBAC)
+- [ ] E2E-Browserprüfung und Accessibility-Audit
 
 **Abnahme:** Navigierbare Weboberfläche, geschützte Bereiche ohne Session nicht erreichbar.
 
 ## Phase 3 – Benutzer, Admin & Rechte
-- [ ] PostgreSQL-Schema/Versionierung für Nutzer, Rollen, Einstellungen, Sessions
+- [x] Versioniertes PostgreSQL-Basisschema für Aufgaben, Segmente und Zeiten (Vorarbeit aus Phase 1)
+- [ ] ASP.NET-Identity-Schema/Versionierung für Nutzer, Rollen und Sessions (inkl. Eigentümer-FKs)
 - [ ] Ersteinrichtung mit lokalem Admin
 - [ ] Lokale Benutzer anlegen, sperren, Kennwort wechseln/resetten
 - [ ] Passwort-Hashing, Session-Cookies und sichere API-Autorisierung
