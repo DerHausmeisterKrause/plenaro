@@ -85,3 +85,14 @@ jobs:
             -X PUT "$API/api/v1/admin/users/$ID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
             -d '{"displayName":"Test User","role":"User","disabled":true}')" = "204"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/auth/me")" = "401"
+
+          # Verify the optional secure overlay in the SAME smoke job.
+          mkdir -p secrets
+          openssl rand -hex 32 > secrets/vault.key
+          chmod 0644 secrets/vault.key
+          docker compose -f compose.yaml -f compose.secure.yaml config --quiet
+          docker compose -f compose.yaml -f compose.secure.yaml up -d --build --wait --wait-timeout 180
+          docker compose -f compose.yaml -f compose.secure.yaml cp proxy:/data/caddy/pki/authorities/local/root.crt ./ci-ca.crt
+          curl --fail --silent --show-error --cacert ./ci-ca.crt \
+            --resolve plenaro.home.arpa:443:127.0.0.1 https://plenaro.home.arpa/health/ready \
+            | grep -q '"schema":"current"'
