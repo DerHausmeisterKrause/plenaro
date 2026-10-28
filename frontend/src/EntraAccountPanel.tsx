@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link2, ShieldCheck, Unlink } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { confirmEntraLink, entraStatus, unlinkEntra, type EntraStatus } from './entraApi';
+import { confirmEntraLink, entraStatus, unlinkEntra, pendingEntraIdentity, type EntraStatus, type PendingEntraIdentity } from './entraApi';
 
 export function EntraAccountPanel() {
   const [params, setParams] = useSearchParams();
@@ -9,6 +9,7 @@ export function EntraAccountPanel() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [identity, setIdentity] = useState<PendingEntraIdentity | null>(null);
   const pending = params.get('entra') === 'pending';
 
   useEffect(() => {
@@ -17,6 +18,14 @@ export function EntraAccountPanel() {
       .catch(() => { if (mounted) setStatus({ enabled: false, linked: false }); });
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (!pending) return;
+    let mounted = true;
+    void pendingEntraIdentity().then(value => { if (mounted) setIdentity(value); })
+      .catch(reason => { if (mounted) setError(reason instanceof Error ? reason.message : 'Verknüpfung abgelaufen.'); });
+    return () => { mounted = false; };
+  }, [pending]);
 
   if (!status?.enabled) return null;
 
@@ -27,7 +36,7 @@ export function EntraAccountPanel() {
       await action();
       setStatus(await entraStatus());
       setMessage(success);
-      if (pending) setParams({}, { replace: true });
+      if (pending) { setIdentity(null); setParams({}, { replace: true }); }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Microsoft-Anfrage fehlgeschlagen.');
     } finally {
@@ -45,8 +54,9 @@ export function EntraAccountPanel() {
         <Unlink size={16}/>Verknüpfung entfernen
       </button>
     </> : pending ? <>
-      <p>Microsoft hat die Identität geprüft. **Bestätige jetzt ausdrücklich**, dass diese Microsoft-Identität mit deinem derzeit angemeldeten lokalen Plenaro-Konto verbunden werden soll.</p>
-      <button type="button" className="button button-primary" disabled={busy}
+      <p>Microsoft hat deine Identität geprüft. Prüfe das Microsoft-Konto und den Tenant, bevor du die Verbindung ausdrücklich bestätigst.</p>
+      {identity && <div className="um-account-data"><span>Microsoft-Konto / Tenant</span><strong>{identity.account} ({identity.tenantId})</strong></div>}
+      <button type="button" className="button button-primary" disabled={busy || !identity}
         onClick={() => void perform(confirmEntraLink, 'Microsoft-Konto erfolgreich verbunden.')}>
         <Link2 size={16}/>Verknüpfung bestätigen
       </button>
