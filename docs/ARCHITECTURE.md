@@ -94,3 +94,12 @@ Migration \`0005_user_management.sql\` ergänzt das administrative Deaktivierung
 - `PLENARO_SERVER_NAME` ist optional, Standard `_` für Host-IP. Ein FQDN benötigt DNS und ein passendes TLS-Zertifikat.
 - NGINX verwendet die feste Edge-Netz-IP `172.29.213.10`; ASP.NET Core vertraut nur dieser IP für X-Forwarded-For/Proto, auch für korrektes Login-Rate-Limiting im HTTP-Entwicklungsmodus.
 - Keine zweite Proxy-Infrastruktur, keine externe CA-Automatik. Verschlüsselter Vault unverändert, optionale Hostdatei `./secrets/vault.key`.
+
+## Phase 4 – Microsoft Entra ID, erster SSO-Meilenstein
+
+- Optionales Single-Tenant-OIDC-Verfahren via ASP.NET-Core-OpenIdConnect: Confidential Authorization Code, PKCE, State und Nonce; exakte Tenant Authority, ValidIssuer und ValidAudience.
+- Der Microsoft-Client-Secret-Wert kommt ausschließlich aus einer bei Dockerstart eingelesenen Datei; kein Secret-Wert in `.env`, Git oder Auth-Response. Nur bei `PLENARO_HTTPS_ENABLED=true`.
+- `/signin-entra` ist der OIDC-Callback. Externe Identitäten werden zunächst über den kurzlebigen `IdentityConstants.ExternalScheme`-Cookie validiert.
+- Der Schlüssel `tid:oid` wird über Identity-`AspNetUserLogins` mit genau einem bestehenden lokalen Konto verbunden. Es gibt weder Auto-Provisioning noch E-Mail-Matching.
+- Der lokale Benutzer muss vor der Verknüpfung angemeldet sein und nach dem Entra-Redirect eine ausdrücklich bestätigte CSRF-geschützte POST-Anfrage ausführen; bestehende Rollen verbleiben bei Identity.
+- `SaveTokens=false`: Keine Entra-/Graph-Tokens landen im Plenaro-Cookie. Graph und dynamische Tenant-Adminoberfläche folgen später.

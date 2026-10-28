@@ -1,6 +1,7 @@
 using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -32,6 +33,8 @@ var builder = WebApplication.CreateBuilder(
     args.Where(a => a != "--bootstrap-admin" && a != "--setup-token").ToArray());
 
 var requireHttps = builder.Configuration.GetValue<bool>("Security:RequireHttps");
+var entra = EntraConfiguration.Load(builder.Configuration, requireHttps);
+builder.Services.AddSingleton(entra);
 // Always trust forwarded headers from exactly our own NGINX container, never from
 // arbitrary LAN clients. Correct client IPs are essential for login rate limits.
 var trustedProxy = builder.Configuration["Security:TrustedProxyIp"];
@@ -72,6 +75,41 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
 })
 .AddEntityFrameworkStores<PlenaroIdentityDbContext>()
 .AddDefaultTokenProviders();
+
+if (entra.Enabled)
+{
+    builder.Services.AddAuthentication().AddOpenIdConnect(EntraConfiguration.Scheme, options =>
+    {
+        options.Authority = $"https://login.microsoftonline.com/{entra.TenantId}/v2.0";
+        options.ClientId = entra.ClientId;
+        options.ClientSecret = entra.ClientSecret;
+        options.CallbackPath = "/signin-entra";
+        options.SignInScheme = IdentityConstants.ExternalScheme;
+        options.ResponseType = "code";
+        options.UsePkce = true;
+        options.SaveTokens = false; // No Graph/refresh tokens in the identity cookie.
+        options.GetClaimsFromUserInfoEndpoint = false;
+        options.MapInboundClaims = false;
+        options.RequireHttpsMetadata = true;
+        options.Scope.Clear();
+        options.Scope.Add("openid");
+        options.Scope.Add("profile");
+        options.Scope.Add("email");
+        options.TokenValidationParameters.ValidateIssuer = true;
+        options.TokenValidationParameters.ValidateAudience = true;
+        options.TokenValidationParameters.ValidAudience = entra.ClientId;
+        options.Events = new OpenIdConnectEvents
+        {
+            OnRemoteFailure = context =>
+            {
+                // No exception strings, tokens or sensitive claim details in URLs/logs.
+                context.HandleResponse();
+                context.Response.Redirect("/login?entra=failed");
+                return Task.CompletedTask;
+            }
+        };
+    });
+}
 
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -173,7 +211,7 @@ app.MapGet("/health/live", () => Results.Ok(new
 {
     status = "ok",
     service = "plenaro-web",
-    phase = 3
+    phase = 4
 }));
 
 app.MapGet("/health/ready", async (
@@ -202,6 +240,7 @@ app.MapGet("/health/ready", async (
 });
 
 app.MapPlenaroAuth();
+app.MapPlenaroEntra();
 app.MapAdminUsers();
 app.MapPlenaroSettings();
 app.MapPlenaroSecrets();

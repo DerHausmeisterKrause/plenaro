@@ -30,6 +30,10 @@ services:
       ConnectionStrings__Plenaro: "Host=database;Port=5432;Database=${POSTGRES_DB:-plenaro};Username=${POSTGRES_USER:-plenaro};Password=${POSTGRES_PASSWORD:?Setze POSTGRES_PASSWORD in der .env};Pooling=true"
       Security__RequireHttps: "${PLENARO_HTTPS_ENABLED:-false}"
       Security__TrustedProxyIp: "172.29.213.10"
+      Entra__Enabled: "${PLENARO_ENTRA_ENABLED:-false}"
+      Entra__TenantId: "${PLENARO_ENTRA_TENANT_ID:-}"
+      Entra__ClientId: "${PLENARO_ENTRA_CLIENT_ID:-}"
+      Entra__ClientSecretFile: "${PLENARO_ENTRA_CLIENT_SECRET_FILE:-/run/plenaro-secrets/entra-client-secret}"
       PLENARO_VAULT_KEY_FILE: "${PLENARO_VAULT_KEY_FILE:-}"
     depends_on:
       database:

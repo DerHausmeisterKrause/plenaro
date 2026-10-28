@@ -1,10 +1,24 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowRight, LogOut, ShieldAlert } from 'lucide-react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { login, logout, type CurrentUser } from './authApi';
+import { entraStatus } from './entraApi';
 
 export function LoginPage({ onLogin, user }: { onLogin: (value: CurrentUser) => void; user: CurrentUser | null }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [entraEnabled, setEntraEnabled] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    void entraStatus().then(s => { if (mounted) setEntraEnabled(s.enabled); })
+      .catch(() => { /* Local login stays available. */ });
+    return () => { mounted = false; };
+  }, []);
+  const entraMessage: Record<string, string> = {
+    'not-linked': 'Dieses Microsoft-Konto ist noch nicht verknüpft. Melde dich lokal an und verbinde es unter Einstellungen.',
+    denied: 'Dein Plenaro-Konto ist gesperrt oder derzeit nicht zur Anmeldung berechtigt.',
+    failed: 'Die Microsoft-Anmeldung ist fehlgeschlagen oder wurde abgebrochen.',
+  };
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -38,6 +52,8 @@ export function LoginPage({ onLogin, user }: { onLogin: (value: CurrentUser) => 
       <h1>Willkommen zurück.</h1>
       <p>Melde dich mit deinem Plenaro-Konto an.</p>
       {insecureLan && <p role="alert" className="auth-warning"><ShieldAlert size={17} aria-hidden="true"/> Achtung: HTTP überträgt Passwörter im LAN unverschlüsselt. Für echte Konten einen HTTPS-Reverse-Proxy verwenden.</p>}
+      {entraMessage[searchParams.get('entra') ?? ''] &&
+        <p role="alert" className="auth-error">{entraMessage[searchParams.get('entra') ?? '']}</p>}
       <form onSubmit={submit} className="auth-form">
         <label htmlFor="plenaro-email">E-Mail-Adresse</label>
         <input id="plenaro-email" autoComplete="username" type="email" value={email}
@@ -50,7 +66,13 @@ export function LoginPage({ onLogin, user }: { onLogin: (value: CurrentUser) => 
           {busy ? 'Anmeldung läuft …' : 'Anmelden'} <ArrowRight size={17} aria-hidden="true" />
         </button>
       </form>
-
+      {entraEnabled && <>
+        <div className="auth-divider"><span>oder</span></div>
+        <a className="button button-secondary auth-submit auth-entra" href="/api/v1/auth/entra/start">
+          Mit Microsoft anmelden
+        </a>
+        <p className="um-hint">Nur für zuvor verknüpfte lokale Plenaro-Konten.</p>
+      </>}
     </section>
   </div>;
 }

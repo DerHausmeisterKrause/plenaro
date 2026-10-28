@@ -78,3 +78,14 @@
 - Betriebsanleitung: [HTTPS_AND_VAULT.md](HTTPS_AND_VAULT.md).
 
 **Proxy-IP:** Nur die feste NGINX-IP `172.29.213.10` darf Forwarded Headers liefern. In HTTP- und HTTPS-Betrieb wird damit die echte Client-IP für Rate-Limits ermittelt. Sicherheitskonzept und Anleitung: [HTTPS_AND_VAULT.md](HTTPS_AND_VAULT.md).
+
+## Phase 4 – Optionaler Microsoft-Entra-Login
+
+- Single-Tenant-Authority: `https://login.microsoftonline.com/{tenant-guid}/v2.0`, feste Client-ID, validierter Issuer/Audience, Microsoft-signierte ID-Tokens, Authorization Code mit PKCE und State/Nonce.
+- Nur mit aktiviertem HTTPS; keine Microsoft-Anmeldung über unsichere HTTP-Instanzen.
+- Keine automatische Anlage/Verknüpfung anhand von E-Mail-Claims. Identität ausschließlich `tid` + `oid`; Zuordnung in Identity-`AspNetUserLogins` eindeutig.
+- Verknüpfung erfordert vorhandene lokale Anmeldung, OIDC-Challenge-Zustand mit lokaler Nutzer-ID und nachgelagertes bewusstes CSRF-geschütztes Bestätigen.
+- Entkoppelung nur mit lokalem Passwort; widerruft alte Plenaro-Sessions. Gesperrte oder gelockte Benutzer erhalten keine SSO-Sitzung.
+- Lokale Benutzer-Rollen bleiben die **einzigen** autoritativen Rollen. Microsoft-Claims oder E-Mail verleihen niemals Admin-Rechte.
+- Kein Token-Persistieren in Auth-Cookies (`SaveTokens=false`), minimale Scopes `openid profile email`; Client Secret ausschließlich per schreibgeschützter gemounteter Hostdatei.
+- Vollständige Abnahme mit echtem Entra-Tenant, Conditional-Access-Verhalten, Browser-Korrelation, Link-Race/Threat-Model sowie Graph-Delegated-Token-Speicher bleibt offen.
