@@ -74,7 +74,8 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [x] Monatsberichte für aufgabenbezogene Timer und Korrekturen, monatsgenaue Europe/Berlin-Grenzen, CSV-Export ohne fremde Nutzer (PR #25; CI-/Host-Abnahme offen)
 - [ ] Homeoffice-Workflows
 - [ ] Aufgaben teilen, Einladungen und Besitzerrechte
-- [ ] Desktop-SQLite-Datenimport mit Validierungs-/Rollback-Strategie
+- [x] Erster SQLite-v1–v32-Importpfad: lokaler bereinigender Export, Web-Vorschau, transaktionaler Import, ID-Deduplizierung und snapshotgeschützte Rücknahme (PR nach CI; Host-Abnahme offen)
+- [ ] **Vollständige** Datenmigration/Classic-Feldparität (Ticket-/Outlook-Verknüpfungen, Buchungen, weitere Einstellungen und Legacy-Datenmengen)
 
 **Abnahme:** Kernabläufe der Desktop-Aufgaben-/Zeitverwaltung funktionieren im Browser.
 
@@ -160,7 +161,8 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [x] Auth-, CSRF-, Cross-User-Isolation und Integrationschecks für Timer, Anpassungen, Segment-CRUD im bestehenden CI-Job
 - [x] Lokale Konflikt- und Verfügbarkeitsprüfung für **eigene** Zeitsegmente: Vorschau, Kollisionen beim Erstellen, Bearbeiten und Verschieben verhindern (CI-/Host-Abnahme offen)
 - [ ] Vollständige Kalender-/Teilnehmer-Verfügbarkeitsprüfung über Microsoft Graph, Kalendereinladungen und Outlook-/Teams-Synchronisation
-- [ ] Desktop-Datenimport von Zeitbuchungen und Zeitsegmenten; lokale Browser-Abnahme
+- [x] Abgeschlossene Desktop-Aufgabenzeitbuchungen und geplante Segmente über SQLite-Exportpfad übertragbar (CI/Host-Abnahme getrennt)
+- [ ] Vollständige Altimport-Feldparität und Browser-Abnahme
 - [x] Drag-and-drop der lokalen Zeitsegmente mit Konfliktprüfung (PR #26)
 - [ ] Weitere Planungsoptimierungen und erweiterte Tages-/Segmentberichte
 - [x] Kommen/Gehen/Pausen/Sollzeit weiterhin bewusst ausgeschlossen
@@ -197,3 +199,13 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [ ] Browser-Schließen / PWA-Web-Push / Service Worker und dauerhafte Background-Push-Zustellung.
 - [ ] Ticket-/Znuny-Benachrichtigungen, bevor der Ticketsystem-Adapter implementiert ist.
 - [ ] Manuelle Desktop-/Mobilbrowser-Abnahme auf dem Zielhost.
+
+## Classic-Import in Phase 5 – Teilmigration
+
+- [x] `tools/export_classic.py`: SQLite 1–32 schreibgeschützt öffnen und als bereinigtes JSON exportieren, optional `settings.json` mit strikt erlaubtem `ReminderLeadMinutes`-Wert. Keine Zugangsdaten exportieren.
+- [x] Eigene Aufgaben, geplante Zeitsegmente mit Teilnehmern, abgeschlossene `time_logs` und UL/AM/BR/HO aus `work_days`; keine Anwesenheit, Pausen oder offene Timer.
+- [x] Web-Einstellungen → Datenimport mit Vorschau, Hinweisen, Zählung, expliziter Bestätigung und Importhistorie.
+- [x] In einer PostgreSQL-Transaktion importieren, UUIDs/Benutzerbesitz absichern, Wiederholungsimporte ohne Duplikate, bestehende eigene Marker nicht überschreiben.
+- [x] Manuelle batchbezogene Rücknahme mit Daten-Snapshots; bei bearbeiteten Datensätzen/abhängigen Einträgen verweigern.
+- [ ] Volle Classic-Übernahme von Ticketbuchungen, Zeitanpassungen, Outlook-/Znuny-/Wiki-Einstellungen und Zuordnungen.
+- [ ] Host-Abnahme mit einer echten Kopie der bisherigen `TaskTool.db` und `settings.json` nach PostgreSQL-Backup.

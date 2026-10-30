@@ -179,6 +179,24 @@ jobs:
           curl -fsS -b "$COOKIE" "$API/api/v1/notifications/" | python3 -c 'import json,sys;assert json.load(sys.stdin)==[]'
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/notifications/settings" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["enabled"] and d["leadMinutes"]==2'
 
+          # Import conversion is read-only and strips all secrets (synthetic SQLite).
+          python3 -m unittest discover -s tools -p 'test_*.py'
+          # Preview is nonmutating; import and undo only touch authenticated owner data.
+          IMPORT_JSON='{"formatVersion":1,"sourceId":"ci-classic-import","schemaVersion":32,"tasks":[{"legacyId":"b51a46d3-c97f-4a13-ac92-bb0123456789","title":"Importierte Altaufgabe","description":"Classic","status":"planned","priority":2,"tags":["import"],"plannedFor":"2026-12-14","createdAt":"2026-01-02T09:00:00Z"}],"segments":[{"legacyId":"17","taskLegacyId":"b51a46d3-c97f-4a13-ac92-bb0123456789","startsAt":"2026-12-14T10:00:00Z","endsAt":"2026-12-14T10:30:00Z","note":"Classic Segment","participants":[]}],"timeEntries":[{"legacyId":"9","taskLegacyId":"b51a46d3-c97f-4a13-ac92-bb0123456789","startsAt":"2026-01-02T09:00:00Z","endsAt":"2026-01-02T09:30:00Z","note":"Classic Zeit"}],"dayMarkers":[{"day":"2025-02-12","dayType":"UL","isBr":true,"isHo":false}],"settings":{"reminderLeadMinutes":4},"warnings":[]}'
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/classic-import/batches")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/classic-import/preview" -H 'Content-Type: application/json' -d "$IMPORT_JSON")" = "400"
+          curl -fsS -b "$COOKIE" -X POST "$API/api/v1/classic-import/preview" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$IMPORT_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin); assert (d["newTasks"],d["newSegments"],d["newTimeEntries"],d["newMarkers"])==(1,1,1,1)'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/tasks/" | python3 -c 'import json,sys;assert all(x["title"]!="Importierte Altaufgabe" for x in json.load(sys.stdin))'
+          BATCH_ID=$(curl -fsS -b "$COOKIE" -X POST "$API/api/v1/classic-import/commit" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$IMPORT_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["inserted"]==4;print(d["batchId"])')
+          test -n "$BATCH_ID"
+          curl -fsS -b "$COOKIE" "$API/api/v1/tasks/" | python3 -c 'import json,sys;assert any(t["title"]=="Importierte Altaufgabe" for t in json.load(sys.stdin))'
+          curl -fsS -b "$COOKIE" "$API/api/v1/notifications/settings" | python3 -c 'import json,sys;assert json.load(sys.stdin)["leadMinutes"]==4'
+          curl -fsS -b "$COOKIE" -X POST "$API/api/v1/classic-import/preview" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$IMPORT_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["newTasks"]==d["newSegments"]==d["newTimeEntries"]==d["newMarkers"]==0'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/day-markers/?year=2025&month=2" | python3 -c 'import json,sys;assert not any(x["day"]=="2025-02-12" for x in json.load(sys.stdin))'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X DELETE "$API/api/v1/classic-import/batches/$BATCH_ID" -H "X-CSRF-TOKEN: $USER_CSRF")" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X DELETE "$API/api/v1/classic-import/batches/$BATCH_ID")" = "400"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X DELETE "$API/api/v1/classic-import/batches/$BATCH_ID" -H "X-CSRF-TOKEN: $CSRF")" = "204"
+          curl -fsS -b "$COOKIE" "$API/api/v1/tasks/" | python3 -c 'import json,sys;assert not any(x["title"]=="Importierte Altaufgabe" for x in json.load(sys.stdin))'
           # Task activity reports: own data only, invalid month and CSV injection protection.
           MONTH=$(TZ=Europe/Berlin date +%Y-%m)
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/reports/month?month=$MONTH")" = "401"

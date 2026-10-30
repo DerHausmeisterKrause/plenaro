@@ -14,6 +14,9 @@ beforeEach(() => {
   calendarSegments = [];
   reminderItems = [];
   vi.stubGlobal('fetch', vi.fn(async (path: string) => {
+    if (path === '/api/v1/classic-import/batches') return {
+      ok: true, status: 200, json: async () => [],
+    };
     if (path === '/api/v1/notifications/') return {
       ok: true, status: 200, json: async () => reminderItems,
     };
@@ -143,6 +146,14 @@ describe('Plenaro web shell', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Aufgaben & Kalender' }));
     expect(await screen.findByRole('heading', { name: 'Benachrichtigungen und Reminder' })).toBeTruthy();
     expect((screen.getByLabelText('Vorwarnung in Minuten') as HTMLInputElement).value).toBe('2');
+  });
+
+  it('bietet einen persönlichen Datenimport mit Vorschau und ohne direkte SQLite-Übertragung', async () => {
+    renderAt('/settings');
+    fireEvent.click(await screen.findByRole('button', { name: 'Datenimport' }));
+    expect(await screen.findByRole('heading', { name: 'Desktop-Daten importieren' })).toBeTruthy();
+    expect(screen.getAllByText(/tools\/export_classic.py/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Noch kein Import ausgeführt/)).toBeTruthy();
   });
 
   it('zeigt getrennte Formulare für persönliche und globale Einstellungen', async () => {

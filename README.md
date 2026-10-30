@@ -285,3 +285,49 @@ Verschobene Segmente erzeugen neue Hinweise zum neuen Zeitpunkt.
 **Nicht enthalten:** Push bei komplett geschlossenem Browser, geräteübergreifende Push-
 Zustellung und Ticketbenachrichtigungen (Znuny-Adapter noch nicht vorhanden).
 Die Migration `0012_task_reminders.sql` wird beim Docker-Start automatisch angewendet.
+
+## Plenaro Classic SQLite-Import (erste Migrationsstufe)
+
+**Wichtig:** Vorher PostgreSQL sichern und eine **Kopie** der alten `TaskTool.db`
+sowie optional `settings.json` erstellen. Das Werkzeug ist für SQLite
+Schema-Versionen **1–32** ausgelegt, überschreibt keine bestehenden Webdaten
+und überträgt keinen Desktop-Benutzer automatisch: Importziel ist ausschließlich
+das gerade angemeldete Plenaro-Webkonto.
+
+1. Mit Python 3.10 oder neuer auf dem Rechner, auf dem die **Kopien** liegen,
+   `tools/export_classic.py` aus diesem Repository starten:
+
+   ```bash
+   python tools/export_classic.py "/pfad/TaskTool.db" -s "/pfad/settings.json" -o plenaro-import.json
+   ```
+
+   Ohne settings.json einfach `-s` weglassen. Bei Windows ggf.
+   `py tools/export_classic.py "C:\Plenaro\TaskTool.db" -s "C:\Plenaro\settings.json" -o plenaro-import.json`.
+   Der Konverter verwendet `sqlite3` und `zoneinfo` der Python-Standardbibliothek.
+   Über `--source-id` kann bei einem umgezogenen Datenbankpfad eine stabile
+   Importquelle festgelegt werden (bei wiederholten Importen **denselben** Wert nutzen).
+
+2. Die bereinigte JSON-Datei auf **Einstellungen → Datenimport** auswählen. Dort
+   Vorschau, geplante/neue/übersprungene Datensätze und Warnungen lesen.
+3. Erst nach einem PostgreSQL-Backup den Import bestätigen. Eine fehlgeschlagene
+   Einspielung wird **vollständig** zurückgerollt. Wiederholte Importe desselben
+   Desktop-Quell-IDs legen keine doppelten Aufgaben/Segmente/Zeiten an.
+4. Unterhalb der Vorschau kann ein kompletter Import-Batch zurückgenommen werden,
+   **solange die ursprünglich importierten Zeilen unverändert** sind und keine
+   neu hinzugefügten abhängigen Zeiten/Segmente an importierten Aufgaben hängen.
+   Andernfalls verweigert die API die Rücknahme, statt Benutzerdaten zu löschen.
+
+**Enthalten:** Aufgaben (Titel, Beschreibung, Status, Priorität, Tags, geplantes Datum),
+Zeitsegmente inkl. Teilnehmer, abgeschlossene Arbeitszeit-Logs,
+UL/AM/BR/HO-Tagesmarker und (falls vorhanden) allein `ReminderLeadMinutes`.
+Alle Datumsfelder werden nach UTC bzw. Europe/Berlin normalisiert. Unklare
+Sommer-/Winterzeit-Uhrzeiten werden übersprungen und gemeldet.
+
+**Nicht enthalten:** Ticketzeitbuchungen, Ticket-/Outlook-Verknüpfungen,
+KI-/Wiki-/Znuny-Konfiguration, verschlüsselte Passwörter und Token, offene Timer,
+weitere Einstellungen und ausdrücklich ausgeschlossene Kommen/Gehen/Pausen.
+Die exportierte JSON-Datei enthält weiterhin **Aufgabentitel und Beschreibungen**;
+deshalb vertraulich aufbewahren und nach der Migration sicher löschen.
+Die Migration `0013_classic_import_batches.sql` wird beim Start automatisch eingespielt.
+
+**Schema-/Sicherheitstest** des Konverters: `python -m unittest discover -s tools -p 'test_*.py'`.

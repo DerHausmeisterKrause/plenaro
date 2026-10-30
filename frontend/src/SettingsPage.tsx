@@ -7,6 +7,7 @@ import { EntraAccountPanel } from './EntraAccountPanel';
 import { EntraAdminSettings } from './EntraAdminSettings';
 import { DayMarkerBudgetSettings } from './DayMarkersPanel';
 import { ReminderSettingsPanel } from './ReminderSettingsPanel';
+import { ClassicImportPanel } from './ClassicImportPanel';
 import { type PersonalPreferences, type WorkspacePreferences } from './settingsApi';
 import { addUser, changePassword, listUsers, resetUserPassword, saveUser, type ManagedUser } from './userApi';
 
@@ -187,7 +188,7 @@ function AdminUsers({ currentId }: { currentId: string }) {
   </section>;
 }
 
-type SettingsSection = 'general' | 'planning' | 'microsoft' | 'ticket' | 'security' | 'admin';
+type SettingsSection = 'general' | 'planning' | 'import' | 'microsoft' | 'ticket' | 'security' | 'admin';
 
 export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved }: {
   user: CurrentUser | null | undefined;
@@ -200,6 +201,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved }: {
   const tabs: { key: SettingsSection; label: string }[] = [
     { key: 'general', label: 'Allgemein' },
     { key: 'planning', label: 'Aufgaben & Kalender' },
+    { key: 'import', label: 'Datenimport' },
     { key: 'microsoft', label: 'Microsoft 365' },
     { key: 'ticket', label: 'Ticketsystem' },
     { key: 'security', label: 'Konto & Sicherheit' },
@@ -223,6 +225,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved }: {
       <WorkspacePreferencesPanel admin={admin} onSaved={onWorkspaceSaved}/>
     </div>}
     {section === 'planning' && <><DayMarkerBudgetSettings/><ReminderSettingsPanel/></>}
+    {section === 'import' && <ClassicImportPanel/>}
     {section === 'microsoft' && <>
       {admin && <EntraAdminSettings/>}
       <EntraAccountPanel/>
