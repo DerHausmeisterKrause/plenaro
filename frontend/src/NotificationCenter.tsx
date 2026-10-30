@@ -122,7 +122,7 @@ export function NotificationCenter({ userId }: { userId: string }) {
             <strong>{item.taskTitle}</strong>
             <small>{localTime(item.startsAt)}</small>
             <div className="plenaro-notification-actions">
-              <Link to="/today" className="classic-text-action" onClick={() => setOpened(false)}>Aufgaben öffnen</Link>
+              <Link to={`/tasks?task=${encodeURIComponent(item.taskId)}`} className="classic-text-action" onClick={() => setOpened(false)}>Aufgabe öffnen</Link>
               <button type="button" className="button button-secondary" disabled={!!processing}
                 onClick={() => void acknowledge(item)}><Check size={14}/>Gelesen</button>
             </div>
