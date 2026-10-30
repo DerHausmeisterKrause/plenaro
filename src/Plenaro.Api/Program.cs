@@ -126,6 +126,9 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
             OnTokenValidated = async context =>
             {
                 if (context.Principal is null || !entra.Enabled) return;
+                // Linking is a distinct, explicitly approved operation. Only a
+                // normal Entra login may refresh the linked user's Graph token.
+                if (context.Properties.Items.ContainsKey("linkUserId")) return;
                 var tid = context.Principal.FindFirst("tid")?.Value;
                 var oid = context.Principal.FindFirst("oid")?.Value;
                 if (!Guid.TryParse(tid, out var tenantId) ||
