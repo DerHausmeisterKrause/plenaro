@@ -2,8 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { CalendarDays, Clock3, Pencil, Play, Save, Square, Trash2, X } from 'lucide-react';
 import {
   adjustTaskTime, createTaskSegment, deleteTaskSegment, listTaskSegments,
-  readTaskTime, secondsToClock, startTaskTimer, stopTaskTimer, updateTaskSegment,
-  type SegmentInput, type TaskSegment, type TaskTimeSummary,
+  readTaskTime, readSegmentAvailability, secondsToClock, startTaskTimer, stopTaskTimer, updateTaskSegment,
+  type SegmentAvailability, type SegmentInput, type TaskSegment, type TaskTimeSummary,
 } from './taskWorkApi';
 import { localDate } from './tasksApi';
 import { Link } from 'react-router-dom';
@@ -114,6 +114,8 @@ export function TaskSegmentsPanel({ taskId }: { taskId: string | null }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
+  const [availability, setAvailability] = useState<SegmentAvailability | null>(null);
+  const [availabilityError, setAvailabilityError] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -125,6 +127,21 @@ export function TaskSegmentsPanel({ taskId }: { taskId: string | null }) {
     }).catch(e => { if (active) { setError(e instanceof Error ? e.message : 'Segmente konnten nicht geladen werden.'); setLoading(false); } });
     return () => { active = false; };
   }, [taskId]);
+
+  // Preview own local occupancy. Final validation is always done in PostgreSQL.
+  useEffect(() => {
+    let active = true;
+    setAvailability(null); setAvailabilityError('');
+    if (!taskId) return;
+    const begins = new Date(day + 'T' + start + ':00');
+    const finishes = new Date(day + 'T' + end + ':00');
+    if (Number.isNaN(begins.getTime()) || Number.isNaN(finishes.getTime()) || finishes <= begins)
+      return;
+    void readSegmentAvailability(begins.toISOString(), finishes.toISOString(), editing ?? undefined)
+      .then(result => { if (active) setAvailability(result); })
+      .catch(() => { if (active) setAvailabilityError('Verfügbarkeit konnte vorab nicht geprüft werden. Der Server prüft beim Speichern.'); });
+    return () => { active = false; };
+  }, [taskId, editing, day, start, end]);
 
   function reset() {
     setEditing(null); setDay(localDate()); setStart('09:00'); setEnd('09:30');
@@ -148,6 +165,9 @@ export function TaskSegmentsPanel({ taskId }: { taskId: string | null }) {
     }
     const emails = participants.split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
     if (emails.length > 20) { setError('Maximal 20 Teilnehmer.'); return; }
+    if (availability?.available === false) {
+      setError('Dieser Zeitraum ist bereits durch ein eigenes Zeitsegment belegt.'); return;
+    }
     const input: SegmentInput = {
       startsAt: starts.toISOString(), endsAt: ends.toISOString(),
       note: note.trim(), participants: emails,
@@ -192,6 +212,13 @@ export function TaskSegmentsPanel({ taskId }: { taskId: string | null }) {
         <label>Teilnehmer (E-Mail) <input value={participants} onChange={e => setParticipants(e.target.value)}
           placeholder="name@firma.de, weitere@firma.de"/></label>
         <p className="um-hint">Mehrere E-Mail-Adressen mit Komma oder Semikolon trennen. Noch keine Kalendereinladungen.</p>
+        {availability && <div className={availability.available ? 'um-feedback success' : 'um-feedback failure'}
+          role="status">
+          {availability.available ? 'Lokal frei – keine Überschneidung mit eigenen Segmenten.' :
+            <>Lokal belegt: {availability.conflicts.map(c => c.taskTitle).join(', ')}</>}
+        </div>}
+        {availabilityError && <p role="status" className="um-hint">{availabilityError}</p>}
+        <p className="um-hint">Teilnehmer- und Outlook-Verfügbarkeit wird hier nicht geprüft.</p>
         <button type="submit" className="button button-primary" disabled={busy}><Save size={15}/>{editing ? 'Änderungen speichern' : 'Segment speichern'}</button>
       </form>
       {error && <p role="alert" className="um-feedback failure">{error}</p>}
