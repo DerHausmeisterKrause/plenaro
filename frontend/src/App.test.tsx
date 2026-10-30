@@ -11,6 +11,12 @@ let calendarSegments: TaskSegment[] = [];
 beforeEach(() => {
   calendarSegments = [];
   vi.stubGlobal('fetch', vi.fn(async (path: string) => {
+    if (path === '/api/v1/notifications/') return {
+      ok: true, status: 200, json: async () => [],
+    };
+    if (path === '/api/v1/notifications/settings') return {
+      ok: true, status: 200, json: async () => ({ enabled: true, leadMinutes: 2 }),
+    };
     if (path === '/api/v1/settings/me') return {
       ok: true, status: 200, json: async () => ({ theme: 'light', weekStart: 'inherit' }),
     };
@@ -103,6 +109,21 @@ describe('Plenaro web shell', () => {
     const themeButton = await screen.findByRole('button', { name: /Dunkelmodus aktivieren/i });
     fireEvent.click(themeButton);
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));
+  });
+
+  it('zeigt die Benachrichtigungsglocke und ein leeres persönliches Postfach', async () => {
+    renderAt('/');
+    const button = await screen.findByRole('button', { name: /Benachrichtigungen öffnen, 0 ungelesen/ });
+    fireEvent.click(button);
+    expect(await screen.findByRole('region', { name: 'Benachrichtigungen' })).toBeTruthy();
+    expect(screen.getByText('Keine ungelesenen Erinnerungen.')).toBeTruthy();
+  });
+
+  it('bietet persönliche Reminder-Einstellungen mit Standardvorlauf', async () => {
+    renderAt('/settings');
+    fireEvent.click(await screen.findByRole('button', { name: 'Aufgaben & Kalender' }));
+    expect(await screen.findByRole('heading', { name: 'Benachrichtigungen und Reminder' })).toBeTruthy();
+    expect((screen.getByLabelText('Vorwarnung in Minuten') as HTMLInputElement).value).toBe('2');
   });
 
   it('zeigt getrennte Formulare für persönliche und globale Einstellungen', async () => {
