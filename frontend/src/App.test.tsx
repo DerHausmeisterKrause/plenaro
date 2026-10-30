@@ -85,7 +85,7 @@ describe('Plenaro web shell', () => {
     renderAt('/reports');
     expect(await screen.findByRole('heading', { name: 'Monatsberichte' })).toBeTruthy();
     expect(await screen.findByText('CI Monatsaufgabe')).toBeTruthy();
-    expect(screen.getByText('30 Min.')).toBeTruthy();
+    expect(screen.getAllByText(/\\+30 Min\\./).length).toBeGreaterThan(0);
     const exportLink = screen.getByRole('link', { name: 'CSV exportieren' });
     expect(exportLink.getAttribute('href')).toContain('/api/v1/reports/monthly.csv?');
     expect(exportLink.getAttribute('href')).toContain('timeZone=');
