@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calendarMove, halfHourFromPosition } from './segmentPlanner';
+import { calendarMove, conflictingLocalSegments, halfHourFromPosition, intervalsOverlap } from './segmentPlanner';
 import type { TaskSegment } from './taskWorkApi';
 
 const segment: TaskSegment = {
@@ -35,6 +35,15 @@ describe('Kalender-Verschiebeplanung', () => {
     expect(() => calendarMove(segment, '2026-10-30', 18, 0)).toThrow();
     expect(() => calendarMove(segment, '2026-10-30', 9, 15)).toThrow();
     expect(() => calendarMove(segment, '2026-02-30', 9, 0)).toThrow();
+  });
+
+  it('erkennt echte Überschneidungen, aber keine direkt angrenzenden Zeiträume', () => {
+    expect(intervalsOverlap('2026-10-30T09:00:00Z', '2026-10-30T09:30:00Z',
+      '2026-10-30T09:30:00Z', '2026-10-30T10:00:00Z')).toBe(false);
+    expect(intervalsOverlap('2026-10-30T09:00:00Z', '2026-10-30T09:30:00Z',
+      '2026-10-30T09:29:00Z', '2026-10-30T10:00:00Z')).toBe(true);
+    expect(conflictingLocalSegments([segment], segment.startsAt, segment.endsAt)).toHaveLength(1);
+    expect(conflictingLocalSegments([segment], segment.startsAt, segment.endsAt, segment.id)).toHaveLength(0);
   });
 
   it('bestimmt die halbe Stunde relativ zur Drop-Fläche', () => {
