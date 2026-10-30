@@ -233,3 +233,19 @@ einsehen und per **CSV exportieren**. Dieser Bericht beschreibt Aufgabenaktivit�
   `task_time_adjustments` werden ausgelesen. CI- und Live-Host-Abnahme im PR prüfen.
 
 Die Benutzeroberfläche und Export-API sind in [PR #25](https://github.com/DerHausmeisterKrause/plenaro/pull/25) implementiert.
+
+## Zeitsegmente im Wochenkalender verschieben (Phase 5)
+
+Die lokale **Wochenplanung** zeigt Zeitsegmente deiner eigenen Aufgaben. Ziehe ein Segment
+am Griff auf einen anderen Wochentag bzw. in ein Stundenfeld (Mo–Fr, 06–18 Uhr).
+Die obere Hälfte eines Stundenfelds steht für `:00`, die untere für `:30`.
+Die Dauer des Segments bleibt beim Verschieben vollständig erhalten.
+
+Alternativ Segment anklicken, rechts unter **Zeitsegmente → Zeitsegment verschieben**
+den Wochentag und die Startzeit wählen und speichern. Diese Alternative funktioniert
+auch ohne Drag-and-drop, etwa auf einem Touchgerät oder mit Tastatur.
+
+Plenaro speichert nur die neuen Zeitgrenzen (gesonderte `PATCH`-API);
+Notizen und Teilnehmer bleiben unverändert. Bei einem inzwischen anders
+geänderten Termin erscheint ein Konflikthinweis statt eines stillen Überschreibens.
+Kein Outlook-/Teams-Schreibzugriff oder Versand von Einladungen.

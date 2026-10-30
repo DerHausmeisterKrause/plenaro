@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AppContent } from './App';
+import { localDate } from './tasksApi';
+import type { TaskSegment } from './taskWorkApi';
+
+let calendarSegments: TaskSegment[] = [];
+
 
 beforeEach(() => {
+  calendarSegments = [];
   vi.stubGlobal('fetch', vi.fn(async (path: string) => {
     if (path === '/api/v1/settings/me') return {
       ok: true, status: 200, json: async () => ({ theme: 'light', weekStart: 'inherit' }),
@@ -35,7 +41,10 @@ beforeEach(() => {
           totalSeconds: 4500, sessionCount: 1 }],
       }),
     };
-    if (path.startsWith('/api/v1/segments/?')) return { ok: true, status: 200, json: async () => [] };
+    if (path.startsWith('/api/v1/segments/?')) return {
+      ok: true, status: 200, json: async () => calendarSegments,
+    };
+    if (path.endsWith('/schedule')) return { ok: true, status: 204 };
     if (path.startsWith('/api/v1/tasks/')) return {
       ok: true, status: 200, json: async () => ([]),
     };
@@ -134,6 +143,67 @@ describe('Plenaro web shell', () => {
     expect(screen.getByRole('button', { name: 'Vorherige Woche' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Nächste Woche' })).toBeTruthy();
     expect(screen.queryByText('Microsoft Graph ist noch nicht eingerichtet')).toBeNull();
+  });
+
+  it('verschiebt ein Segment mit Drag-and-drop und erhält Notizen durch den gezielten PATCH', async () => {
+    const today = new Date();
+    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    const tuesday = new Date(monday);
+    tuesday.setDate(tuesday.getDate() + 1);
+    const start = new Date(monday);
+    start.setHours(9, 0, 0, 0);
+    const end = new Date(start.getTime() + 45 * 60 * 1000);
+    calendarSegments = [{
+      id: '1179cbb8-5b66-4c2c-940f-44ea05f4fa91',
+      taskId: 'd10e1e7c-a55d-42a0-a0df-061fcf157810',
+      taskTitle: 'Testaufgabe', startsAt: start.toISOString(), endsAt: end.toISOString(),
+      note: 'Bestehende Notiz', participants: ['kunde@example.invalid'],
+    }];
+    renderAt('/week');
+    const segment = await screen.findByRole('button', { name: /Zeitsegment Testaufgabe/ });
+    const transfer = { setData: vi.fn(), effectAllowed: 'copy', dropEffect: 'none' };
+    fireEvent.dragStart(segment, { dataTransfer: transfer });
+    expect(transfer.setData).toHaveBeenCalledWith('text/plain', calendarSegments[0].id);
+    const target = screen.getByTestId(`calendar-slot-${localDate(tuesday)}-10`);
+    fireEvent.dragOver(target, { dataTransfer: transfer, clientY: 0 });
+    fireEvent.drop(target, { dataTransfer: transfer, clientY: 0 });
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      `/api/v1/tasks/${calendarSegments[0].taskId}/segments/${calendarSegments[0].id}/schedule`,
+      expect.objectContaining({
+        method: 'PATCH',
+        body: expect.stringContaining('"expectedStartsAt"'),
+      }),
+    ));
+    const patch = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith('/schedule'));
+    const payload = JSON.parse((patch?.[1] as RequestInit).body as string) as {
+      startsAt: string; endsAt: string; expectedStartsAt: string;
+    };
+    expect(new Date(payload.startsAt).getHours()).toBe(10);
+    expect(new Date(payload.endsAt).getTime() - new Date(payload.startsAt).getTime()).toBe(45 * 60000);
+    expect(payload.expectedStartsAt).toBe(start.toISOString());
+    expect((patch?.[1] as RequestInit).headers).toMatchObject({ 'X-CSRF-TOKEN': 'test-token' });
+  });
+
+  it('erlaubt Segmentverschiebung per Tastatur bedienbarem Formular', async () => {
+    const monday = new Date();
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    monday.setHours(9, 0, 0, 0);
+    calendarSegments = [{
+      id: '1179cbb8-5b66-4c2c-940f-44ea05f4fa91',
+      taskId: 'd10e1e7c-a55d-42a0-a0df-061fcf157810',
+      taskTitle: 'Testaufgabe', startsAt: monday.toISOString(),
+      endsAt: new Date(monday.getTime() + 30 * 60000).toISOString(),
+      note: '', participants: [],
+    }];
+    renderAt('/week');
+    fireEvent.click(await screen.findByRole('button', { name: /Zeitsegment Testaufgabe/ }));
+    const form = screen.getByRole('form', { name: 'Zeitsegment verschieben' });
+    fireEvent.change(within(form).getByLabelText('Neue Startzeit'), { target: { value: '10:30' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Zeitsegment verschieben' }));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, options]) =>
+      String(url).endsWith('/schedule') && (options as RequestInit).method === 'PATCH',
+    )).toBe(true));
   });
 
   it('zeigt Aufgaben links und Details rechts statt Einzelkarten', async () => {

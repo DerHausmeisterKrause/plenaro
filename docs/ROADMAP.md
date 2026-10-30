@@ -69,7 +69,7 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [x] Lokale Heute-Ansicht: Aktuell/Geplant/Erledigt aus eigenen PostgreSQL-Aufgaben (ohne Demo-Daten)
 - [ ] Vollständige Funktionsparität/Migrationsmapping mit dem Desktop-Programm und weitere Aufgabenfilter
 - [x] Lokales 7-Tage-Kalenderraster (06–18 Uhr) mit geplanten Aufgaben und UL/AM/BR, **auch ohne Entra/Outlook**
-- [ ] Aufgaben mit konkreten Uhrzeiten/Segmenten und Drag-and-drop in Stundenplanung einplanen
+- [x] Bestehende Zeitsegmente im lokalen Mo–Fr-Kalender mit Drag-and-drop und Halb-Stunden-Raster planen (PR #26; Host-Abnahme offen)
 - [x] Aufgaben-Timer und manuelle Korrekturminuten (separat von gestrichener Kommen/Gehen-/Pausenerfassung)
 - [x] Monatsberichte für aufgabenbezogene Timer und Korrekturen, monatsgenaue Europe/Berlin-Grenzen, CSV-Export ohne fremde Nutzer (PR #25; CI-/Host-Abnahme offen)
 - [ ] Homeoffice-Workflows
@@ -159,7 +159,8 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [x] Auth-, CSRF-, Cross-User-Isolation und Integrationschecks für Timer, Anpassungen, Segment-CRUD im bestehenden CI-Job
 - [ ] Kalendereinladung, Outlook-/Teams-Synchronisation und Konflikt-/Verfügbarkeitsprüfung
 - [ ] Desktop-Datenimport von Zeitbuchungen und Zeitsegmenten; lokale Browser-Abnahme
-- [ ] Drag-and-drop und weitere Planungsoptimierungen; erweiterte Tages-/Segmentberichte
+- [x] Drag-and-drop der lokalen Zeitsegmente mit Konfliktprüfung (PR #26)
+- [ ] Weitere Planungsoptimierungen und erweiterte Tages-/Segmentberichte
 - [x] Kommen/Gehen/Pausen/Sollzeit weiterhin bewusst ausgeschlossen
 
 
@@ -169,3 +170,10 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [x] `GET /api/v1/reports/month.csv?month=JJJJ-MM` lädt Excel-kompatibles UTF-8/CSV (Semikolon) mit entschärften Formelnamen herunter.
 - [x] Monatsgrenzen in Europe/Berlin einschließlich Sommerzeit; Monatsübertritte werden auf den jeweiligen Monatsabschnitt begrenzt, laufende Timer bis zum Abrufzeitpunkt gezählt, Korrekturen im Erfassungsmonat. Keine Anwesenheits-, Pausen- oder Sollzeitberichte.
 - [ ] Vollständige CI-Abnahme, Browser-Abnahme am Zielhost und Reports nach Desktop-Altimport.\n
+## Wochenplanung – lokale Zeitsegmente verschieben
+
+- [x] Zeitsegmente im Mo–Fr-Kalender 06:00–18:00 in 30-Minuten-Schritten per Drag-and-drop verschieben.
+- [x] Formular für Touch und Tastatur im Tagesdetail mit Auswahl von Wochentag und Startzeit.
+- [x] Segmentdauer beibehalten; Notizen, Teilnehmer und Aufgabenbezug unverändert lassen.
+- [x] Geschützte schedule-PATCH-API mit User-Filter, CSRF und optimistischer Konflikterkennung (409).
+- [ ] Manuelle Browser- und Touch-Geräte-Abnahme auf dem Zielhost.
