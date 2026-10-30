@@ -396,6 +396,7 @@ app.MapPlenaroTasks();
 app.MapPlenaroTaskWork();
 app.MapPlenaroReports();
 app.MapPlenaroReminders();
+app.MapPlenaroClassicImport();
 app.MapPlenaroDayMarkers();
 app.MapFallbackToFile("index.html");
 app.Run();
