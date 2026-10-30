@@ -21,6 +21,7 @@ using Plenaro.Api.Secrets;
 using Plenaro.Api.Graph;
 using Plenaro.Api.Tasks;
 using Plenaro.Api.DayMarkers;
+using Plenaro.Api.Reports;
 
 if (args.Contains("--healthcheck", StringComparer.Ordinal))
 {
@@ -395,5 +396,6 @@ app.MapPlenaroGraph();
 app.MapPlenaroTasks();
 app.MapPlenaroTaskWork();
 app.MapPlenaroDayMarkers();
+app.MapPlenaroReports();
 app.MapFallbackToFile("index.html");
 app.Run();

@@ -596,3 +596,27 @@ h1,h2,h3,p { margin-top: 0; }
 .classic-calendar-event.classic-calendar-task-segment { border-color: #309e85; background: rgba(38,157,134,.13); color: var(--text); }
 .classic-calendar-task-segment strong { color: #248973; }
 @media(max-width: 570px) { .plenaro-segment-date { grid-template-columns: minmax(0,1fr); } }
+
+/* Live monthly reports – theme-aware, responsive and without fake data. */
+.report-top { display:flex; justify-content:space-between; align-items:start; flex-wrap:wrap; gap:16px; }
+.report-controls { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.report-controls input { color:var(--text); background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px; font:inherit; font-size:12px; }
+.report-heading-row { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin:18px 0 4px; }
+.report-heading-row h2 { font-size:20px; margin:0; text-transform:capitalize; }
+.report-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin:21px 0; }
+.report-kpi { display:grid; gap:12px; padding:20px; min-width:0; }
+.report-kpi > span { display:flex; align-items:center; gap:8px; color:var(--muted-strong); font-size:12px; }
+.report-kpi > strong { font-size:clamp(23px,2.7vw,34px); line-height:1.1; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.report-kpi > small { color:var(--muted); font-size:11px; line-height:1.5; }
+.report-section { padding:19px; margin-bottom:15px; }
+.report-section-head { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:15px; }
+.report-section-head h2 { font-size:17px; margin:0; }
+.report-section-head span { font-size:12px; color:var(--muted); }
+.report-table-scroll { overflow-x:auto; }
+.report-table { width:100%; border-collapse:collapse; min-width:520px; }
+.report-table th,.report-table td { text-align:left; font-size:12px; padding:14px 10px; border-bottom:1px solid var(--border); }
+.report-table th { color:var(--muted); font-size:11px; font-weight:700; background:var(--surface-soft); }
+.report-table td:not(:first-child) { font-variant-numeric:tabular-nums; }
+.report-empty { color:var(--muted-strong); font-size:13px; padding:20px 0; line-height:1.6; }
+@media(max-width:1150px) { .report-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:600px) { .report-kpis { grid-template-columns:minmax(0,1fr); } .report-kpi { padding:16px; } }

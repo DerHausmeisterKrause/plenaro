@@ -161,3 +161,15 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [ ] Desktop-Datenimport von Zeitbuchungen und Zeitsegmenten; lokale Browser-Abnahme
 - [ ] Drag-and-drop und weitere Planungsoptimierungen; Reports und Monatsübersichten
 - [x] Kommen/Gehen/Pausen/Sollzeit weiterhin bewusst ausgeschlossen
+
+## Phase-2-Meilenstein: Monatsauswertungen und CSV-Export
+
+- [x] Echte Monatsreports aus abgeschlossenen Aufgaben-Timer-Sitzungen und manuellen Korrekturen – keine Demodaten
+- [x] Zeit nach Aufgabe und nach lokalem Tag aufgliedern; Zeiträume und DST anhand IANA-Zeitzone korrekt zuordnen
+- [x] Erledigte Aufgaben, geplante Segmentdauer, UL/AM/BR/HO-Tagessummen getrennt ausweisen
+- [x] Downloadbarer CSV-Bericht mit eigener User-ID, UTF-8, Tabellenkalkulationsformel-Schutz und No-Store-Header
+- [x] Berichte-Seite mit Monatsnavigation und denselben Light-/Dark-Farbtokens wie andere Classic-Bereiche
+- [ ] Monatliche Ticketsystemzeiten und historische SQLite-Zeitbuchungen importieren
+- [ ] Erweiterte Filter, PDF-/XLSX-Exporte, geplante Reports und Zeitbuchungs-/Audit-Journal vervollständigen
+
+**Punkt der Nutzer-Checkliste „Wochenkalender und Monatsreports aufbauen“ ist damit auf Implementierungsebene abhakbar.** Der Kalender ist bereits lokal verfügbar; Monatsreport und CSV-Ausgabe sind jetzt ergänzt. End-to-End-Abnahme auf dem eigenen Zielhost bleibt offen.

@@ -25,6 +25,16 @@ beforeEach(() => {
       remainingBrDays: null, brExhausted: false, brExceeded: false,
     }) };
     if (path.startsWith('/api/v1/day-markers/?')) return { ok: true, status: 200, json: async () => [] };
+    if (path.startsWith('/api/v1/reports/monthly?')) return {
+      ok: true, status: 200, json: async () => ({
+        year: 2026, month: 10, timeZone: 'Europe/Berlin',
+        trackedSeconds: 3600, adjustmentMinutes: 30, netSeconds: 5400,
+        completedTasks: 1, plannedSegments: 1, plannedSegmentSeconds: 1800,
+        ulDays: 1, amDays: 0, brDays: 1, hoDays: 2,
+        days: [{ taskId: 'abc', taskTitle: 'CI Monatsaufgabe',
+          date: '2026-10-30', trackedSeconds: 3600, adjustmentMinutes: 30 }],
+      }),
+    };
     if (path.startsWith('/api/v1/segments/?')) return { ok: true, status: 200, json: async () => [] };
     if (path.startsWith('/api/v1/tasks/')) return {
       ok: true, status: 200, json: async () => ([]),
@@ -69,6 +79,16 @@ describe('Plenaro web shell', () => {
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThanOrEqual(4));
     expect(vi.mocked(fetch)).toHaveBeenCalledWith('/health/live', expect.any(Object));
     expect(vi.mocked(fetch)).toHaveBeenCalledWith('/health/ready', expect.any(Object));
+  });
+
+  it('zeigt echte Monatsreport-Werte und einen geschützten CSV-Exportlink', async () => {
+    renderAt('/reports');
+    expect(await screen.findByRole('heading', { name: 'Monatsberichte' })).toBeTruthy();
+    expect(await screen.findByText('CI Monatsaufgabe')).toBeTruthy();
+    expect(screen.getByText('30 Min.')).toBeTruthy();
+    const exportLink = screen.getByRole('link', { name: 'CSV exportieren' });
+    expect(exportLink.getAttribute('href')).toContain('/api/v1/reports/monthly.csv?');
+    expect(exportLink.getAttribute('href')).toContain('timeZone=');
   });
 
   it('zeigt das klassische Ticketlayout ohne vorgetäuschte Tickets', async () => {

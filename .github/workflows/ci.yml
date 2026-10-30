@@ -133,6 +133,19 @@ jobs:
           curl -fsS -b "$COOKIE" "$API/api/v1/tasks/$WORK_ID/segments" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d)==1 and d[0]["note"]=="Verschoben"'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X DELETE "$API/api/v1/tasks/$WORK_ID/segments/$SEG_ID" -H "X-CSRF-TOKEN: $CSRF")" = "204"
           curl -fsS -b "$COOKIE" "$API/api/v1/tasks/$WORK_ID/segments" | python3 -c 'import json,sys; assert json.load(sys.stdin)==[]'
+          # Monthly reports: real timer/adjustment totals, owner isolation, timezone and CSV safety.
+          REPORT_YEAR=$(date -u +%Y)
+          REPORT_MONTH=$(date -u +%-m)
+          REPORT_QUERY="year=$REPORT_YEAR&month=$REPORT_MONTH&timeZone=UTC"
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/reports/monthly?$REPORT_QUERY")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" "$API/api/v1/reports/monthly?year=$REPORT_YEAR&month=$REPORT_MONTH&timeZone=InvalidZone")" = "400"
+          curl -fsS -b "$COOKIE" "$API/api/v1/reports/monthly?$REPORT_QUERY" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d["adjustmentMinutes"]==15 and d["trackedSeconds"]>=1 and d["netSeconds"]>=901 and d["days"]'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/reports/monthly?$REPORT_QUERY" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d["trackedSeconds"]==0 and d["adjustmentMinutes"]==0 and d["days"]==[]'
+          FORMULA_ID=$(curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"title":"=2+2","description":"","status":"planned","priority":3,"tags":[],"plannedFor":null}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+          curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/$FORMULA_ID/time/adjust" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"deltaMinutes":3}' >/dev/null
+          curl -fsS -b "$COOKIE" "$API/api/v1/reports/monthly.csv?$REPORT_QUERY" | python3 -c 'import sys; text=sys.stdin.read(); assert "Datum;Aufgabe;Gebuchte Sekunden;Korrektur Minuten;Netto Sekunden" in text and "\"\x27=2+2\"" in text'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/reports/monthly.csv?$REPORT_QUERY")" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" "$API/api/v1/reports/monthly?year=0&month=14&timeZone=UTC")" = "400"
           # Day-marker quota smoke: annual UL, monthly BR, CSRF and user isolation.
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/day-markers/budget")" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/day-markers/budget" -H 'Content-Type: application/json' -d '{"annualUlDays":2,"monthlyBrDays":1}')" = "400"

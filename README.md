@@ -212,3 +212,13 @@ Bei einem Update:
 git pull --ff-only
 docker compose up -d --build --wait
 ```
+
+## Monatsreports und CSV-Export (Phase 2)
+
+Unter **Berichte** ist die echte Monatsauswertung verfügbar. Sie zeigt pro Benutzer und Monat die summierten **abgeschlossenen aufgabenbezogenen Timer-Sitzungen**, **signierten manuellen Zeitkorrekturen**, **Netto-Aufgabenzeit**, im Monat erledigte Aufgaben, geplante Segmentanzahl/-dauer und die unabhängig markierten **UL/AM/BR/HO-Tage**. Zwei Tabellen gliedern tatsächliche Buchungen nach Aufgabe und lokalem Kalendertag auf.
+
+Der Monat und die Zeitzone werden ausdrücklich gewählt; der Webbrowser liefert seine IANA-Zeitzone (z. B. `Europe/Berlin`). Die API teilt Timer-Sitzungen bei lokalen Tagesgrenzen sauber auf, auch bei Sommer-/Winterzeit. **Ein laufender Timer ist noch nicht gebucht** und geht erst nach dem Stoppen in den Bericht ein. Das geplante Segmentvolumen ist **nicht** automatisch gebuchte Zeit. Beim Löschen einer Aufgabe sind vergangene, nur noch aufgabenlose Timer-Sitzungen derzeit nicht als frühere Aufgaben rekonstruierbar; für revisionssichere Auswertungen muss ein unveränderliches Buchungsjournal folgen.
+
+API: `GET /api/v1/reports/monthly?year=2026&month=10&timeZone=Europe%2FBerlin` sowie `GET /api/v1/reports/monthly.csv` mit gleichen Parametern. Nur der eingeloggte Benutzer sieht eigene Aktivitäten. Keine freien Owner-IDs; CSV-Export mit UTF-8-BOM, deutschen Semikolonspalten, Content-Disposition als Download, neutralisierten Tabellenkalkulationsformeln und `Cache-Control: no-store`.
+
+**Abgrenzung:** Es handelt sich um einen *Aufgabenzeit*-Report, **nicht** um Arbeitszeitnachweis/Kommen/Gehen/Pausen/Sollzeit. Der Export ist CSV; PDF-, XLSX-, automatische E-Mail-Reports und Outlook-Rückschreibung sind noch nicht umgesetzt.

@@ -24,7 +24,7 @@ export const navigation: NavigationEntry[] = [
   { key: 'tickets', label: 'Ticketsystem', path: '/tickets', icon: Ticket, phase: 6, description: 'Znuny / OTRS und weitere Ticketsysteme anbinden.' },
   { key: 'wiki', label: 'Wissensdatenbank', path: '/wiki', icon: BookOpenText, phase: 7, description: 'Wiki-Inhalte und angebundene Wissensquellen durchsuchen.' },
   { key: 'ai', label: 'KI-Assistent', path: '/ai', icon: Sparkles, phase: 7, description: 'Aufgaben und Wissen mit KI-Unterstützung bearbeiten.' },
-  { key: 'reports', label: 'Berichte', path: '/reports', icon: ChartNoAxesCombined, phase: 5, description: 'Arbeitszeit- und Tätigkeitsberichte auswerten.' },
+  { key: 'reports', label: 'Berichte', path: '/reports', icon: ChartNoAxesCombined, phase: 5, description: 'Monatsberichte für Aufgabenzeit, Planung und Tagesmarker mit CSV-Export.' },
   { key: 'settings', label: 'Einstellungen', path: '/settings', icon: Settings2, phase: 3, description: 'Benutzer, Integrationen und persönliche Einstellungen.' },
 ];
 
