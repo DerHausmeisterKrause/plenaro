@@ -94,7 +94,7 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein grÃ
 ## Phase 7 â€“ Wissen, KI, Erweiterungen & Release
 - [ ] Wiki/Knowledge-Quellen, Suche, Dokumentenverarbeitung
 - [ ] KI-Chat, Knowledge-Retrieval und optionale lokale/OpenAI-kompatible Anbieter
-- [x] Lokale Zeitsegment-Reminder mit konfigurierbarem Vorlauf, Startbenachrichtigung, Glocke im Web, gelesen-Status und optionalen Browserhinweisen (PR noch in CI)
+- [x] Lokale Zeitsegment-Reminder mit konfigurierbarem Vorlauf, Startbenachrichtigung, Glocke im Web, gelesen-Status und optionalen Browserhinweisen ([PR #28](https://github.com/DerHausmeisterKrause/plenaro/pull/28), [CI erfolgreich](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41134694355); Host-Abnahme offen)
 - [ ] Ticketbenachrichtigungen und Favoriten erst nach Znuny-/OTRS-Anbindung; Web Push bei geschlossenem Browser
 - [ ] Erweiterungs-/Add-in-Schnittstelle mit Sicherheitsmodell
 - [ ] DSGVO-Konzept, Audit, Backups/Restore-Tests und Betriebsdokumentation
