@@ -197,7 +197,7 @@ export function WeekCalendarPage() {
     } catch { return null; }
   })();
   const proposedLocalConflicts = proposedMove
-    ? conflictingLocalSegments(segments, proposedMove.startsAt, proposedMove.endsAt, selectedSegmentId) : [];
+    ? conflictingLocalSegments(segments, proposedMove.startsAt, proposedMove.endsAt, selectedSegmentId ?? undefined) : [];
   const proposedOutlookConflicts = proposedMove && graph?.connected
     ? outlook.filter(event => ['busy', 'oof', 'tentative'].includes(event.showAs.toLowerCase()) &&
       intervalsOverlap(proposedMove.startsAt, proposedMove.endsAt, event.start, event.end)) : [];
