@@ -155,6 +155,21 @@ public static class TaskWorkEndpoints
             return Results.Ok(await ReadSegmentsAsync(cmd, ct));
         });
 
+        segments.MapGet("/availability", async (DateTimeOffset start, DateTimeOffset end,
+            Guid? excludeId, HttpContext http, UserManager<ApplicationUser> users,
+            IConfiguration config, CancellationToken ct) =>
+        {
+            var owner = await OwnerAsync(http, users);
+            if (owner is null) return Results.Unauthorized();
+            if (ValidatePeriod(start, end) is { } error)
+                return Results.BadRequest(new { error });
+            await using var db = await OpenAsync(config, ct);
+            if (excludeId.HasValue && !await SegmentExistsAsync(db, excludeId.Value, owner.Value, null, ct))
+                return Results.NotFound();
+            return Results.Ok(await SegmentAvailability.ReadAsync(
+                db, owner.Value, start, end, excludeId, null, ct));
+        });
+
         tasks.MapPost("/segments", async (Guid taskId, SegmentInput input, HttpContext http,
             UserManager<ApplicationUser> users, IConfiguration config, IAntiforgery anti, CancellationToken ct) =>
         {
@@ -347,11 +362,31 @@ public static class TaskWorkEndpoints
             .Value = input.Participants ?? [];
     }
 
+    private static IResult SlotConflict(SegmentAvailability.Result check) =>
+        Results.Conflict(new {
+            error = "Dieser Zeitraum überschneidet sich mit einem bestehenden eigenen Zeitsegment.",
+            conflicts = check.Conflicts
+        });
+
+    private static async Task<bool> SegmentExistsAsync(NpgsqlConnection db, Guid id, Guid owner,
+        NpgsqlTransaction? transaction, CancellationToken ct, Guid? taskId = null)
+    {
+        await using var cmd = new NpgsqlCommand("""
+            SELECT EXISTS(SELECT 1 FROM task_segments
+            WHERE id=@id AND owner_user_id=@owner AND (@task IS NULL OR task_id=@task))
+            """, db, transaction);
+        cmd.Parameters.AddWithValue("id", id);
+        cmd.Parameters.AddWithValue("owner", owner);
+        cmd.Parameters.Add("task", NpgsqlDbType.Uuid).Value =
+            taskId.HasValue ? taskId.Value : DBNull.Value;
+        return (bool)(await cmd.ExecuteScalarAsync(ct) ?? false);
+    }
+
     private static async Task<bool> TaskExistsAsync(NpgsqlConnection db, Guid task, Guid owner,
-        CancellationToken ct)
+        CancellationToken ct, NpgsqlTransaction? transaction = null)
     {
         await using var cmd = new NpgsqlCommand(
-            "SELECT EXISTS(SELECT 1 FROM tasks WHERE id=@task AND owner_user_id=@owner)", db);
+            "SELECT EXISTS(SELECT 1 FROM tasks WHERE id=@task AND owner_user_id=@owner)", db, transaction);
         cmd.Parameters.AddWithValue("task", task);
         cmd.Parameters.AddWithValue("owner", owner);
         return (bool)(await cmd.ExecuteScalarAsync(ct) ?? false);
