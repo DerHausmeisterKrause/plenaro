@@ -209,14 +209,23 @@ public static class TaskWorkEndpoints
             var error = ValidateSegment(input);
             if (error is not null) return Results.BadRequest(new { error });
             await using var db = await OpenAsync(config, ct);
+            await using var tx = await db.BeginTransactionAsync(ct);
+            await SegmentAvailability.LockOwnerAsync(db, tx, owner.Value, ct);
+            if (!await SegmentExistsAsync(db, segmentId, owner.Value, tx, ct, taskId))
+                return Results.NotFound();
+            var check = await SegmentAvailability.ReadAsync(db, owner.Value,
+                input.StartsAt, input.EndsAt, segmentId, tx, ct);
+            if (!check.Available) return SlotConflict(check);
             await using var cmd = new NpgsqlCommand("""
                 UPDATE task_segments SET starts_at=@start,ends_at=@end,
                     note=@note,participants=@participants
                 WHERE id=@id AND owner_user_id=@owner AND task_id=@task
                 RETURNING id
-                """, db);
+                """, db, tx);
             BindSegment(cmd, input, owner.Value, taskId, segmentId);
-            return await cmd.ExecuteScalarAsync(ct) is null ? Results.NotFound() : Results.NoContent();
+            if (await cmd.ExecuteScalarAsync(ct) is null) return Results.NotFound();
+            await tx.CommitAsync(ct);
+            return Results.NoContent();
         });
 
 
