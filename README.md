@@ -267,3 +267,21 @@ Kein Outlook-/Teams-Schreibzugriff oder Versand von Einladungen.
   werden weder gespeichert noch als verbindliche Freigabe interpretiert.
 - Noch keine **Teilnehmerverfügbarkeit**, keine Einladungen oder Teams-Termine:
   Microsoft-Graph-Schreibrechte, Consent und Live-Abnahme folgen separat.
+
+## Erinnerungen und Benachrichtigungen
+
+Plenaro erinnert an den Beginn **eigener Zeitsegmente** geplanter/aktiver Aufgaben:
+standardmäßig zwei Minuten vorher und beim Start. Oben in der Weboberfläche erscheint
+eine Glocke mit den ungelesenen Erinnerungen. In **Einstellungen → Aufgaben & Kalender**
+lassen sich Reminder ausschalten oder ihr Vorlauf (0–1440 Minuten) einstellen.
+
+Browser-Systemhinweise lassen sich über die Glocke **explizit aktivieren**. Sie setzen
+HTTPS, Browserunterstützung und eine Berechtigung voraus. Sie werden nur für frische
+Ereignisse ausgelöst; ältere Hinweise bleiben in der Glocke sichtbar, bis sie quittiert
+werden. Der Browser prüft alle 20 Sekunden, solange Plenaro geöffnet ist. Die
+Gelesen-Markierungen sind pro Benutzer und Terminausführung in PostgreSQL gespeichert.
+Verschobene Segmente erzeugen neue Hinweise zum neuen Zeitpunkt.
+
+**Nicht enthalten:** Push bei komplett geschlossenem Browser, geräteübergreifende Push-
+Zustellung und Ticketbenachrichtigungen (Znuny-Adapter noch nicht vorhanden).
+Die Migration `0012_task_reminders.sql` wird beim Docker-Start automatisch angewendet.
