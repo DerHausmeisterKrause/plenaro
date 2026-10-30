@@ -84,7 +84,7 @@ describe('Plenaro web shell', () => {
   it('zeigt echte Monatsreport-Werte und einen geschützten CSV-Exportlink', async () => {
     renderAt('/reports');
     expect(await screen.findByRole('heading', { name: 'Monatsberichte' })).toBeTruthy();
-    expect(await screen.findByText('CI Monatsaufgabe')).toBeTruthy();
+    expect((await screen.findAllByText('CI Monatsaufgabe')).length).toBe(2);
     expect(screen.getAllByText(/\+30 Min\./).length).toBeGreaterThan(0);
     const exportLink = screen.getByRole('link', { name: 'CSV exportieren' });
     expect(exportLink.getAttribute('href')).toContain('/api/v1/reports/monthly.csv?');
