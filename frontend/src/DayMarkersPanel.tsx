@@ -110,6 +110,7 @@ export function DayMarkersPanel() {
   const [summary, setSummary] = useState<BudgetSummary | null>(null);
   const [dayType, setDayType] = useState<DayType>('Normal');
   const [isBr, setIsBr] = useState(false);
+  const [isHo, setIsHo] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -135,6 +136,7 @@ export function DayMarkersPanel() {
     const item = markers.find(m => m.day === selected);
     setDayType(item?.dayType ?? 'Normal');
     setIsBr(item?.isBr ?? false);
+    setIsHo(item?.isHo ?? false);
   }, [selected, markers]);
 
   const days = useMemo(() => {
@@ -155,7 +157,7 @@ export function DayMarkersPanel() {
     if (busy) return;
     setBusy(true); setError(''); setNotice('');
     try {
-      await saveDayMarker(selected, dayType, isBr);
+      await saveDayMarker(selected, dayType, isBr, isHo);
       // Refresh both usage counters and the individual marker from the database.
       setRefresh(v => v + 1);
       setNotice('Tagesmarker gespeichert.');
@@ -193,7 +195,7 @@ export function DayMarkersPanel() {
             className={`day-marker-day${selected === day ? ' selected' : ''}`}
             aria-pressed={selected === day} aria-label={`${day}: ${item?.dayType ?? 'Normal'}${item?.isBr ? ', BR' : ''}`}>
             <strong>{Number(day.slice(-2))}</strong>
-            {item && <span className="day-marker-label">{item.dayType === 'Normal' ? '' : item.dayType}{item.isBr ? ' BR' : ''}</span>}
+            {item && <span className="day-marker-label">{item.dayType === 'Normal' ? '' : item.dayType}{item.isBr ? ' BR' : ''}{item.isHo ? ' HO' : ''}</span>}
           </button>;
         })}
       </div>
@@ -205,6 +207,8 @@ export function DayMarkersPanel() {
             <label key={type}><input type="radio" name="day-type" value={type}
               checked={dayType === type} onChange={() => setDayType(type)}/>{type}</label>)}
         </fieldset>
+        <label className="day-marker-br"><input type="checkbox" checked={isHo}
+          onChange={e => setIsHo(e.target.checked)}/> HO – Homeoffice</label>
         <label className="day-marker-br"><input type="checkbox" checked={isBr}
           onChange={e => setIsBr(e.target.checked)}/> BR-Tag markieren</label>
         {summary && dayType === 'UL' && !markers.some(m => m.day === selected && m.dayType === 'UL') &&

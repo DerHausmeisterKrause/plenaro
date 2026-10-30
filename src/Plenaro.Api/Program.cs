@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication.OAuth;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -40,7 +41,7 @@ var builder = WebApplication.CreateBuilder(
     args.Where(a => a != "--bootstrap-admin" && a != "--setup-token").ToArray());
 
 var requireHttps = builder.Configuration.GetValue<bool>("Security:RequireHttps");
-var entra = EntraConfiguration.Load(builder.Configuration, requireHttps);
+var entra = new EntraConfiguration(requireHttps);
 builder.Services.AddSingleton(entra);
 // Always trust forwarded headers from exactly our own NGINX container, never from
 // arbitrary LAN clients. Correct client IPs are essential for login rate limits.
@@ -88,13 +89,12 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
 .AddEntityFrameworkStores<PlenaroIdentityDbContext>()
 .AddDefaultTokenProviders();
 
-if (entra.Enabled)
 {
     builder.Services.AddAuthentication().AddOpenIdConnect(EntraConfiguration.Scheme, options =>
     {
-        options.Authority = $"https://login.microsoftonline.com/{entra.TenantId}/v2.0";
-        options.ClientId = entra.ClientId;
-        options.ClientSecret = entra.ClientSecret;
+        options.Authority = $"https://login.microsoftonline.com/{(entra.Enabled ? entra.TenantId : "organizations")}/v2.0";
+        options.ClientId = entra.Enabled ? entra.ClientId : "00000000-0000-0000-0000-000000000001";
+        options.ClientSecret = entra.Enabled ? entra.ClientSecret : "not-enabled";
         options.CallbackPath = "/signin-entra";
         options.SignInScheme = IdentityConstants.ExternalScheme;
         options.ResponseType = "code";
@@ -107,11 +107,44 @@ if (entra.Enabled)
         options.Scope.Add("openid");
         options.Scope.Add("profile");
         options.Scope.Add("email");
+        // Optional delegated calendar read on first sign-in; no separate login required
+        // for users whose local account is already explicitly linked.
+        options.Scope.Add("User.Read");
+        options.Scope.Add("Calendars.Read");
+        options.Scope.Add("offline_access");
         options.TokenValidationParameters.ValidateIssuer = true;
         options.TokenValidationParameters.ValidateAudience = true;
-        options.TokenValidationParameters.ValidAudience = entra.ClientId;
+        options.TokenValidationParameters.ValidAudience = entra.Enabled ? entra.ClientId : "00000000-0000-0000-0000-000000000001";
         options.Events = new OpenIdConnectEvents
         {
+            OnTokenResponseReceived = context =>
+            {
+                // This is request-scoped memory, NOT AuthenticationProperties/cookie.
+                context.HttpContext.Items["plenaro.graph.refresh"] = context.TokenEndpointResponse?.RefreshToken;
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = async context =>
+            {
+                if (context.Principal is null || !entra.Enabled) return;
+                var tid = context.Principal.FindFirst("tid")?.Value;
+                var oid = context.Principal.FindFirst("oid")?.Value;
+                if (!Guid.TryParse(tid, out var tenantId) ||
+                    !Guid.TryParse(oid, out var objectId) ||
+                    !string.Equals(tenantId.ToString("D"), entra.TenantId, StringComparison.Ordinal))
+                    return;
+
+                var users = context.HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+                var existing = await users.FindByLoginAsync(EntraConfiguration.Provider,
+                    $"{tenantId:D}:{objectId:D}");
+                if (existing is null || existing.IsDisabled || await users.IsLockedOutAsync(existing))
+                    return; // Brand-new link: no calendar access before explicit user approval.
+                var token = context.HttpContext.Items["plenaro.graph.refresh"] as string;
+                if (string.IsNullOrEmpty(token)) return;
+                var vault = context.HttpContext.RequestServices.GetRequiredService<SecretVault>();
+                if (vault.IsConfigured)
+                    await vault.SetAsync("user", existing.Id, GraphCalendarService.RefreshSecretName,
+                        token, context.HttpContext.RequestAborted);
+            },
             OnRemoteFailure = context =>
             {
                 // No exception strings, tokens or sensitive claim details in URLs/logs.
@@ -123,16 +156,15 @@ if (entra.Enabled)
     });
 }
 
-if (entra.Enabled)
 {
     builder.Services.AddAuthentication().AddOAuth(GraphCalendarService.Scheme, options =>
     {
         options.ClientId = entra.ClientId;
         options.ClientSecret = entra.ClientSecret;
         options.AuthorizationEndpoint =
-            $"https://login.microsoftonline.com/{entra.TenantId}/oauth2/v2.0/authorize";
+            $"https://login.microsoftonline.com/{(entra.Enabled ? entra.TenantId : "organizations")}/oauth2/v2.0/authorize";
         options.TokenEndpoint =
-            $"https://login.microsoftonline.com/{entra.TenantId}/oauth2/v2.0/token";
+            $"https://login.microsoftonline.com/{(entra.Enabled ? entra.TenantId : "organizations")}/oauth2/v2.0/token";
         options.CallbackPath = "/signin-graph";
         options.SignInScheme = IdentityConstants.ExternalScheme;
         options.UsePkce = true;
@@ -277,6 +309,7 @@ builder.Services.AddRateLimiter(options =>
 var app = builder.Build();
 var migrator = app.Services.GetRequiredService<SchemaMigrator>();
 await migrator.ApplyPendingAsync(connectionString, app.Logger, app.Lifetime.ApplicationStopping);
+await entra.InitializeAsync(app.Services.GetRequiredService<SecretVault>(), app.Lifetime.ApplicationStopping);
 
 if (bootstrapAdmin)
 {
@@ -351,6 +384,7 @@ app.MapGet("/health/ready", async (
 
 app.MapPlenaroAuth();
 app.MapPlenaroEntra();
+app.MapPlenaroEntraAdmin();
 app.MapAdminUsers();
 app.MapPlenaroSettings();
 app.MapPlenaroSecrets();

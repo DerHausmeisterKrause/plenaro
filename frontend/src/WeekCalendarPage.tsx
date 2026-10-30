@@ -39,8 +39,8 @@ export function WeekCalendarPage() {
   const [refresh, setRefresh] = useState(0);
   const [showMarkers, setShowMarkers] = useState(false);
   const [selectedDay, setSelectedDay] = useState(() => localDate());
-  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => plusDays(weekStart, i)), [weekStart]);
-  const until = useMemo(() => plusDays(weekStart, 7), [weekStart]);
+  const days = useMemo(() => Array.from({ length: 5 }, (_, i) => plusDays(weekStart, i)), [weekStart]);
+  const until = useMemo(() => plusDays(weekStart, 5), [weekStart]);
 
   useEffect(() => {
     setSelectedDay(previous => days.some(d => localDate(d) === previous) ? previous : localDate(days[0]));
@@ -52,7 +52,7 @@ export function WeekCalendarPage() {
     setLoading(true);
     setLocalError('');
     const first = days[0];
-    const last = days[6];
+    const last = days[4];
     const ym = (d: Date) => [d.getFullYear(), d.getMonth() + 1] as const;
     const months = [ym(first)];
     if (first.getMonth() !== last.getMonth() || first.getFullYear() !== last.getFullYear()) months.push(ym(last));
@@ -157,8 +157,8 @@ export function WeekCalendarPage() {
                 onClick={() => setSelectedDay(date)}>
                 <strong>{fmtDay(d)}</strong>
                 <span>{dayTasks.length ? `${dayTasks.length} Aufgaben` : '–'}</span>
-                {marker && (marker.dayType !== 'Normal' || marker.isBr) &&
-                  <span className="classic-calendar-markers">{marker.dayType !== 'Normal' ? marker.dayType : ''} {marker.isBr ? 'BR' : ''}</span>}
+                {marker && (marker.dayType !== 'Normal' || marker.isBr || marker.isHo) &&
+                  <span className="classic-calendar-markers">{marker.dayType !== 'Normal' ? marker.dayType : ''} {marker.isBr ? 'BR' : ''} {marker.isHo ? 'HO' : ''}</span>}
                 {allDay.slice(0, 2).map(e => <span key={e.id} className="classic-calendar-all-day" title={e.subject}>{e.subject || 'Outlook'}</span>)}
               </button>;
             })}
@@ -188,7 +188,7 @@ export function WeekCalendarPage() {
         <h3>Tagesmarker</h3>
         {selectedMarker ? <p className="classic-day-marker-value">
           {selectedMarker.dayType === 'Normal' ? 'Normal' : selectedMarker.dayType}
-          {selectedMarker.isBr ? ' · BR' : ''}
+          {selectedMarker.isBr ? ' · BR' : ''}{selectedMarker.isHo ? ' · HO' : ''}
         </p> : <p className="um-hint">Normal · Kein Marker</p>}
         <button type="button" className="button button-secondary" onClick={() => setShowMarkers(v => !v)}>
           {showMarkers ? 'Markereditor schließen' : 'UL / AM / BR bearbeiten'}

@@ -39,3 +39,7 @@ Dieser Meilenstein ergänzt den bereits implementierten, optionalen Microsoft-En
 Der bestehende **einzige CI-Workflow** prüft den deaktivierten Zustand, Berechtigungsgrenzen und weiterhin Login, Datenbank und TLS. **Ein tatsächlicher Microsoft-OAuth-Roundtrip und Kalenderabruf können ohne App-Registration nicht getestet werden.** Der Code ist die Grundlage, nicht die bestätigte Funktion auf einem echten Tenant.
 
 Noch offen: persönlicher Token-Cache, OAuth-Fehler-/Tenant-Integrationstests, Pagination über mehr als 100 Termine, Mehrkalender-Auswahl, Schreiboperationen für Meetings/Teams, Focus Time, Rate-Limit-/Retry-Policy und Admin-gestützte Tenant-Registrierung in der Weboberfläche.
+
+## Kalender bei Entra-Anmeldung automatisch freigeben
+
+Die neue Admin-Konfiguration verwendet ausschließlich den verschlüsselten Plenaro-Vault. Beim Microsoft-Login eines bereits verknüpften Plenaro-Benutzers werden `User.Read`, `Calendars.Read` und `offline_access` zusätzlich angefordert. Wenn der Tenant die delegierte Zustimmung erlaubt und Microsoft einen Refresh-Token ausstellt, speichert das Backend diesen sofort verschlüsselt unter `user/graph.refresh`. Kein Microsoft-Token wird ins Browser-Cookie geschrieben. Für neue Kontoverknüpfungen bleibt der Einwilligungs-/Verknüpfungsschritt notwendig; Benutzer können andernfalls einmalig über den separaten Kalender-Connect nachziehen. Die lokale 5-Tage-Ansicht läuft stets unabhängig.

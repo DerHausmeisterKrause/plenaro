@@ -1,32 +1,62 @@
+using System.Text.Json;
+using Plenaro.Api.Secrets;
+
 namespace Plenaro.Api.Identity;
 
-/// <summary>Single-tenant Entra OIDC is opt-in and requires TLS.</summary>
-public sealed record EntraConfiguration(bool Enabled, string TenantId, string ClientId, string ClientSecret)
+/// <summary>
+/// In-memory immutable snapshot backed by the AES-256-GCM vault. No Entra
+/// credentials are read from environment variables or written to logs.
+/// </summary>
+public sealed class EntraConfiguration(bool requireHttps)
 {
     public const string Scheme = "Plenaro.Entra";
     public const string Provider = "Entra";
+    public const string SecretName = "entra.config";
 
-    public static EntraConfiguration Load(IConfiguration config, bool requireHttps)
+    private sealed record Snapshot(bool Enabled, string TenantId, string ClientId, string ClientSecret);
+    private volatile Snapshot _current = new(false, "", "", "");
+
+    public bool Enabled => _current.Enabled;
+    public string TenantId => _current.TenantId;
+    public string ClientId => _current.ClientId;
+    public string ClientSecret => _current.ClientSecret;
+    public bool RequireHttps => requireHttps;
+
+    public async Task InitializeAsync(SecretVault vault, CancellationToken ct)
     {
-        if (!config.GetValue<bool>("Entra:Enabled"))
-            return new(false, "", "", "");
+        if (!vault.IsConfigured) return;
+        var raw = await vault.GetForIntegrationAsync("global", null, SecretName, ct);
+        if (string.IsNullOrWhiteSpace(raw)) return;
+        var data = JsonSerializer.Deserialize<Snapshot>(raw);
+        if (data is null) throw new InvalidOperationException("Invalid stored Entra configuration.");
+        Validate(data);
+        _current = data;
+    }
 
+    public async Task SaveAsync(SecretVault vault, bool enabled, string tenant, string client,
+        string secret, CancellationToken ct)
+    {
+        var data = new Snapshot(enabled, tenant.Trim().ToLowerInvariant(),
+            client.Trim().ToLowerInvariant(), secret);
+        Validate(data);
+        await vault.SetAsync("global", null, SecretName, JsonSerializer.Serialize(data), ct);
+        _current = data; // publish atomically only after successful encrypted persist
+    }
+
+    public async Task DisableAsync(SecretVault vault, CancellationToken ct)
+    {
+        await vault.DeleteAsync("global", null, SecretName, ct);
+        _current = new(false, "", "", "");
+    }
+
+    private void Validate(Snapshot data)
+    {
+        if (!data.Enabled) throw new InvalidOperationException("Only enabled Entra configurations may be stored.");
         if (!requireHttps)
-            throw new InvalidOperationException("Microsoft Entra login requires PLENARO_HTTPS_ENABLED=true.");
-
-        var tenant = config["Entra:TenantId"];
-        var client = config["Entra:ClientId"];
-        var path = config["Entra:ClientSecretFile"];
-        if (!Guid.TryParse(tenant, out var tenantGuid) || tenantGuid == Guid.Empty ||
-            !Guid.TryParse(client, out var clientGuid) || clientGuid == Guid.Empty ||
-            string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-            throw new InvalidOperationException(
-                "Entra requires valid tenant/client GUIDs and a readable client secret file.");
-
-        var secret = File.ReadAllText(path).TrimEnd('\r', '\n');
-        if (secret.Length is < 16 or > 4096)
-            throw new InvalidOperationException("Entra client secret file is empty or invalid.");
-
-        return new(true, tenantGuid.ToString("D"), clientGuid.ToString("D"), secret);
+            throw new InvalidOperationException("Entra SSO requires HTTPS and a trusted public name.");
+        if (!Guid.TryParse(data.TenantId, out var tenant) || tenant == Guid.Empty ||
+            !Guid.TryParse(data.ClientId, out var client) || client == Guid.Empty ||
+            data.ClientSecret.Length is < 16 or > 4096)
+            throw new InvalidOperationException("Invalid tenant/client ID or client secret length.");
     }
 }
