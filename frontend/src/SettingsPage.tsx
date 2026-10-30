@@ -6,6 +6,7 @@ import { SecretsSettings } from './SecretsSettings';
 import { EntraAccountPanel } from './EntraAccountPanel';
 import { EntraAdminSettings } from './EntraAdminSettings';
 import { DayMarkerBudgetSettings } from './DayMarkersPanel';
+import { ReminderSettingsPanel } from './ReminderSettingsPanel';
 import { type PersonalPreferences, type WorkspacePreferences } from './settingsApi';
 import { addUser, changePassword, listUsers, resetUserPassword, saveUser, type ManagedUser } from './userApi';
 
@@ -221,7 +222,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved }: {
       <PersonalPreferencesPanel onSaved={onPersonalSaved}/>
       <WorkspacePreferencesPanel admin={admin} onSaved={onWorkspaceSaved}/>
     </div>}
-    {section === 'planning' && <DayMarkerBudgetSettings/>}
+    {section === 'planning' && <><DayMarkerBudgetSettings/><ReminderSettingsPanel/></>}
     {section === 'microsoft' && <>
       {admin && <EntraAdminSettings/>}
       <EntraAccountPanel/>
