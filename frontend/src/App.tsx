@@ -15,6 +15,7 @@ import { ClassicTodayPage } from './ClassicTodayPage';
 import { ClassicTasksPage } from './ClassicTasksPage';
 import { TicketsWorkspacePage } from './TicketsWorkspacePage';
 import { ReportsPage } from './ReportsPage';
+import { NotificationCenter } from './NotificationCenter';
 import { readPersonalPreferences, readWorkspacePreferences, savePersonalPreferences, type PersonalPreferences } from './settingsApi';
 import { checkHealth, type HealthState } from './api';
 import { navigation, type ModuleKey, type NavigationEntry } from './navigation';
@@ -344,6 +345,7 @@ export function AppContent() {
           </div>
           <div className="topbar-right">
             <span className="topbar-environment"><span /> Lokaler Server</span>
+            {user && <NotificationCenter key={user.id} userId={user.id}/>}
             <button type="button" className="icon-button" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Hellmodus aktivieren' : 'Dunkelmodus aktivieren'} title="Design ändern">{theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}</button>
             <Link to="/system" className="icon-button" aria-label="Systemstatus" title="Systemstatus"><Activity size={19}/></Link>
             {user

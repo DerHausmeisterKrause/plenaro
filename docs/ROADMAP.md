@@ -94,7 +94,8 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 ## Phase 7 – Wissen, KI, Erweiterungen & Release
 - [ ] Wiki/Knowledge-Quellen, Suche, Dokumentenverarbeitung
 - [ ] KI-Chat, Knowledge-Retrieval und optionale lokale/OpenAI-kompatible Anbieter
-- [ ] Favoriten und Benachrichtigungen
+- [x] Lokale Zeitsegment-Reminder mit konfigurierbarem Vorlauf, Startbenachrichtigung, Glocke im Web, gelesen-Status und optionalen Browserhinweisen (PR noch in CI)
+- [ ] Ticketbenachrichtigungen und Favoriten erst nach Znuny-/OTRS-Anbindung; Web Push bei geschlossenem Browser
 - [ ] Erweiterungs-/Add-in-Schnittstelle mit Sicherheitsmodell
 - [ ] DSGVO-Konzept, Audit, Backups/Restore-Tests und Betriebsdokumentation
 - [ ] End-to-End- und Migrationstests auf Funktionsparität mit Desktop
@@ -185,3 +186,14 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [x] Eintragungsformular meldet freie/belegte lokale Zeit; Wochenansicht warnt bei lokal sichtbaren Überschneidungen und zeigt bei angebundenem Outlook möglicherweise belegte eigene Termine als Hinweis (kein Graph-Schreibzugriff).
 - [ ] Graph-/Teams-Teilnehmer-Free/Busy und Einladungen, externe Kalender-Änderungen; noch nicht umgesetzt.
 - [ ] Host-/Browser-Abnahme, unabhängig vom CI-Status.
+
+## Web-Reminder und Benachrichtigungen (Phase 5)
+
+- [x] Geplante/aktive Aufgabensegmente erzeugen zwei Erinnerungstypen wie das Desktop-Plenaro: Vorlauf (Standard 2 Min.; 0 = aus) und Start.
+- [x] Userbezogene, persistente Einstellungen in PostgreSQL; individuelle Aktivierung/Deaktivierung und Vorlauf 0–1440 Minuten.
+- [x] 20-Sekunden-Abfrage bei geöffneter Webseite; Benachrichtigungsglocke mit ungelesenen Hinweisen, Browser-Desktop-Hinweise nach expliziter Freigabe (HTTPS vorausgesetzt).
+- [x] Quittierung pro Benutzer, Segment, geplantem Startzeitpunkt und Erinnerungstyp dauerhaft gespeichert. Alter Startzeitpunkt nach Verschieben löst keine veraltete Quittierung aus.
+- [x] Benutzerisolation, Auth, CSRF, Deaktivierung und Zeit-/Start-Erinnerungen im bestehenden CI-Docker-Test.
+- [ ] Browser-Schließen / PWA-Web-Push / Service Worker und dauerhafte Background-Push-Zustellung.
+- [ ] Ticket-/Znuny-Benachrichtigungen, bevor der Ticketsystem-Adapter implementiert ist.
+- [ ] Manuelle Desktop-/Mobilbrowser-Abnahme auf dem Zielhost.

@@ -647,3 +647,43 @@ h1,h2,h3,p { margin-top: 0; }
 .classic-segment-reschedule label { display: grid; gap: 4px; font-size: 12px; color: var(--muted-strong); }
 .classic-segment-reschedule select { width: 100%; min-width: 0; padding: 8px 9px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 7px; }
 .classic-segment-reschedule .button { width: 100%; justify-content: center; }
+
+/* Self-hosted reminder inbox: responsive, readable in light and dark themes. */
+.plenaro-notification-center { position: relative; flex: none; }
+.plenaro-notification-toggle { position: relative; }
+.plenaro-notification-count {
+  position: absolute; top: -3px; right: -4px; min-width: 17px; height: 17px;
+  padding: 1px 4px; border-radius: 99px; display: grid; place-items: center;
+  background: var(--blue); color: white; font-size: 10px; font-weight: 800;
+}
+.plenaro-notification-panel {
+  position: absolute; z-index: 150; right: -70px; top: calc(100% + 12px);
+  width: min(390px, calc(100vw - 24px)); max-height: min(640px, 78vh);
+  overflow: auto; padding: 16px; border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: var(--shadow); background: var(--surface);
+  color: var(--text);
+}
+.plenaro-notification-heading, .plenaro-notification-actions {
+  display: flex; align-items: center; justify-content: space-between; gap: 7px;
+}
+.plenaro-notification-heading > strong { font-size: 15px; }
+.plenaro-notification-heading .icon-button { width: 30px; height: 30px; }
+.plenaro-notification-panel .um-hint { margin: 8px 0; font-size: 11px; }
+.plenaro-notification-empty { margin: 15px 0; font-size: 13px; color: var(--muted-strong); }
+.plenaro-notification-list { display: grid; gap: 8px; max-height: 330px; overflow: auto; }
+.plenaro-notification-item { display: grid; gap: 5px; padding: 11px; border-radius: 9px; background: var(--surface-soft); border: 1px solid var(--border); }
+.plenaro-notification-item strong { font-size: 13px; overflow-wrap: anywhere; }
+.plenaro-notification-item small { color: var(--muted); font-size: 11px; }
+.plenaro-notification-item .button { padding: 6px 8px; }
+.plenaro-notification-bottom { display: grid; gap: 10px; padding-top: 12px; margin-top: 12px; border-top: 1px solid var(--border); }
+.plenaro-notification-bottom .button { justify-content: center; }
+.plenaro-reminder-settings { display: grid; align-content: start; gap: 10px; max-width: 450px; }
+.plenaro-reminder-settings label { font-size: 13px; font-weight: 700; }
+.plenaro-reminder-settings input[type="number"] {
+  width: 140px; max-width: 100%; padding: 9px 11px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--surface); color: var(--text);
+}
+.plenaro-reminder-settings .button { width: fit-content; }
+@media (max-width: 650px) {
+  .plenaro-notification-panel { position: fixed; left: 12px; top: 68px; right: 12px; width: auto; max-height: 76vh; }
+}
