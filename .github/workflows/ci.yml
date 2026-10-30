@@ -154,6 +154,21 @@ jobs:
           # Availability API: unauthenticated reads are rejected; users see only their bookings.
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/segments/availability?start=2026-11-02T09:00:00Z&end=2026-11-02T09:30:00Z")" = "401"
           curl -fsS -b "$COOKIE" "$API/api/v1/segments/availability?start=2026-11-02T09:00:00Z&end=2026-11-02T09:30:00Z" | python3 -c 'import json,sys; assert json.load(sys.stdin)["available"]'
+          # Web reminders: personal defaults, CSRF, owner isolation, read receipts.
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/notifications/")" = "401"
+          curl -fsS -b "$COOKIE" "$API/api/v1/notifications/settings" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["enabled"] and d["leadMinutes"]==2'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/notifications/settings" -H 'Content-Type: application/json' -d '{"enabled":true,"leadMinutes":5}')" = "400"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/notifications/settings" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"enabled":true,"leadMinutes":1441}')" = "400"
+          REM_START=$(date -u -d '+90 seconds' '+%Y-%m-%dT%H:%M:%SZ')
+          REM_END=$(date -u -d '+120 seconds' '+%Y-%m-%dT%H:%M:%SZ')
+          REM_ID=$(curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/$WORK_ID/segments" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "{\"startsAt\":\"$REM_START\",\"endsAt\":\"$REM_END\",\"note\":\"CI Reminder\",\"participants\":[]}" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
+          test -n "$REM_ID"
+          curl -fsS -b "$COOKIE" "$API/api/v1/notifications/" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert any(x["kind"]=="lead" and x["taskTitle"]=="Zeittest" for x in d)'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/notifications/" | python3 -c 'import json,sys;assert json.load(sys.stdin)==[]'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/notifications/read" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d "{\"segmentId\":\"$REM_ID\",\"startsAt\":\"$REM_START\",\"kind\":\"lead\"}")" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/notifications/read" -H 'Content-Type: application/json' -d "{\"segmentId\":\"$REM_ID\",\"startsAt\":\"$REM_START\",\"kind\":\"lead\"}")" = "400"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/notifications/read" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "{\"segmentId\":\"$REM_ID\",\"startsAt\":\"$REM_START\",\"kind\":\"lead\"}")" = "204"
+          curl -fsS -b "$COOKIE" "$API/api/v1/notifications/" | python3 -c 'import json,sys;assert not any(x["kind"]=="lead" for x in json.load(sys.stdin))'
           # Task activity reports: own data only, invalid month and CSV injection protection.
           MONTH=$(TZ=Europe/Berlin date +%Y-%m)
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/reports/month?month=$MONTH")" = "401"
