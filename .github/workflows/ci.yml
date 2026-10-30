@@ -100,6 +100,39 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -c "$USER_COOKIE" -b "$USER_COOKIE" \
             -X DELETE "$API/api/v1/tasks/$TASK_ID" -H "X-CSRF-TOKEN: $USER_CSRF")" = "404"
           # Task data survives the database/web restart later in this same test.
+          # Task-bound timer and segment integration, no attendance or break tracking.
+          WORK_ID=$(curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/" \
+            -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
+            -d '{"title":"Zeittest","description":"","status":"planned","priority":3,"tags":[],"plannedFor":"2026-10-29"}' \
+            | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
+          test -n "$WORK_ID"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/tasks/$WORK_ID/time/start")" = "400"
+          curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/$WORK_ID/time/start" \
+            -H "X-CSRF-TOKEN: $CSRF" | python3 -c 'import json,sys; assert json.load(sys.stdin)["runningSince"]'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/tasks/$WORK_ID/time/start" -H "X-CSRF-TOKEN: $CSRF")" = "409"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/tasks/$WORK_ID/time/stop" -H "X-CSRF-TOKEN: $USER_CSRF")" = "404"
+          curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/$WORK_ID/time/stop" \
+            -H "X-CSRF-TOKEN: $CSRF" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["runningSince"] is None and d["sessionCount"]==1 and d["bookedSeconds"]>=1'
+          curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/$WORK_ID/time/adjust" \
+            -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
+            -d '{"deltaMinutes":30,"note":"Nachtrag"}' | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["adjustedMinutes"]==30 and d["bookedSeconds"]>=1800'
+          curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/$WORK_ID/time/adjust" \
+            -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
+            -d '{"deltaMinutes":-15}' | python3 -c 'import json,sys;d=json.load(sys.stdin); assert d["adjustedMinutes"]==15'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/tasks/$WORK_ID/time")" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/tasks/$WORK_ID/segments" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"startsAt":"2026-10-29T10:00:00Z","endsAt":"2026-10-29T09:00:00Z","note":"","participants":[]}')" = "400"
+          SEG_ID=$(curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/$WORK_ID/segments" \
+            -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
+            -d '{"startsAt":"2026-10-29T09:00:00Z","endsAt":"2026-10-29T09:30:00Z","note":"Testsegment","participants":["kunde@example.invalid"]}' \
+            | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
+          test -n "$SEG_ID"
+          curl -fsS -b "$COOKIE" "$API/api/v1/segments/?start=2026-10-29T00%3A00%3A00Z&end=2026-10-30T00%3A00%3A00Z" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d)==1 and d[0]["note"]=="Testsegment" and d[0]["participants"]==["kunde@example.invalid"]'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/segments/?start=2026-10-29T00%3A00%3A00Z&end=2026-10-30T00%3A00%3A00Z" | python3 -c 'import json,sys; assert json.load(sys.stdin)==[]'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/tasks/$WORK_ID/segments")" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/tasks/$WORK_ID/segments/$SEG_ID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"startsAt":"2026-10-29T10:00:00Z","endsAt":"2026-10-29T11:00:00Z","note":"Verschoben","participants":[]}')" = "204"
+          curl -fsS -b "$COOKIE" "$API/api/v1/tasks/$WORK_ID/segments" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d)==1 and d[0]["note"]=="Verschoben"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X DELETE "$API/api/v1/tasks/$WORK_ID/segments/$SEG_ID" -H "X-CSRF-TOKEN: $CSRF")" = "204"
+          curl -fsS -b "$COOKIE" "$API/api/v1/tasks/$WORK_ID/segments" | python3 -c 'import json,sys; assert json.load(sys.stdin)==[]'
           # Day-marker quota smoke: annual UL, monthly BR, CSRF and user isolation.
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/day-markers/budget")" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/day-markers/budget" -H 'Content-Type: application/json' -d '{"annualUlDays":2,"monthlyBrDays":1}')" = "400"

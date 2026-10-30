@@ -5,6 +5,7 @@ import { DayMarkersPanel } from './DayMarkersPanel';
 import { getMonthMarkers, type DayMarker } from './dayMarkersApi';
 import { graphStatus, readOutlookWeek, disconnectOutlook, type GraphStatus, type OutlookEvent } from './graphApi';
 import { listTasks, localDate, type WorkTask } from './tasksApi';
+import { listWeekSegments, type TaskSegment } from './taskWorkApi';
 
 function startOfWeek(value: Date) {
   const date = new Date(value.getFullYear(), value.getMonth(), value.getDate());
@@ -29,6 +30,7 @@ export function WeekCalendarPage() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [tasks, setTasks] = useState<WorkTask[]>([]);
   const [markers, setMarkers] = useState<DayMarker[]>([]);
+  const [segments, setSegments] = useState<TaskSegment[]>([]);
   const [outlook, setOutlook] = useState<OutlookEvent[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [graph, setGraph] = useState<GraphStatus | null>(null);
@@ -58,17 +60,19 @@ export function WeekCalendarPage() {
     if (first.getMonth() !== last.getMonth() || first.getFullYear() !== last.getFullYear()) months.push(ym(last));
     void Promise.all([
       listTasks(),
-      ...months.map(([year, month]) => getMonthMarkers(year, month)),
-    ]).then(([taskList, ...monthlyMarkers]) => {
+      Promise.all(months.map(([year, month]) => getMonthMarkers(year, month))),
+      listWeekSegments(weekStart.toISOString(), until.toISOString()),
+    ]).then(([taskList, monthlyMarkers, plannedSegments]) => {
       if (!active) return;
-      setTasks(taskList as WorkTask[]);
-      setMarkers((monthlyMarkers as DayMarker[][]).flat());
+      setTasks(taskList);
+      setMarkers(monthlyMarkers.flat());
+      setSegments(plannedSegments);
       setLoading(false);
     }).catch(e => {
       if (active) { setLocalError(e instanceof Error ? e.message : 'Lokaler Kalender nicht erreichbar.'); setLoading(false); }
     });
     return () => { active = false; };
-  }, [days, refresh]);
+  }, [days, weekStart, until, refresh]);
 
   // Microsoft is only an additional source. Failures must not hide the local calendar.
   useEffect(() => {
@@ -109,6 +113,7 @@ export function WeekCalendarPage() {
   const selectedTasks = tasks.filter(t => t.plannedFor === selectedDay);
   const selectedMarker = markers.find(m => m.day === selectedDay);
   const selectedEvents = eventsOn(selectedDay);
+  const selectedSegments = segments.filter(s => localDate(new Date(s.startsAt)) === selectedDay);
   const byHour = (date: string, hour: number) => eventsOn(date).filter(e => !e.isAllDay && hourOf(e.start) === hour);
 
   return <div className="page classic-workspace">
@@ -167,9 +172,15 @@ export function WeekCalendarPage() {
               {days.map(day => {
                 const date = localDate(day);
                 const slotEvents = byHour(date, hour);
+                const slotSegments = segments.filter(s => localDate(new Date(s.startsAt)) === date && hourOf(s.startsAt) === hour);
                 return <button type="button" key={date} className={`classic-calendar-slot${selectedDay === date ? ' selected' : ''}`}
                   aria-label={`${fmtDay(day)}, ${String(hour).padStart(2, '0')} Uhr`}
                   onClick={() => setSelectedDay(date)}>
+                  {slotSegments.map(segment => <span className="classic-calendar-event classic-calendar-task-segment"
+                    key={segment.id} title={segment.note || segment.taskTitle}>
+                    <strong>{formatClock(segment.startsAt)}–{formatClock(segment.endsAt)}</strong>
+                    {' '}{segment.taskTitle}
+                  </span>)}
                   {slotEvents.map(e => <span className="classic-calendar-event" key={e.id} title={e.subject}>
                     <strong>{formatClock(e.start)}</strong> {e.subject || 'Outlook-Termin'}
                   </span>)}
@@ -179,7 +190,7 @@ export function WeekCalendarPage() {
           </div>
         </div>
         {loading && <p role="status" className="um-hint">Lade lokale Wochenplanung …</p>}
-        <div className="classic-calendar-legend"><span>● Eigene Aufgaben</span><span>● UL / AM / BR</span><span>● Outlook (optional)</span></div>
+        <div className="classic-calendar-legend"><span>● Eigene Aufgaben</span><span>● Lokale Zeitsegmente</span><span>● UL / AM / BR / HO</span><span>● Outlook (optional)</span></div>
       </section>
 
       <aside className="classic-calendar-aside" aria-label="Tagesdetails">
@@ -198,6 +209,14 @@ export function WeekCalendarPage() {
           <strong>{t.title}</strong><small>{t.status === 'completed' ? 'Erledigt' : 'Offen'} · Priorität {t.priority ?? '–'}</small>
         </div>) : <p className="um-hint">Für diesen Tag keine Aufgaben geplant.</p>}
         <Link className="classic-text-action" to="/tasks">Aufgaben verwalten</Link>
+        <h3>Zeitsegmente</h3>
+        {selectedSegments.length ? selectedSegments.map(segment =>
+          <div className="classic-day-entry" key={segment.id}>
+            <strong>{segment.taskTitle}</strong>
+            <small>{formatClock(segment.startsAt)}–{formatClock(segment.endsAt)}</small>
+            {segment.note && <small>{segment.note}</small>}
+            {segment.participants.length > 0 && <small>{segment.participants.join(', ')}</small>}
+          </div>) : <p className="um-hint">Keine Zeitsegmente für diesen Tag geplant.</p>}
         {graph?.connected && <>
           <h3>Outlook-Termine</h3>
           {selectedEvents.length ? selectedEvents.map(e => <div key={e.id} className="classic-day-entry">
