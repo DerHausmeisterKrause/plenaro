@@ -126,6 +126,8 @@ jobs:
             -d '{"startsAt":"2026-10-29T09:00:00Z","endsAt":"2026-10-29T09:30:00Z","note":"Testsegment","participants":["kunde@example.invalid"]}' \
             | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
           test -n "$SEG_ID"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/segments/availability?start=2026-10-29T09:05:00Z&end=2026-10-29T09:20:00Z" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["available"] and not d["conflicts"]'
+
           curl -fsS -b "$COOKIE" "$API/api/v1/segments/availability?start=2026-10-29T09:05:00Z&end=2026-10-29T09:20:00Z" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert not d["available"] and len(d["conflicts"])==1'
 
           curl -fsS -b "$COOKIE" "$API/api/v1/segments/?start=2026-10-29T00%3A00%3A00Z&end=2026-10-30T00%3A00%3A00Z" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d)==1 and d[0]["note"]=="Testsegment" and d[0]["participants"]==["kunde@example.invalid"]'
