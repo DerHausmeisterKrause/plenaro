@@ -71,7 +71,7 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [x] Lokales 7-Tage-Kalenderraster (06–18 Uhr) mit geplanten Aufgaben und UL/AM/BR, **auch ohne Entra/Outlook**
 - [ ] Aufgaben mit konkreten Uhrzeiten/Segmenten und Drag-and-drop in Stundenplanung einplanen
 - [x] Aufgaben-Timer und manuelle Korrekturminuten (separat von gestrichener Kommen/Gehen-/Pausenerfassung)
-- [x] Monatsberichte für aufgabenbezogene Timer und Korrekturen, monatsgenaue Europe/Berlin-Grenzen, CSV-Export ohne fremde Nutzer (PR #24; CI-/Host-Abnahme offen)
+- [x] Monatsberichte für aufgabenbezogene Timer und Korrekturen, monatsgenaue Europe/Berlin-Grenzen, CSV-Export ohne fremde Nutzer (PR #25; CI-/Host-Abnahme offen)
 - [ ] Homeoffice-Workflows
 - [ ] Aufgaben teilen, Einladungen und Besitzerrechte
 - [ ] Desktop-SQLite-Datenimport mit Validierungs-/Rollback-Strategie
