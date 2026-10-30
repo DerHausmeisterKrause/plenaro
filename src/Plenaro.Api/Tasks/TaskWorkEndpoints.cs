@@ -229,8 +229,8 @@ public static class TaskWorkEndpoints
         });
 
 
-        // Calendar drag-and-drop changes only scheduling fields, never notes or participants.
-        // Expected values protect against overwriting a concurrent schedule edit.
+        // The update checks both optimistic version and local availability under
+        // the same owner-specific transaction lock as creation and full edits.
         tasks.MapPatch("/segments/{segmentId:guid}/schedule", async (Guid taskId, Guid segmentId,
             SegmentRescheduleInput input, HttpContext http, UserManager<ApplicationUser> users,
             IConfiguration config, IAntiforgery anti, CancellationToken ct) =>
@@ -242,14 +242,34 @@ public static class TaskWorkEndpoints
                 return Results.BadRequest(new { error });
             if (ValidatePeriod(input.ExpectedStartsAt, input.ExpectedEndsAt) is not null)
                 return Results.BadRequest(new { error = "Ursprünglicher Zeitraum ist ungültig." });
-
             await using var db = await OpenAsync(config, ct);
+            await using var tx = await db.BeginTransactionAsync(ct);
+            await SegmentAvailability.LockOwnerAsync(db, tx, owner.Value, ct);
+            if (!await SegmentExistsAsync(db, segmentId, owner.Value, tx, ct, taskId))
+                return Results.NotFound();
+            await using (var expected = new NpgsqlCommand("""
+                SELECT EXISTS(SELECT 1 FROM task_segments
+                    WHERE id=@id AND owner_user_id=@owner AND task_id=@task
+                    AND starts_at=@old_start AND ends_at=@old_end)
+                """, db, tx))
+            {
+                expected.Parameters.AddWithValue("id", segmentId);
+                expected.Parameters.AddWithValue("owner", owner.Value);
+                expected.Parameters.AddWithValue("task", taskId);
+                expected.Parameters.Add("old_start", NpgsqlDbType.TimestampTz).Value = input.ExpectedStartsAt.UtcDateTime;
+                expected.Parameters.Add("old_end", NpgsqlDbType.TimestampTz).Value = input.ExpectedEndsAt.UtcDateTime;
+                if (!(bool)(await expected.ExecuteScalarAsync(ct) ?? false))
+                    return Results.Conflict(new { error = "Das Zeitsegment wurde zwischenzeitlich verändert. Bitte Kalender aktualisieren." });
+            }
+            var check = await SegmentAvailability.ReadAsync(db, owner.Value,
+                input.StartsAt, input.EndsAt, segmentId, tx, ct);
+            if (!check.Available) return SlotConflict(check);
             await using var cmd = new NpgsqlCommand("""
                 UPDATE task_segments SET starts_at=@start, ends_at=@end
                 WHERE id=@id AND task_id=@task AND owner_user_id=@owner
                   AND starts_at=@expected_start AND ends_at=@expected_end
                 RETURNING id
-                """, db);
+                """, db, tx);
             cmd.Parameters.AddWithValue("id", segmentId);
             cmd.Parameters.AddWithValue("task", taskId);
             cmd.Parameters.AddWithValue("owner", owner.Value);
@@ -257,18 +277,10 @@ public static class TaskWorkEndpoints
             cmd.Parameters.Add("end", NpgsqlDbType.TimestampTz).Value = input.EndsAt.UtcDateTime;
             cmd.Parameters.Add("expected_start", NpgsqlDbType.TimestampTz).Value = input.ExpectedStartsAt.UtcDateTime;
             cmd.Parameters.Add("expected_end", NpgsqlDbType.TimestampTz).Value = input.ExpectedEndsAt.UtcDateTime;
-            if (await cmd.ExecuteScalarAsync(ct) is not null) return Results.NoContent();
-
-            await using var exists = new NpgsqlCommand("""
-                SELECT EXISTS(SELECT 1 FROM task_segments
-                WHERE id=@id AND task_id=@task AND owner_user_id=@owner)
-                """, db);
-            exists.Parameters.AddWithValue("id", segmentId);
-            exists.Parameters.AddWithValue("task", taskId);
-            exists.Parameters.AddWithValue("owner", owner.Value);
-            return (bool)(await exists.ExecuteScalarAsync(ct) ?? false)
-                ? Results.Conflict(new { error = "Das Zeitsegment wurde zwischenzeitlich verändert. Bitte Kalender aktualisieren." })
-                : Results.NotFound();
+            if (await cmd.ExecuteScalarAsync(ct) is null)
+                return Results.Conflict(new { error = "Segmentänderung konnte nicht übernommen werden." });
+            await tx.CommitAsync(ct);
+            return Results.NoContent();
         });
 
         tasks.MapDelete("/segments/{segmentId:guid}", async (Guid taskId, Guid segmentId,
