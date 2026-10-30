@@ -152,7 +152,7 @@ describe('Plenaro web shell', () => {
     renderAt('/settings');
     fireEvent.click(await screen.findByRole('button', { name: 'Datenimport' }));
     expect(await screen.findByRole('heading', { name: 'Desktop-Daten importieren' })).toBeTruthy();
-    expect(screen.getByText(/tools\/export_classic.py/)).toBeTruthy();
+    expect(screen.getAllByText(/tools\/export_classic.py/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Noch kein Import ausgeführt/)).toBeTruthy();
   });
 
