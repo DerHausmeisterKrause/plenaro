@@ -220,6 +220,15 @@ public static class ClassicImportEndpoints
                     settings.Parameters.AddWithValue("owner", owner.Value);
                     settings.Parameters.AddWithValue("lead", newLead);
                     await settings.ExecuteNonQueryAsync(ct);
+                    await using var timestamp = new NpgsqlCommand("""
+                        UPDATE classic_import_batches
+                        SET settings_imported_at=(
+                            SELECT updated_at FROM user_reminder_settings WHERE owner_user_id=@owner)
+                        WHERE id=@batch
+                        """, db, tx);
+                    timestamp.Parameters.AddWithValue("owner",owner.Value);
+                    timestamp.Parameters.AddWithValue("batch",batchId);
+                    await timestamp.ExecuteNonQueryAsync(ct);
                 }
                 await tx.CommitAsync(ct);
                 return Results.Ok(new { batchId, inserted, skipped = 
@@ -271,26 +280,31 @@ public static class ClassicImportEndpoints
             await using var tx = await db.BeginTransactionAsync(ct);
             await SegmentAvailability.LockOwnerAsync(db, tx, owner.Value, ct);
             await using var batch = new NpgsqlCommand("""
-                SELECT previous_lead,changed_lead,settings_had_row
+                SELECT previous_lead,changed_lead,settings_had_row,settings_imported_at
                 FROM classic_import_batches WHERE id=@id AND owner_user_id=@owner
                 """, db, tx);
             batch.Parameters.AddWithValue("id", id);
             batch.Parameters.AddWithValue("owner", owner.Value);
             int? previous = null, changed = null; bool had = false;
+            DateTime? settingsWrittenAt = null;
             await using (var reader = await batch.ExecuteReaderAsync(ct))
             {
                 if (!await reader.ReadAsync(ct)) return Results.NotFound();
                 previous = reader.IsDBNull(0) ? null : reader.GetInt16(0);
                 changed = reader.IsDBNull(1) ? null : reader.GetInt16(1);
                 had = reader.GetBoolean(2);
+                settingsWrittenAt = reader.IsDBNull(3) ? null : reader.GetDateTime(3);
             }
             if (changed is not null)
             {
                 await using var current = new NpgsqlCommand("""
-                    SELECT lead_minutes FROM user_reminder_settings WHERE owner_user_id=@owner
+                    SELECT lead_minutes,updated_at FROM user_reminder_settings WHERE owner_user_id=@owner
                     """, db, tx);
                 current.Parameters.AddWithValue("owner", owner.Value);
-                if (Convert.ToInt32(await current.ExecuteScalarAsync(ct)) != changed.Value)
+                await using var settingsRow = await current.ExecuteReaderAsync(ct);
+                if (!await settingsRow.ReadAsync(ct) ||
+                    settingsWrittenAt is null || settingsRow.GetDateTime(1) != settingsWrittenAt.Value ||
+                    settingsRow.GetInt16(0) != changed.Value)
                     return Results.Conflict(new { error = "Reminder-Einstellung wurde inzwischen verändert. Import kann nicht sicher rückgängig gemacht werden." });
             }
             var items = new List<ImportSnapshot>();
