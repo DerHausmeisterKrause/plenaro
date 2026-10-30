@@ -7,6 +7,7 @@ CREATE TABLE classic_import_batches (
     created_at timestamptz NOT NULL DEFAULT now(),
     previous_lead smallint,
     changed_lead smallint,
+    settings_imported_at timestamptz,
     settings_had_row boolean NOT NULL DEFAULT false,
     CHECK (previous_lead IS NULL OR previous_lead BETWEEN 0 AND 1440),
     CHECK (changed_lead IS NULL OR changed_lead BETWEEN 0 AND 1440)
