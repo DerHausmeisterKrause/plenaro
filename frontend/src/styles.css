@@ -477,7 +477,7 @@ h1,h2,h3,p { margin-top: 0; }
 .classic-calendar-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(245px, 295px); gap: 13px; align-items: start; }
 .classic-calendar-main,.classic-calendar-aside { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; min-width: 0; overflow: hidden; box-shadow: var(--shadow); }
 .classic-calendar-scroll { overflow: auto; max-width: 100%; }
-.classic-calendar-grid { min-width: 950px; display: grid; grid-template-columns: 66px repeat(7, minmax(124px,1fr)); }
+.classic-calendar-grid { min-width: 720px; display: grid; grid-template-columns: 66px repeat(5, minmax(124px,1fr)); }
 .classic-calendar-corner { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--muted); background: var(--surface-soft); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .classic-calendar-header { position: relative; min-width: 0; min-height: 94px; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 6px; padding: 11px 8px; background: var(--surface-soft); color: var(--text); border: 0; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); text-align: left; }
 .classic-calendar-header strong { font-size: 12px; }
@@ -486,7 +486,7 @@ h1,h2,h3,p { margin-top: 0; }
 .classic-calendar-header.selected { box-shadow: inset 0 -3px 0 var(--blue); }
 .classic-calendar-header .classic-calendar-markers { background: var(--green-pale); color: var(--green); font-weight: 750; border-radius: 4px; padding: 3px 6px; }
 .classic-calendar-all-day { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--blue) !important; }
-.classic-calendar-time-row { grid-column: 1 / -1; display: grid; grid-template-columns: 66px repeat(7, minmax(124px,1fr)); min-height: 72px; }
+.classic-calendar-time-row { grid-column: 1 / -1; display: grid; grid-template-columns: 66px repeat(5, minmax(124px,1fr)); min-height: 72px; }
 .classic-calendar-time { padding: 9px 6px; background: var(--surface-soft); text-align: center; color: var(--muted); font-size: 10px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .classic-calendar-slot { display: flex; flex-direction: column; gap: 4px; align-items: stretch; min-width: 0; border: 0; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface); padding: 4px; color: var(--text); text-align: left; }
 .classic-calendar-slot:hover,.classic-calendar-slot.selected { background: var(--blue-pale); }
@@ -521,3 +521,49 @@ h1,h2,h3,p { margin-top: 0; }
   .classic-calendar-aside { grid-template-columns: minmax(0,1fr); }
   .classic-form-grid { grid-template-columns: minmax(0,1fr); }
 }
+
+/* Screenshot-matched Plenaro Classic / Heute – theme-aware, desktop split. */
+.plenaro-today { max-width: none; }
+.plenaro-today-columns { display: grid; grid-template-columns: minmax(0, 1.58fr) minmax(340px, 1fr); gap: 14px; align-items: stretch; min-height: calc(100vh - 155px); }
+.plenaro-today-left,.plenaro-today-right { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.plenaro-today .content-card { border-radius: 12px; padding: 17px; }
+.plenaro-today-quick label { display: block; margin-bottom: 9px; font-size: 12px; font-weight: 750; }
+.plenaro-today-quick-row { display: flex; gap: 6px; }
+.plenaro-today-quick-row input { flex: 1; min-width: 0; background: var(--surface-soft); border: 1px solid var(--border); padding: 13px; border-radius: 8px; color: var(--text); }
+.plenaro-today-quick-row .button { padding: 12px 14px; }
+.plenaro-workday { display: flex; align-items: center; justify-content: space-between; gap: 15px; flex-wrap: wrap; }
+.plenaro-workday h2 { margin: 0 0 5px; font-size: 16px; }
+.plenaro-workday p { font-size: 11px; margin: 0 0 4px; color: var(--muted-strong); }
+.plenaro-marker-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.plenaro-marker-pill { border: 1px solid var(--border); border-radius: 9px; background: var(--surface-soft); padding: 8px 14px; font-size: 11px; font-weight: 700; color: var(--muted-strong); cursor: pointer; }
+.plenaro-marker-pill.active { color: #fff; border-color: #4365ed; background: #4365ed; }
+.plenaro-today-list { flex: 1; min-height: 420px; display: flex; flex-direction: column; }
+.plenaro-tabs { display: flex; gap: 0; overflow-x: auto; padding-bottom: 12px; }
+.plenaro-tabs button { background: var(--surface-soft); border: 1px solid var(--border); padding: 10px 16px; white-space: nowrap; color: var(--muted-strong); font-size: 12px; font-weight: 700; }
+.plenaro-tabs button:first-child { border-radius: 9px 0 0 9px; }
+.plenaro-tabs button:last-child { border-radius: 0 9px 9px 0; }
+.plenaro-tabs button.active { background: #4365ed; color: #fff; border-color: #4365ed; }
+.plenaro-list-title { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0 14px; }
+.plenaro-list-title h2 { font-size: 14px; margin: 0; }
+.plenaro-rows { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 66vh; }
+.plenaro-task-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; min-height: 68px; text-align: left; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-soft); color: var(--text); padding: 12px; }
+.plenaro-task-row.selected { border-color: var(--blue); background: var(--blue-pale); }
+.plenaro-task-row > span:first-child { display: grid; gap: 6px; min-width: 0; }
+.plenaro-task-row strong { font-size: 13px; overflow-wrap: anywhere; }
+.plenaro-task-row small { color: var(--muted-strong); white-space: nowrap; text-overflow: ellipsis; overflow: hidden; max-width: 38vw; }
+.plenaro-empty-list { display: grid; align-content: start; justify-items: start; gap: 10px; padding: 26px 6px; font-size: 12px; color: var(--muted); }
+.plenaro-empty-list strong { color: var(--text); }
+.plenaro-today-detail { display: flex; flex-direction: column; gap: 12px; min-height: 340px; }
+.plenaro-today-detail h2 { overflow-wrap: anywhere; font-size: 21px; margin: 0; }
+.plenaro-today-detail label { font-size: 12px; font-weight: 750; }
+.plenaro-today-detail textarea { width: 100%; min-height: 150px; resize: vertical; background: var(--surface-soft); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font: inherit; font-size: 13px; line-height: 1.55; }
+.plenaro-today-detail-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.plenaro-today-detail-actions .button { padding: 10px 12px; }
+.plenaro-timer,.plenaro-segments { display: flex; flex-direction: column; gap: 12px; }
+.plenaro-timer-time { display: flex; justify-content: center; align-items: center; gap: 11px; font-size: 32px; font-weight: 800; color: var(--text); letter-spacing: -.035em; }
+.plenaro-timer p,.plenaro-segments p { font-size: 12px; color: var(--muted-strong); margin: 0; line-height: 1.7; }
+.plenaro-segments h3 { font-size: 15px; margin: 0; }
+.plenaro-segments .button { align-self: start; }
+@media (min-width: 1350px) { .sidebar { width: 200px; flex-basis: 200px; } .sidebar-top { padding-left: 16px; padding-right: 16px; } }
+@media (max-width: 1050px) { .plenaro-today-columns { grid-template-columns: minmax(0, 1fr); } .plenaro-today-list { min-height: 300px; } }
+@media (max-width: 650px) { .plenaro-today .content-card { padding: 12px; } .plenaro-marker-actions { width: 100%; } .plenaro-marker-pill { flex: 1; padding: 8px; } .plenaro-tabs button { padding: 9px 10px; } }

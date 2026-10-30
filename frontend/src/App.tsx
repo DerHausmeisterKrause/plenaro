@@ -11,7 +11,7 @@ import { currentUser, setupRequired, type CurrentUser } from './authApi';
 import { SetupPage } from './SetupPage';
 import { SettingsPage } from './SettingsPage';
 import { WeekCalendarPage } from './WeekCalendarPage';
-import { TodayTasksPage } from './TasksPages';
+import { ClassicTodayPage } from './ClassicTodayPage';
 import { ClassicTasksPage } from './ClassicTasksPage';
 import { TicketsWorkspacePage } from './TicketsWorkspacePage';
 import { readPersonalPreferences, readWorkspacePreferences, savePersonalPreferences, type PersonalPreferences } from './settingsApi';
@@ -358,7 +358,7 @@ export function AppContent() {
             <Route path="/week" element={<PrivateArea user={user}><WeekCalendarPage/></PrivateArea>} />
             <Route path="/tasks" element={<PrivateArea user={user}><ClassicTasksPage/></PrivateArea>} />
             <Route path="/tickets" element={<PrivateArea user={user}><TicketsWorkspacePage/></PrivateArea>} />
-            <Route path="/today" element={<PrivateArea user={user}><TodayTasksPage/></PrivateArea>} />
+            <Route path="/today" element={<PrivateArea user={user}><ClassicTodayPage/></PrivateArea>} />
             <Route path="/settings" element={<PrivateArea user={user}><SettingsPage user={user} onPersonalSaved={value => { setPrefs(value); applyTheme(value.theme); setThemeError(''); }} onWorkspaceSaved={value => setInstanceName(value.instanceName)}/></PrivateArea>} />
             <Route path="/system" element={<SystemPage web={web} database={database}/>} />
             <Route path="*" element={<NotFound />} />

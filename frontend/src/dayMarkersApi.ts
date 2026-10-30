@@ -1,5 +1,5 @@
 export type DayType = 'Normal' | 'UL' | 'AM';
-export type DayMarker = { day: string; dayType: DayType; isBr: boolean };
+export type DayMarker = { day: string; dayType: DayType; isBr: boolean; isHo?: boolean };
 export type BudgetSettings = { annualUlDays: number | null; monthlyBrDays: number | null };
 export type BudgetSummary = {
   year: number; month: number; annualUlDays: number | null; usedUlDays: number;
@@ -38,5 +38,5 @@ export const getMarkerSummary = (year: number, month: number) =>
   get<BudgetSummary>('/api/v1/day-markers/summary?' + monthParams(year, month));
 export const getMonthMarkers = (year: number, month: number) =>
   get<DayMarker[]>('/api/v1/day-markers/?' + monthParams(year, month));
-export const saveDayMarker = (day: string, dayType: DayType, isBr: boolean) =>
-  save('/api/v1/day-markers/' + encodeURIComponent(day), { dayType, isBr });
+export const saveDayMarker = (day: string, dayType: DayType, isBr: boolean, isHo = false) =>
+  save('/api/v1/day-markers/' + encodeURIComponent(day), { dayType, isBr, isHo });

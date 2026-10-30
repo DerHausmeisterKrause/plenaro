@@ -15,8 +15,8 @@ namespace Plenaro.Api.DayMarkers;
 public static class DayMarkerEndpoints
 {
     public sealed record BudgetInput(int? AnnualUlDays, int? MonthlyBrDays);
-    public sealed record MarkerInput(string DayType, bool IsBr);
-    public sealed record MarkerView(DateOnly Day, string DayType, bool IsBr);
+    public sealed record MarkerInput(string DayType, bool IsBr, bool IsHo = false);
+    public sealed record MarkerView(DateOnly Day, string DayType, bool IsBr, bool IsHo);
     public sealed record BudgetSummary(int Year, int Month, int? AnnualUlDays,
         int UsedUlDays, int? RemainingUlDays, bool UlExhausted, bool UlExceeded,
         int? MonthlyBrDays, int UsedBrDays, int? RemainingBrDays,
@@ -107,7 +107,7 @@ public static class DayMarkerEndpoints
             if (owner is null) return Results.Unauthorized();
             await using var db = await OpenAsync(config, ct);
             await using var cmd = new NpgsqlCommand("""
-                SELECT day,day_type,is_br FROM day_markers
+                SELECT day,day_type,is_br,is_ho FROM day_markers
                 WHERE user_id=@owner AND day>=@first AND day<@last
                 ORDER BY day
                 """, db);
@@ -117,7 +117,7 @@ public static class DayMarkerEndpoints
             var result = new List<MarkerView>();
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
-                result.Add(new MarkerView(reader.GetFieldValue<DateOnly>(0), reader.GetString(1), reader.GetBoolean(2)));
+                result.Add(new MarkerView(reader.GetFieldValue<DateOnly>(0), reader.GetString(1), reader.GetBoolean(2), reader.GetBoolean(3)));
             return Results.Ok(result);
         });
 
@@ -133,7 +133,7 @@ public static class DayMarkerEndpoints
             if (owner is null) return Results.Unauthorized();
 
             await using var db = await OpenAsync(config, ct);
-            if (input.DayType == "Normal" && !input.IsBr)
+            if (input.DayType == "Normal" && !input.IsBr && !input.IsHo)
             {
                 await using var remove = new NpgsqlCommand(
                     "DELETE FROM day_markers WHERE user_id=@owner AND day=@day", db);
@@ -144,15 +144,16 @@ public static class DayMarkerEndpoints
             else
             {
                 await using var cmd = new NpgsqlCommand("""
-                    INSERT INTO day_markers(user_id,day,day_type,is_br,updated_at)
-                    VALUES(@owner,@day,@type,@br,now())
+                    INSERT INTO day_markers(user_id,day,day_type,is_br,is_ho,updated_at)
+                    VALUES(@owner,@day,@type,@br,@ho,now())
                     ON CONFLICT(user_id,day) DO UPDATE SET
-                        day_type=EXCLUDED.day_type,is_br=EXCLUDED.is_br,updated_at=now()
+                        day_type=EXCLUDED.day_type,is_br=EXCLUDED.is_br,is_ho=EXCLUDED.is_ho,updated_at=now()
                     """, db);
                 cmd.Parameters.AddWithValue("owner", owner.Value);
                 cmd.Parameters.Add("day", NpgsqlDbType.Date).Value = parsed;
                 cmd.Parameters.AddWithValue("type", input.DayType);
                 cmd.Parameters.AddWithValue("br", input.IsBr);
+                cmd.Parameters.AddWithValue("ho", input.IsHo);
                 await cmd.ExecuteNonQueryAsync(ct);
             }
             return Results.NoContent();

@@ -4,6 +4,7 @@ import { type CurrentUser } from './authApi';
 import { PersonalPreferencesPanel, WorkspacePreferencesPanel } from './SettingsPreferences';
 import { SecretsSettings } from './SecretsSettings';
 import { EntraAccountPanel } from './EntraAccountPanel';
+import { EntraAdminSettings } from './EntraAdminSettings';
 import { DayMarkerBudgetSettings } from './DayMarkersPanel';
 import { type PersonalPreferences, type WorkspacePreferences } from './settingsApi';
 import { addUser, changePassword, listUsers, resetUserPassword, saveUser, type ManagedUser } from './userApi';
@@ -222,6 +223,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved }: {
     </div>}
     {section === 'planning' && <DayMarkerBudgetSettings/>}
     {section === 'microsoft' && <>
+      {admin && <EntraAdminSettings/>}
       <EntraAccountPanel/>
       <section className="content-card um-panel">
         <h2>Outlook-Kalender</h2>

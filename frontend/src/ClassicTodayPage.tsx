@@ -1,0 +1,189 @@
+import { useEffect, useState, type FormEvent } from 'react';
+import { CalendarDays, CheckCircle2, Clock3, ExternalLink, Plus, RotateCcw, Save, Ticket } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { changeTaskStatus, createTask, listTasks, localDate, todayTasks, updateTask, type WorkTask, type TaskInput } from './tasksApi';
+import { getMonthMarkers, saveDayMarker, type DayType, type DayMarker } from './dayMarkersApi';
+
+type Tab = 'today' | 'active' | 'new' | 'completed';
+const labels: { key: Tab; label: string }[] = [
+  { key: 'today', label: 'Heute' },
+  { key: 'active', label: 'Aktuelle Aufgaben' },
+  { key: 'new', label: 'Neue Aufgaben' },
+  { key: 'completed', label: 'Erledigte Aufgaben' },
+];
+
+export function ClassicTodayPage() {
+  const [tasks, setTasks] = useState<WorkTask[]>([]);
+  const [todayTasksList, setTodayTasks] = useState<WorkTask[]>([]);
+  const [tab, setTab] = useState<Tab>('today');
+  const [selected, setSelected] = useState<string | null>(null);
+  const [quick, setQuick] = useState('');
+  const [description, setDescription] = useState('');
+  const [marker, setMarker] = useState<DayMarker | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const day = localDate();
+  const today = new Date();
+  const [yy, mm] = day.slice(0, 7).split('-').map(Number);
+
+  async function reload() {
+    const [all, todayItems, days] = await Promise.all([
+      listTasks(), todayTasks(day), getMonthMarkers(yy, mm),
+    ]);
+    setTasks(all);
+    setTodayTasks(todayItems);
+    setMarker(days.find(item => item.day === day) ?? null);
+    setSelected(id => id && all.some(t => t.id === id) ? id : all[0]?.id ?? null);
+  }
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    void Promise.all([listTasks(), todayTasks(day), getMonthMarkers(yy, mm)])
+      .then(([all, due, days]) => {
+        if (!active) return;
+        setTasks(all); setTodayTasks(due);
+        setMarker(days.find(item => item.day === day) ?? null);
+        setSelected(all[0]?.id ?? null); setLoading(false);
+      }).catch(e => { if (active) { setError(e instanceof Error ? e.message : 'Aufgaben konnten nicht geladen werden.'); setLoading(false); } });
+    return () => { active = false; };
+  }, [day, yy, mm]);
+
+  const chosen = tasks.find(t => t.id === selected);
+  const rows = tab === 'today' ? todayTasksList :
+    tab === 'active' ? tasks.filter(t => t.status === 'active' || t.status === 'planned') :
+    tab === 'completed' ? tasks.filter(t => t.status === 'completed') : [];
+  const visibleSelected = rows.some(t => t.id === selected);
+  useEffect(() => {
+    setDescription(chosen?.description ?? '');
+  }, [chosen?.id, chosen?.description]);
+
+  async function mutate(run: () => Promise<void>, message: string) {
+    if (busy) return;
+    setBusy(true); setError(''); setNotice('');
+    try { await run(); await reload(); setNotice(message); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Änderung fehlgeschlagen.'); }
+    finally { setBusy(false); }
+  }
+
+  async function quickAdd(e: FormEvent) {
+    e.preventDefault();
+    const title = quick.trim();
+    if (!title) return;
+    await mutate(() => createTask({
+      title, description: '', status: 'planned', priority: 3, tags: [], plannedFor: day,
+    }), 'Aufgabe angelegt.');
+    setQuick('');
+  }
+
+  async function setDay(type: DayType, isBr: boolean, isHo: boolean) {
+    await mutate(async () => saveDayMarker(day, type, isBr, isHo), 'Tagesmarker gespeichert.');
+  }
+
+  function inputFor(t: WorkTask): TaskInput {
+    return { title: t.title, description, status: t.status,
+      priority: t.priority, tags: t.tags, plannedFor: t.plannedFor };
+  }
+
+  return <div className="page plenaro-today">
+    {error && <p role="alert" className="um-feedback failure">{error}</p>}
+    {notice && <p role="status" className="um-feedback success">{notice}</p>}
+    <div className="plenaro-today-columns">
+      <section className="plenaro-today-left" aria-label="Arbeitsbereich Heute">
+        <div className="content-card plenaro-today-quick">
+          <form onSubmit={e => void quickAdd(e)}>
+            <label htmlFor="today-add-task">Neue Aufgabe</label>
+            <div className="plenaro-today-quick-row">
+              <input id="today-add-task" maxLength={255} required value={quick}
+                onChange={e => setQuick(e.target.value)} placeholder="Aufgabe schnell erfassen …"/>
+              <button type="submit" disabled={busy} className="button button-primary" aria-label="Aufgabe hinzufügen"><Plus size={20}/></button>
+            </div>
+          </form>
+        </div>
+        <div className="content-card plenaro-workday">
+          <div>
+            <h2>Arbeitstag heute</h2>
+            <p>{new Intl.DateTimeFormat('de-DE', { dateStyle: 'full' }).format(today)}</p>
+            <p className="um-hint">Tagesmarker für deine persönliche Planung</p>
+          </div>
+          <div className="plenaro-marker-actions" aria-label="Tagesart einstellen">
+            {(['Normal', 'UL', 'AM'] as DayType[]).map(t => <button type="button" key={t}
+              className={`plenaro-marker-pill${(marker?.dayType ?? 'Normal') === t ? ' active' : ''}`}
+              aria-pressed={(marker?.dayType ?? 'Normal') === t}
+              disabled={busy} onClick={() => void setDay(t, marker?.isBr ?? false, marker?.isHo ?? false)}>{t}</button>)}
+            <button type="button" className={`plenaro-marker-pill${marker?.isHo ? ' active' : ''}`}
+              aria-pressed={marker?.isHo ?? false} disabled={busy}
+              onClick={() => void setDay(marker?.dayType ?? 'Normal', marker?.isBr ?? false, !marker?.isHo)}>HO</button>
+            <button type="button" className={`plenaro-marker-pill${marker?.isBr ? ' active' : ''}`}
+              aria-pressed={marker?.isBr ?? false} disabled={busy}
+              onClick={() => void setDay(marker?.dayType ?? 'Normal', !marker?.isBr, marker?.isHo ?? false)}>BR</button>
+          </div>
+        </div>
+        <div className="content-card plenaro-today-list">
+          <div className="plenaro-tabs" role="tablist" aria-label="Aufgabenansichten">
+            {labels.map(item => <button role="tab" type="button" key={item.key}
+              className={tab === item.key ? 'active' : ''} aria-selected={tab === item.key}
+              onClick={() => setTab(item.key)}>{item.label}{item.key === 'new' ? ' (0)' : ''}</button>)}
+          </div>
+          <div className="plenaro-list-title">
+            <h2>{labels.find(item => item.key === tab)?.label}:</h2>
+            <Link to="/tasks" className="classic-text-action">Alle Aufgaben</Link>
+          </div>
+          {loading ? <p role="status" className="um-hint">Lade Aufgaben …</p> :
+            tab === 'new' ? <div className="plenaro-empty-list">
+              <Ticket size={22}/>
+              <strong>Keine neuen Tickets verfügbar</strong>
+              <p>Neue Znuny/OTRS-Ticketkandidaten erscheinen hier nach Einrichtung des Ticketsystems.</p>
+            </div> :
+            rows.length === 0 ? <p className="plenaro-empty-list">Keine Aufgaben in dieser Ansicht.</p> :
+            <div className="plenaro-rows">{rows.map(t => <button type="button" key={t.id}
+              className={`plenaro-task-row${selected === t.id ? ' selected' : ''}`}
+              onClick={() => setSelected(t.id)}>
+              <span><strong>{t.title}</strong>{t.description && <small>{t.description}</small>}</span>
+              <span className={`tasks-state tasks-state-${t.status}`}>{t.status === 'completed' ? 'Erledigt' : t.status === 'active' ? 'Aktuell' : 'Geplant'}</span>
+            </button>)}</div>}
+        </div>
+      </section>
+      <aside className="plenaro-today-right" aria-label="Aufgabedetails und Planung">
+        <section className="content-card plenaro-today-detail" aria-label="Task Details">
+          <span className="eyebrow">TASK DETAILS</span>
+          {!chosen || (!visibleSelected && tab !== 'new') ? <div className="classic-detail-empty">
+            <h2>Aufgabe auswählen</h2><p>Wähle links eine Aufgabe aus, um ihre Details hier zu öffnen.</p>
+          </div> : <>
+            <h2>{chosen.title}</h2>
+            <label htmlFor="today-description">Beschreibung</label>
+            <textarea id="today-description" rows={7} value={description}
+              maxLength={10000} onChange={e => setDescription(e.target.value)}/>
+            <div className="plenaro-today-detail-actions">
+              <button type="button" className="button button-primary" disabled={busy}
+                onClick={() => void mutate(() => updateTask(chosen.id, inputFor(chosen)), 'Beschreibung gespeichert.')}>
+                <Save size={15}/>Speichern</button>
+              {chosen.status !== 'completed' ?
+                <button type="button" className="button button-secondary" disabled={busy}
+                  onClick={() => void mutate(() => changeTaskStatus(chosen.id, 'completed'), 'Aufgabe erledigt.')}>
+                  <CheckCircle2 size={15}/>Erledigt</button> :
+                <button type="button" className="button button-secondary" disabled={busy}
+                  onClick={() => void mutate(() => changeTaskStatus(chosen.id, 'active'), 'Aufgabe wieder geöffnet.')}>
+                  <RotateCcw size={15}/>Wieder öffnen</button>}
+              <Link to="/tasks" className="button button-secondary"><ExternalLink size={14}/>Weitere Details</Link>
+            </div>
+          </>}
+        </section>
+        <section className="content-card plenaro-timer">
+          <span className="eyebrow">TIMER / BUCHUNG</span>
+          <div className="plenaro-timer-time"><Clock3 size={20}/>––:––:––</div>
+          <p>Aufgabenbezogener Timer und manuelle Buchung folgen als eigener Funktionsschritt.</p>
+          <p className="um-hint">Keine automatische Arbeitszeiterfassung, kein Kommen/Gehen und keine Pausenbuchung.</p>
+        </section>
+        <section className="content-card plenaro-segments">
+          <span className="eyebrow">PLANUNG (SEGMENTE)</span>
+          <h3>Segmentplanung</h3>
+          <p>Hier werden künftig Termine mit Start- und Endzeit, Kurzbeschreibung und Teilnehmern für die ausgewählte Aufgabe geplant.</p>
+          <Link to="/week" className="button button-secondary"><CalendarDays size={15}/>Lokalen Kalender öffnen</Link>
+        </section>
+      </aside>
+    </div>
+  </div>;
+}

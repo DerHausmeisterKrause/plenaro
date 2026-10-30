@@ -11,6 +11,12 @@ beforeEach(() => {
     if (path === '/api/v1/settings/global') return {
       ok: true, status: 200, json: async () => ({ instanceName: 'Plenaro', supportEmail: '', defaultWeekStart: 'monday' }),
     };
+    if (path === '/api/v1/admin/entra/') return {
+      ok: true, status: 200, json: async () => ({
+        enabled: false, tenantId: '', clientId: '', secretConfigured: false,
+        vaultReady: false, httpsRequired: false,
+      }),
+    };
     if (path === '/api/v1/day-markers/budget') return { ok: true, status: 200, json: async () => ({ annualUlDays: null, monthlyBrDays: null }) };
     if (path.startsWith('/api/v1/day-markers/summary?')) return { ok: true, status: 200, json: async () => ({
       year: 2026, month: 10, annualUlDays: null, usedUlDays: 0,
@@ -129,17 +135,23 @@ describe('Plenaro web shell', () => {
     expect(await screen.findByLabelText('Titel')).toBeTruthy();
   });
 
-  it('zeigt die Heute-Ansicht ohne Aufgaben verständlich an', async () => {
+  it('zeigt Heute mit Classic-Schnellerfassung, Reitern und festem Detailbereich', async () => {
     renderAt('/today');
-    expect(await screen.findByRole('heading', { name: 'Heute' })).toBeTruthy();
-    expect(await screen.findByRole('heading', { name: 'Aktuell' })).toBeTruthy();
-    expect(await screen.findByRole('heading', { name: 'Erledigt' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Arbeitstag heute' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Arbeitsbereich Heute' })).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: 'Aufgabedetails und Planung' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Aktuelle Aufgaben' })).toBeTruthy();
+    expect(screen.getByLabelText('Neue Aufgabe')).toBeTruthy();
+    expect(screen.getByText('Segmentplanung')).toBeTruthy();
   });
 
-  it('zeigt UL/AM/BR-Marker ohne falsche Kontingentwarnung', async () => {
+  it('zeigt Normal, UL, AM, HO und BR als Tagesmarker ohne Microsoft', async () => {
     renderAt('/today');
-    expect(await screen.findByRole('heading', { name: 'Tagesmarker · UL / AM / BR' })).toBeTruthy();
-    expect(await screen.findAllByText('Noch nicht konfiguriert')).toHaveLength(2);
+    expect(await screen.findByRole('heading', { name: 'Arbeitstag heute' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'UL' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'AM' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'HO' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'BR' })).toBeTruthy();
   });
 
   it('zeigt unbekannte URLs als Fehlerseite', async () => {

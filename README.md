@@ -181,3 +181,18 @@ Die Weboberfläche übernimmt nun das gewohnte Arbeitsmuster des alten Desktop-P
 Die Einstellungen sind nach Allgemein, Aufgaben & Kalender, Microsoft 365, Ticketsystem, Konto & Sicherheit und Administration gegliedert. Hell-/Dunkelmodus und mobile Navigation bleiben erhalten.
 
 Details und offener Funktionsumfang: [Classic-UI-Referenz](docs/CLASSIC_UI.md).
+
+## Plenaro Classic 2.0 – Heute und Kalender
+
+Der **Heute-Arbeitsbereich** orientiert sich an der Desktop-Ansicht (siehe Benutzer-Screenshots):
+links Schnellaufgabe, Tagesmarker Normal/UL/AM/HO/BR und die Reiter Heute/Aktuelle/Neue/Erledigte; rechts ein festes Detailpanel sowie reservierte Bereiche für Timer und Segmente. Die Aktionen der Aufgabenliste und der Tagesmarker verwenden echte persistente APIs. Die Timer-/Segmentbereiche sind als **noch nicht fertig** gekennzeichnet; es werden keine falschen Buchungen erzeugt. Neue Aufgaben aus Znuny sind bis zur Adapteranbindung leer. Die Wochenansicht zeigt standardmäßig **Montag bis Freitag** mit einem 06–18-Uhr-Raster und läuft völlig ohne Entra.
+
+## Microsoft Entra direkt im Admin-Bereich
+
+**Einstellungen → Microsoft 365** enthält für Administratoren ein Formular für Single-Tenant-Tenant-ID, Client-ID und das Client-Secret. Plenaro speichert diese Werte **AES-256-GCM-verschlüsselt** als einen Datensatz im bestehenden Secret-Vault. Keine `PLENARO_ENTRA_*`-Umgebungsvariablen mehr nötig. Admin kann ohne Containerneustart aktivieren, rotieren oder deaktivieren.
+
+Die unabhängige, auf dem Docker-Host geschützte **Vault-Masterkey-Datei** ist weiterhin erforderlich (sie kann nicht in derselben Datenbank liegen, sonst wäre die Verschlüsselung wirkungslos). HTTPS bleibt Voraussetzung. **Hinweis:** `POSTGRES_PASSWORD` ist im aktuellen Compose weiterhin eine eigene Umgebungsvariable – die Abschaffung der Klartext-Datenbankcredentials ist ein separater Härtungspunkt.
+
+Bei einem **bereits mit Plenaro verknüpften** Microsoft-Benutzer fragt die Entra-Anmeldung zusätzlich nach den delegierten Graph-Scopes `Calendars.Read`, `User.Read` und `offline_access`. Nach erfolgreicher Einwilligung wird der Refresh-Token **pro lokalem Benutzer verschlüsselt** abgelegt, und dessen Outlook-Kalender erscheint in der Wochenansicht. Beim **erstmaligen Verknüpfen** bleibt aus Sicherheitsgründen die ausdrückliche Bestätigung notwendig; danach kann Outlook einmalig über „Outlook verbinden“ aktiviert werden, oder bei der nächsten Entra-Anmeldung automatisch. Ohne Zustimmung bleiben lokale Kalenderdaten immer nutzbar.
+
+**Nicht gegen einen echten Tenant abgenommen.** Siehe [Einrichtung](docs/ENTRA_SSO.md).
