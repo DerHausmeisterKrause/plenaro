@@ -162,8 +162,8 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
 {
     builder.Services.AddAuthentication().AddOAuth(GraphCalendarService.Scheme, options =>
     {
-        options.ClientId = entra.ClientId;
-        options.ClientSecret = entra.ClientSecret;
+        options.ClientId = entra.Enabled ? entra.ClientId : "00000000-0000-0000-0000-000000000001";
+        options.ClientSecret = entra.Enabled ? entra.ClientSecret : "not-enabled";
         options.AuthorizationEndpoint =
             $"https://login.microsoftonline.com/{(entra.Enabled ? entra.TenantId : "organizations")}/oauth2/v2.0/authorize";
         options.TokenEndpoint =
