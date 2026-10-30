@@ -17,4 +17,3 @@ CREATE TABLE task_time_adjustments (
 CREATE INDEX ix_adjustments_task ON task_time_adjustments(owner_user_id,task_id,created_at DESC);
 
 ALTER TABLE task_segments ADD COLUMN participants text[] NOT NULL DEFAULT ARRAY[]::text[];
-CREATE INDEX ix_segments_owner_start ON task_segments(owner_user_id,starts_at);
