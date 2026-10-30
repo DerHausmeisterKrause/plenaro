@@ -169,6 +169,16 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/notifications/read" -H 'Content-Type: application/json' -d "{\"segmentId\":\"$REM_ID\",\"startsAt\":\"$REM_START\",\"kind\":\"lead\"}")" = "400"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/notifications/read" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "{\"segmentId\":\"$REM_ID\",\"startsAt\":\"$REM_START\",\"kind\":\"lead\"}")" = "204"
           curl -fsS -b "$COOKIE" "$API/api/v1/notifications/" | python3 -c 'import json,sys;assert not any(x["kind"]=="lead" for x in json.load(sys.stdin))'
+
+          # Start-time reminder is distinct from its lead reminder.
+          REM_OLD_START=$(date -u -d '-45 seconds' '+%Y-%m-%dT%H:%M:%SZ')
+          REM_OLD_END=$(date -u -d '-15 seconds' '+%Y-%m-%dT%H:%M:%SZ')
+          curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/$WORK_ID/segments" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "{\"startsAt\":\"$REM_OLD_START\",\"endsAt\":\"$REM_OLD_END\",\"note\":\"CI Start\",\"participants\":[]}" > /dev/null
+          curl -fsS -b "$COOKIE" "$API/api/v1/notifications/" | python3 -c 'import json,sys;assert any(x["kind"]=="start" for x in json.load(sys.stdin))'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/notifications/settings" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"enabled":false,"leadMinutes":3}')" = "204"
+          curl -fsS -b "$COOKIE" "$API/api/v1/notifications/" | python3 -c 'import json,sys;assert json.load(sys.stdin)==[]'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/notifications/settings" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["enabled"] and d["leadMinutes"]==2'
+
           # Task activity reports: own data only, invalid month and CSV injection protection.
           MONTH=$(TZ=Europe/Berlin date +%Y-%m)
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/reports/month?month=$MONTH")" = "401"
