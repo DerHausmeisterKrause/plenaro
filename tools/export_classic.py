@@ -95,8 +95,10 @@ def main():
             if status is None:
                 raise ValueError("unmapped status " + str(row.get("status")))
             planned = str(row["start_local"])[:10] if row.get("start_local") else None
-            if planned and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", planned):
-                raise ValueError("invalid planned day")
+            if planned:
+                datetime.strptime(planned, "%Y-%m-%d")
+                if not 2000 <= int(planned[:4]) <= 2099:
+                    raise ValueError("planned day out of range")
             tags = [x.strip() for x in str(row.get("tags") or "").split(",") if x.strip()]
             if len(tags) > 10 or any(len(x) > 32 for x in tags):
                 warnings.append(f"Task {task_id}: tags truncated for web limit")
@@ -105,9 +107,12 @@ def main():
             if priority is not None and priority not in range(1, 6):
                 priority = None
             description = str(row.get("description") or "")[:10000]
+            created_at = parse_utc(row["created_utc"])
+            if not 2000 <= int(created_at[:4]) <= 2100:
+                raise ValueError("creation date out of range")
             tasks.append({"legacyId": task_id, "title": title, "description": description,
                           "status": status, "priority": priority, "tags": tags, "plannedFor": planned,
-                          "createdAt": parse_utc(row["created_utc"])})
+                          "createdAt": created_at})
             existing_ids.add(task_id)
         except (ValueError, KeyError, TypeError) as exc:
             warnings.append(f"Task skipped: {str(row.get('id', '?'))[:40]}: {exc}")
@@ -122,8 +127,9 @@ def main():
             if task_id not in existing_ids:
                 raise ValueError("parent task skipped")
             start, end = parse_local(row["start_local"]), parse_local(row["end_local"])
-            if datetime.fromisoformat(end.replace("Z", "+00:00")) <= datetime.fromisoformat(start.replace("Z", "+00:00")):
-                raise ValueError("invalid end")
+            duration = datetime.fromisoformat(end.replace("Z", "+00:00")) - datetime.fromisoformat(start.replace("Z", "+00:00"))
+            if not 0 < duration.total_seconds() <= 24 * 3600:
+                raise ValueError("invalid segment duration")
             emails = [x for x in attendees.get(int(row["id"]), []) if x]
             if len(emails) > 20 or any(len(x) > 254 for x in emails):
                 raise ValueError("invalid attendees")
@@ -140,8 +146,9 @@ def main():
             if not row.get("end_utc"):
                 raise ValueError("running timer cannot be migrated as completed time")
             start, end = parse_utc(row["start_utc"]), parse_utc(row["end_utc"])
-            if datetime.fromisoformat(end.replace("Z", "+00:00")) <= datetime.fromisoformat(start.replace("Z", "+00:00")):
-                raise ValueError("invalid times")
+            duration = datetime.fromisoformat(end.replace("Z", "+00:00")) - datetime.fromisoformat(start.replace("Z", "+00:00"))
+            if not 0 < duration.total_seconds() <= 7 * 24 * 3600:
+                raise ValueError("invalid work time duration")
             entries.append({"legacyId": str(row["id"]), "taskLegacyId": task_id,
                             "startsAt": start, "endsAt": end, "note": str(row.get("note") or "")[:500]})
         except (ValueError, TypeError, KeyError) as exc:
