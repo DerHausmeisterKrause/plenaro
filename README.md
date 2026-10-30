@@ -2,7 +2,7 @@
 
 **Self-hosted Aufgaben-, Zeit- und ITSM-Plattform.** Dieses Repository ist der neue, plattformunabhängige Web-Nachfolger von [Plenaro Desktop / project_tool](https://github.com/DerHausmeisterKrause/project_tool).
 
-> **Entwicklungsstand:** Phase 3 – Responsive Weboberfläche mit React/TypeScript, ASP.NET-Core-Backend und PostgreSQL. Die Navigation ist nutzbar, aber **noch keine produktiven Aufgaben oder Tickets**. Nur in einem vertrauenswürdigen LAN verwenden; nicht ins Internet freigeben.
+> **Entwicklungsstand:** Phase 5 – Eigene Aufgaben, Timer, Tagesmarker, lokale Zeitsegmente und Monatsberichte funktionieren in der Weboberfläche. Die Znuny/OTRS-Anbindung, Desktop-Datenübernahme und vollständige Abnahme stehen noch aus. Nur in einem vertrauenswürdigen LAN oder mit korrekt eingerichtetem HTTPS betreiben; nicht ungeprüft ins Internet freigeben.
 
 ## Lokale Benutzeranmeldung und einmaliger Administrator
 
@@ -212,3 +212,24 @@ Bei einem Update:
 git pull --ff-only
 docker compose up -d --build --wait
 ```
+
+## Monatsberichte und CSV-Export (Phase 5)
+
+Unter **Berichte** (`/reports`) kannst du einen Monat auswählen, die Summe deiner eigenen
+aufgabenbezogenen Timer-Sitzungen, manuellen Korrekturen, Aufgabenanzahl und Einzeldetails
+einsehen und per **CSV exportieren**. Dieser Bericht beschreibt Aufgabenaktivitäten,
+**keine** An- oder Abwesenheit, Pausen oder vertragliche Sollzeit.
+
+- `GET /api/v1/reports/month?month=2026-10` – persönlicher JSON-Monatsbericht (Login erforderlich).
+- `GET /api/v1/reports/month.csv?month=2026-10` – persönlicher CSV-Download (Semikolon, UTF-8 mit BOM).
+- Kalendermonate werden in `Europe/Berlin` ausgewertet. Über Monatsgrenzen reichende
+  Timer werden aufgeteilt, aktive Timer bis zum Abrufzeitpunkt gezählt und manuelle
+  Korrekturen dem Kalendermonat ihrer Erfassung zugeordnet.
+- Negative Zeit nach Korrektur wird pro Aufgabe auf null begrenzt. Gelöschte Aufgaben
+  sind mangels Aufgabenmetadaten keine Tätigkeitsposition im Monatsbericht.
+- Aufgabennamen werden beim CSV-Export gegen Spreadsheet-Formel-Injection entschärft.
+  Ohne Anmeldung oder für einen anderen Benutzer gibt es keinen Zugriff.
+- Ohne Datenbankänderung: Die vorhandenen Tabellen `time_entries` und
+  `task_time_adjustments` werden ausgelesen. CI- und Live-Host-Abnahme im PR prüfen.
+
+Die Benutzeroberfläche und Export-API sind in [PR #25](https://github.com/DerHausmeisterKrause/plenaro/pull/25) implementiert.

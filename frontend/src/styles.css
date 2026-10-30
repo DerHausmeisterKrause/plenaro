@@ -596,3 +596,28 @@ h1,h2,h3,p { margin-top: 0; }
 .classic-calendar-event.classic-calendar-task-segment { border-color: #309e85; background: rgba(38,157,134,.13); color: var(--text); }
 .classic-calendar-task-segment strong { color: #248973; }
 @media(max-width: 570px) { .plenaro-segment-date { grid-template-columns: minmax(0,1fr); } }
+
+/* Monthly per-task reporting: compact and theme-aware. */
+.reports-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 22px; }
+.reports-filter label { color: var(--muted-strong); font-size: 13px; font-weight: 700; }
+.reports-filter input { min-width: 150px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); }
+.reports-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 22px; }
+.reports-summary > div { display: grid; gap: 10px; }
+.reports-summary span { font-size: 13px; color: var(--muted-strong); }
+.reports-summary strong { font-size: clamp(21px, 2vw, 29px); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.reports-table-card h2 { font-size: 18px; margin-bottom: 18px; }
+.reports-table-scroll { overflow-x: auto; }
+.reports-table { border-collapse: collapse; width: 100%; text-align: left; font-size: 13px; min-width: 680px; }
+.reports-table th, .reports-table td { padding: 13px 12px; border-bottom: 1px solid var(--border); }
+.reports-table th { color: var(--muted-strong); font-weight: 700; }
+.reports-table td:first-child { min-width: 160px; overflow-wrap: anywhere; }
+.reports-table td:not(:first-child), .reports-table th:not(:first-child) { white-space: nowrap; }
+.reports-table tfoot { background: var(--surface-soft); }
+.reports-empty { display: flex; align-items: center; gap: 10px; color: var(--muted-strong); }
+.reports-note { margin-top: 18px; max-width: 970px; line-height: 1.7; }
+@media (max-width: 930px) {
+  .reports-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .reports-summary { grid-template-columns: 1fr; }
+}

@@ -14,6 +14,7 @@ import { WeekCalendarPage } from './WeekCalendarPage';
 import { ClassicTodayPage } from './ClassicTodayPage';
 import { ClassicTasksPage } from './ClassicTasksPage';
 import { TicketsWorkspacePage } from './TicketsWorkspacePage';
+import { ReportsPage } from './ReportsPage';
 import { readPersonalPreferences, readWorkspacePreferences, savePersonalPreferences, type PersonalPreferences } from './settingsApi';
 import { checkHealth, type HealthState } from './api';
 import { navigation, type ModuleKey, type NavigationEntry } from './navigation';
@@ -85,7 +86,7 @@ function Sidebar({ onNavigate }: { onNavigate: () => void }) {
           <div className="build-card-icon"><Sparkles size={18} aria-hidden="true" /></div>
           <strong>Plenaro 2.0</strong>
           <span>Web-Neuentwicklung</span>
-          <span className="build-stage">Phase 4 / 7</span>
+          <span className="build-stage">Phase 5 / 7</span>
         </div>
         <Link className="sidebar-footer-link" to="/system" onClick={onNavigate}>
           <Activity size={17} aria-hidden="true" /> Systemstatus <ChevronRight size={16} aria-hidden="true" />
@@ -159,7 +160,7 @@ function ModuleTile({ item }: { item: NavigationEntry }) {
       <div className="tile-icon"><Icon size={21} strokeWidth={1.8} aria-hidden="true" /></div>
       <div className="tile-details">
         <strong>{item.label}</strong>
-        <span>{item.key === 'tasks' || item.key === 'today' ? 'Bereit · Aufgaben verwalten' : `In Vorbereitung · Phase ${item.phase}`}</span>
+        <span>{['tasks', 'today', 'week', 'reports'].includes(item.key) ? 'Bereit · Persönlicher Arbeitsbereich' : `In Vorbereitung · Phase ${item.phase}`}</span>
       </div>
       <ArrowUpRight className="tile-arrow" size={18} aria-hidden="true" />
     </Link>
@@ -354,10 +355,11 @@ export function AppContent() {
           {themeError && <p role="alert" className="um-feedback failure app-settings-error">{themeError}</p>}
           <Routes>
             <Route path="/" element={<PrivateArea user={user}><Dashboard web={web} database={database} instanceName={instanceName}/></PrivateArea>} />
-            {navigation.filter(item => !['settings', 'week', 'tasks', 'today', 'tickets'].includes(item.key)).map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
+            {navigation.filter(item => !['settings', 'week', 'tasks', 'today', 'tickets', 'reports'].includes(item.key)).map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
             <Route path="/week" element={<PrivateArea user={user}><WeekCalendarPage/></PrivateArea>} />
             <Route path="/tasks" element={<PrivateArea user={user}><ClassicTasksPage/></PrivateArea>} />
             <Route path="/tickets" element={<PrivateArea user={user}><TicketsWorkspacePage/></PrivateArea>} />
+            <Route path="/reports" element={<PrivateArea user={user}><ReportsPage/></PrivateArea>} />
             <Route path="/today" element={<PrivateArea user={user}><ClassicTodayPage/></PrivateArea>} />
             <Route path="/settings" element={<PrivateArea user={user}><SettingsPage user={user} onPersonalSaved={value => { setPrefs(value); applyTheme(value.theme); setThemeError(''); }} onWorkspaceSaved={value => setInstanceName(value.instanceName)}/></PrivateArea>} />
             <Route path="/system" element={<SystemPage web={web} database={database}/>} />

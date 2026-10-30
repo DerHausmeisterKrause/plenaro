@@ -70,8 +70,8 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [ ] Vollständige Funktionsparität/Migrationsmapping mit dem Desktop-Programm und weitere Aufgabenfilter
 - [x] Lokales 7-Tage-Kalenderraster (06–18 Uhr) mit geplanten Aufgaben und UL/AM/BR, **auch ohne Entra/Outlook**
 - [ ] Aufgaben mit konkreten Uhrzeiten/Segmenten und Drag-and-drop in Stundenplanung einplanen
-- [ ] Optionaler Aufgaben-Timer und manuelle aufgabenbezogene Zeitbuchung (separat von gestrichener Kommen/Gehen-/Pausenerfassung)
-- [ ] Monatsberichte und Export
+- [x] Aufgaben-Timer und manuelle Korrekturminuten (separat von gestrichener Kommen/Gehen-/Pausenerfassung)
+- [x] Monatsberichte für aufgabenbezogene Timer und Korrekturen, monatsgenaue Europe/Berlin-Grenzen, CSV-Export ohne fremde Nutzer (PR #25; CI-/Host-Abnahme offen)
 - [ ] Homeoffice-Workflows
 - [ ] Aufgaben teilen, Einladungen und Besitzerrechte
 - [ ] Desktop-SQLite-Datenimport mit Validierungs-/Rollback-Strategie
@@ -161,3 +161,4 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [ ] Desktop-Datenimport von Zeitbuchungen und Zeitsegmenten; lokale Browser-Abnahme
 - [ ] Drag-and-drop und weitere Planungsoptimierungen; Reports und Monatsübersichten
 - [x] Kommen/Gehen/Pausen/Sollzeit weiterhin bewusst ausgeschlossen
+\n## Monatsreport – Aufgabenzeit und CSV\n\n- [x] `GET /api/v1/reports/month?month=JJJJ-MM` liefert für den authentifizierten Nutzer aufgabenbezogene Timersitzungen und Korrekturen; Berichte zeigen nur Aufgaben mit entsprechender Monatsaktivität.\n- [x] `GET /api/v1/reports/month.csv?month=JJJJ-MM` lädt Excel-kompatibles UTF-8/CSV (Semikolon) mit entschärften Formelnamen herunter.\n- [x] Monatsgrenzen in Europe/Berlin einschließlich Sommerzeit; Monatsübertritte werden auf den jeweiligen Monatsabschnitt begrenzt, laufende Timer bis zum Abrufzeitpunkt gezählt, Korrekturen im Erfassungsmonat. Keine Anwesenheits-, Pausen- oder Sollzeitberichte.\n- [ ] Vollständige CI-Abnahme, Browser-Abnahme am Zielhost und Reports nach Desktop-Altimport.\n

@@ -25,6 +25,16 @@ beforeEach(() => {
       remainingBrDays: null, brExhausted: false, brExceeded: false,
     }) };
     if (path.startsWith('/api/v1/day-markers/?')) return { ok: true, status: 200, json: async () => [] };
+    if (path.startsWith('/api/v1/reports/month?')) return {
+      ok: true, status: 200, json: async () => ({
+        month: '2026-10', timeZone: 'Europe/Berlin', generatedAt: '2026-10-30T21:00:00Z',
+        timerSeconds: 3600, adjustmentMinutes: 15, totalSeconds: 4500,
+        sessionCount: 1, taskCount: 1,
+        tasks: [{ taskId: '00000000-0000-0000-0000-000000000003', title: 'Zeittest',
+          status: 'active', timerSeconds: 3600, adjustmentMinutes: 15,
+          totalSeconds: 4500, sessionCount: 1 }],
+      }),
+    };
     if (path.startsWith('/api/v1/segments/?')) return { ok: true, status: 200, json: async () => [] };
     if (path.startsWith('/api/v1/tasks/')) return {
       ok: true, status: 200, json: async () => ([]),
@@ -154,6 +164,14 @@ describe('Plenaro web shell', () => {
     expect(screen.getByRole('button', { name: 'AM' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'HO' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'BR' })).toBeTruthy();
+  });
+
+  it('zeigt echte Monatsaufgabenzeiten und bietet CSV-Export an', async () => {
+    renderAt('/reports');
+    expect(await screen.findByRole('heading', { name: 'Monatsberichte' })).toBeTruthy();
+    expect(await screen.findByText('Zeittest')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /CSV exportieren/ })).toBeTruthy();
+    expect(screen.getByLabelText('Monat auswählen')).toBeTruthy();
   });
 
   it('zeigt unbekannte URLs als Fehlerseite', async () => {
