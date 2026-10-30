@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CalendarDays, CheckCircle2, ClipboardList, Pencil, Play, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react';
 import {
   changeTaskStatus, createTask, deleteTask, listTasks, taskStatusLabel, updateTask,
@@ -78,6 +79,8 @@ function TaskForm({ task, saving, onCancel, onSave }: {
 
 /** Classic task-tool pattern: compact list on the left, selected record on the right. */
 export function ClassicTasksPage() {
+  const [params] = useSearchParams();
+  const requestedTaskId = params.get('task');
   const [tasks, setTasks] = useState<WorkTask[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<'view' | 'edit' | 'new'>('view');
@@ -93,9 +96,10 @@ export function ClassicTasksPage() {
   const refresh = useCallback(async () => {
     const result = await listTasks(query, statusFilter);
     setTasks(result);
-    setSelectedId(id => id && result.some(t => t.id === id) ? id : result[0]?.id ?? null);
+    setSelectedId(id => id && result.some(t => t.id === id) ? id :
+      requestedTaskId && result.some(t => t.id === requestedTaskId) ? requestedTaskId : result[0]?.id ?? null);
     return result;
-  }, [query, statusFilter]);
+  }, [query, statusFilter, requestedTaskId]);
 
   useEffect(() => {
     let active = true;
@@ -103,11 +107,12 @@ export function ClassicTasksPage() {
     void listTasks(query, statusFilter).then(data => {
       if (!active) return;
       setTasks(data);
-      setSelectedId(id => id && data.some(t => t.id === id) ? id : data[0]?.id ?? null);
+      setSelectedId(id => requestedTaskId && data.some(t => t.id === requestedTaskId) ? requestedTaskId :
+        id && data.some(t => t.id === id) ? id : data[0]?.id ?? null);
       setLoading(false);
     }).catch(e => { if (active) { setError(e instanceof Error ? e.message : 'Laden fehlgeschlagen.'); setLoading(false); } });
     return () => { active = false; };
-  }, [query, statusFilter]);
+  }, [query, statusFilter, requestedTaskId]);
 
   const visible = onlyOpen ? tasks.filter(t => t.status !== 'completed' && t.status !== 'cancelled') : tasks;
   const selected = tasks.find(t => t.id === selectedId);
