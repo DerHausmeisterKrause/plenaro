@@ -143,6 +143,9 @@ jobs:
           curl -fsS -b "$COOKIE" "$API/api/v1/tasks/$WORK_ID/segments" | python3 -c 'import json,sys; assert json.load(sys.stdin)==[]'
           # Calendar schedule-only API: the removed segment must be inaccessible.
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PATCH "$API/api/v1/tasks/$WORK_ID/segments/$SEG_ID/schedule" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"startsAt":"2026-10-30T11:00:00Z","endsAt":"2026-10-30T11:30:00Z","expectedStartsAt":"2026-10-29T09:00:00Z","expectedEndsAt":"2026-10-29T09:30:00Z"}')" = "404"
+          # Availability API: unauthenticated reads are rejected; users see only their bookings.
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/segments/availability?start=2026-11-02T09:00:00Z&end=2026-11-02T09:30:00Z")" = "401"
+          curl -fsS -b "$COOKIE" "$API/api/v1/segments/availability?start=2026-11-02T09:00:00Z&end=2026-11-02T09:30:00Z" | python3 -c 'import json,sys; assert json.load(sys.stdin)["available"]'
           # Task activity reports: own data only, invalid month and CSV injection protection.
           MONTH=$(TZ=Europe/Berlin date +%Y-%m)
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/reports/month?month=$MONTH")" = "401"
