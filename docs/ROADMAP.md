@@ -159,6 +159,13 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [x] Auth-, CSRF-, Cross-User-Isolation und Integrationschecks für Timer, Anpassungen, Segment-CRUD im bestehenden CI-Job
 - [ ] Kalendereinladung, Outlook-/Teams-Synchronisation und Konflikt-/Verfügbarkeitsprüfung
 - [ ] Desktop-Datenimport von Zeitbuchungen und Zeitsegmenten; lokale Browser-Abnahme
-- [ ] Drag-and-drop und weitere Planungsoptimierungen; Reports und Monatsübersichten
+- [ ] Drag-and-drop und weitere Planungsoptimierungen; erweiterte Tages-/Segmentberichte
 - [x] Kommen/Gehen/Pausen/Sollzeit weiterhin bewusst ausgeschlossen
-\n## Monatsreport – Aufgabenzeit und CSV\n\n- [x] `GET /api/v1/reports/month?month=JJJJ-MM` liefert für den authentifizierten Nutzer aufgabenbezogene Timersitzungen und Korrekturen; Berichte zeigen nur Aufgaben mit entsprechender Monatsaktivität.\n- [x] `GET /api/v1/reports/month.csv?month=JJJJ-MM` lädt Excel-kompatibles UTF-8/CSV (Semikolon) mit entschärften Formelnamen herunter.\n- [x] Monatsgrenzen in Europe/Berlin einschließlich Sommerzeit; Monatsübertritte werden auf den jeweiligen Monatsabschnitt begrenzt, laufende Timer bis zum Abrufzeitpunkt gezählt, Korrekturen im Erfassungsmonat. Keine Anwesenheits-, Pausen- oder Sollzeitberichte.\n- [ ] Vollständige CI-Abnahme, Browser-Abnahme am Zielhost und Reports nach Desktop-Altimport.\n
+
+
+## Monatsreport – Aufgabenzeit und CSV
+
+- [x] `GET /api/v1/reports/month?month=JJJJ-MM` liefert für den authentifizierten Nutzer aufgabenbezogene Timersitzungen und Korrekturen; Berichte zeigen nur Aufgaben mit entsprechender Monatsaktivität.
+- [x] `GET /api/v1/reports/month.csv?month=JJJJ-MM` lädt Excel-kompatibles UTF-8/CSV (Semikolon) mit entschärften Formelnamen herunter.
+- [x] Monatsgrenzen in Europe/Berlin einschließlich Sommerzeit; Monatsübertritte werden auf den jeweiligen Monatsabschnitt begrenzt, laufende Timer bis zum Abrufzeitpunkt gezählt, Korrekturen im Erfassungsmonat. Keine Anwesenheits-, Pausen- oder Sollzeitberichte.
+- [ ] Vollständige CI-Abnahme, Browser-Abnahme am Zielhost und Reports nach Desktop-Altimport.\n
