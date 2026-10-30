@@ -133,6 +133,17 @@ jobs:
           curl -fsS -b "$COOKIE" "$API/api/v1/tasks/$WORK_ID/segments" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d)==1 and d[0]["note"]=="Verschoben"'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X DELETE "$API/api/v1/tasks/$WORK_ID/segments/$SEG_ID" -H "X-CSRF-TOKEN: $CSRF")" = "204"
           curl -fsS -b "$COOKIE" "$API/api/v1/tasks/$WORK_ID/segments" | python3 -c 'import json,sys; assert json.load(sys.stdin)==[]'
+          # Task activity reports: own data only, invalid month and CSV injection protection.
+          MONTH=$(TZ=Europe/Berlin date +%Y-%m)
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/reports/month?month=$MONTH")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" "$API/api/v1/reports/month?month=2026-13")" = "400"
+          curl -fsS -b "$COOKIE" "$API/api/v1/reports/month?month=$MONTH" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert any(r["title"]=="Zeittest" and r["adjustmentMinutes"]==15 and r["sessionCount"]>=1 and r["totalSeconds"]>=900 for r in d["tasks"])'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/reports/month?month=$MONTH" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert all(r["title"]!="Zeittest" for r in d["tasks"])'
+          # A task title resembling an Excel formula must become inert text.
+          CSV_ID=$(curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/" -H "X-CSRF-TOKEN: $CSRF"             -H 'Content-Type: application/json' -d '{"title":"=1+1","description":"","status":"planned","priority":3,"tags":[]}'             | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
+          curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/$CSV_ID/time/adjust"             -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json'             -d '{"deltaMinutes":5,"note":"CSV"}' > /dev/null
+          curl -fsS -b "$COOKIE" "$API/api/v1/reports/month.csv?month=$MONTH" | python3 -c 'import sys; s=sys.stdin.buffer.read().decode("utf-8-sig"); assert "\"\x27=1+1\"" in s and "SUMME" in s'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/reports/month.csv?month=$MONTH" | python3 -c 'import sys;assert b"=1+1" not in sys.stdin.buffer.read()'
           # Day-marker quota smoke: annual UL, monthly BR, CSRF and user isolation.
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/day-markers/budget")" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/day-markers/budget" -H 'Content-Type: application/json' -d '{"annualUlDays":2,"monthlyBrDays":1}')" = "400"
