@@ -157,7 +157,8 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [x] Segment-CRUD mit Datum, Start-/Enduhrzeit, Kurzbeschreibung und Teilnehmer-E-Mail-Adressen im rechten Classic-Panel
 - [x] Eigene Segmente im lokalen Wochenkalender (Mo–Fr, Zeitraster) und in Tagesdetails darstellen, auch ohne Microsoft
 - [x] Auth-, CSRF-, Cross-User-Isolation und Integrationschecks für Timer, Anpassungen, Segment-CRUD im bestehenden CI-Job
-- [ ] Kalendereinladung, Outlook-/Teams-Synchronisation und Konflikt-/Verfügbarkeitsprüfung
+- [x] Lokale Konflikt- und Verfügbarkeitsprüfung für **eigene** Zeitsegmente: Vorschau, Kollisionen beim Erstellen, Bearbeiten und Verschieben verhindern (CI-/Host-Abnahme offen)
+- [ ] Vollständige Kalender-/Teilnehmer-Verfügbarkeitsprüfung über Microsoft Graph, Kalendereinladungen und Outlook-/Teams-Synchronisation
 - [ ] Desktop-Datenimport von Zeitbuchungen und Zeitsegmenten; lokale Browser-Abnahme
 - [x] Drag-and-drop der lokalen Zeitsegmente mit Konfliktprüfung (PR #26)
 - [ ] Weitere Planungsoptimierungen und erweiterte Tages-/Segmentberichte
@@ -177,3 +178,10 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [x] Segmentdauer beibehalten; Notizen, Teilnehmer und Aufgabenbezug unverändert lassen.
 - [x] Geschützte schedule-PATCH-API mit User-Filter, CSRF und optimistischer Konflikterkennung (409).
 - [ ] Manuelle Browser- und Touch-Geräte-Abnahme auf dem Zielhost.
+
+## Nächster Schritt – lokale Verfügbarkeit (PR nach CI)
+- [x] Authentifizierte API `GET /api/v1/segments/availability?start=...&end=...&excludeId=...` für eigenen Segmentkalender.
+- [x] Serverseitig keine lokalen Doppelbuchungen bei CREATE/PUT/PATCH: halb-offene Zeitintervalle, exklusive Ausnahme für das bearbeitete Segment, Besitzerprüfung, CSRF und per-User-transaktionale PostgreSQL-Advisory-Locks.
+- [x] Eintragungsformular meldet freie/belegte lokale Zeit; Wochenansicht warnt bei lokal sichtbaren Überschneidungen und zeigt bei angebundenem Outlook möglicherweise belegte eigene Termine als Hinweis (kein Graph-Schreibzugriff).
+- [ ] Graph-/Teams-Teilnehmer-Free/Busy und Einladungen, externe Kalender-Änderungen; noch nicht umgesetzt.
+- [ ] Host-/Browser-Abnahme, unabhängig vom CI-Status.
