@@ -65,7 +65,7 @@ def main():
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA query_only=ON")
     tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if "tasks" not in tables or "task_segments" not in tables or "work_days" not in tables:
+    if "tasks" not in tables or "work_days" not in tables:
         parser.error("Not a supported Plenaro Classic database: missing core tables.")
     version = con.execute("SELECT version FROM schema_version ORDER BY rowid DESC LIMIT 1").fetchone() if "schema_version" in tables else None
     if not version or not 1 <= int(version[0]) <= 32:
