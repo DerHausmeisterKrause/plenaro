@@ -4,15 +4,18 @@ import { MemoryRouter } from 'react-router-dom';
 import { AppContent } from './App';
 import { localDate } from './tasksApi';
 import type { TaskSegment } from './taskWorkApi';
+import type { TaskReminder } from './notificationApi';
 
 let calendarSegments: TaskSegment[] = [];
+let reminderItems: TaskReminder[] = [];
 
 
 beforeEach(() => {
   calendarSegments = [];
+  reminderItems = [];
   vi.stubGlobal('fetch', vi.fn(async (path: string) => {
     if (path === '/api/v1/notifications/') return {
-      ok: true, status: 200, json: async () => [],
+      ok: true, status: 200, json: async () => reminderItems,
     };
     if (path === '/api/v1/notifications/settings') return {
       ok: true, status: 200, json: async () => ({ enabled: true, leadMinutes: 2 }),
@@ -117,6 +120,22 @@ describe('Plenaro web shell', () => {
     fireEvent.click(button);
     expect(await screen.findByRole('region', { name: 'Benachrichtigungen' })).toBeTruthy();
     expect(screen.getByText('Keine ungelesenen Erinnerungen.')).toBeTruthy();
+  });
+
+  it('öffnet die direkt verlinkte Aufgabe aus einer ungelesenen Erinnerung', async () => {
+    reminderItems = [{
+      segmentId: 'a0bb1e29-6574-4970-8a91-40dfd2a15ed7',
+      taskId: '2f145e76-1853-4b88-a1be-6fbc0bdc42b7',
+      taskTitle: 'Aufgabe aus Reminder',
+      startsAt: '2026-10-30T10:30:00Z',
+      dueAt: '2026-10-30T10:28:00Z', kind: 'lead',
+    }];
+    renderAt('/');
+    const button = await screen.findByRole('button', { name: /Benachrichtigungen öffnen, 1 ungelesen/ });
+    fireEvent.click(button);
+    expect(screen.getByText('Aufgabe aus Reminder')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Aufgabe öffnen' }).getAttribute('href'))
+      .toBe('/tasks?task=2f145e76-1853-4b88-a1be-6fbc0bdc42b7');
   });
 
   it('bietet persönliche Reminder-Einstellungen mit Standardvorlauf', async () => {
