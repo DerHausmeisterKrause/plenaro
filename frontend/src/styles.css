@@ -567,3 +567,32 @@ h1,h2,h3,p { margin-top: 0; }
 @media (min-width: 1350px) { .sidebar { width: 200px; flex-basis: 200px; } .sidebar-top { padding-left: 16px; padding-right: 16px; } }
 @media (max-width: 1050px) { .plenaro-today-columns { grid-template-columns: minmax(0, 1fr); } .plenaro-today-list { min-height: 300px; } }
 @media (max-width: 650px) { .plenaro-today .content-card { padding: 12px; } .plenaro-marker-actions { width: 100%; } .plenaro-marker-pill { flex: 1; padding: 8px; } .plenaro-tabs button { padding: 9px 10px; } }
+
+/* Real task timer and local time-segment editor, matching the classic right rail. */
+.plenaro-timer-booked { text-align: center; }
+.plenaro-timer-booked strong { color: var(--text); }
+.plenaro-timer-controls { display: flex; justify-content: center; align-items: center; gap: 9px; }
+.plenaro-timer-controls .button { min-width: 105px; }
+.plenaro-timer-adjust { display: grid; gap: 11px; padding-top: 13px; border-top: 1px solid var(--border); }
+.plenaro-timer-presets { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; }
+.plenaro-time-chip { cursor: pointer; border: 1px solid var(--border); padding: 9px 6px; border-radius: 18px; font-size: 12px; font-weight: 700; color: var(--blue); background: var(--blue-pale); }
+.plenaro-time-chip.negative { color: #d63e4e; background: rgba(210,49,71,.1); }
+.plenaro-time-chip:disabled { opacity: .45; cursor: not-allowed; }
+.plenaro-timer-manual { display: grid; grid-template-columns: minmax(0,1fr); gap: 8px; }
+.plenaro-timer-manual label,.plenaro-segment-form label { display: grid; gap: 6px; font-size: 11px; font-weight: 700; color: var(--muted-strong); }
+.plenaro-timer-manual input,.plenaro-segment-form input {
+  min-width: 0; width: 100%; background: var(--surface-soft); border: 1px solid var(--border);
+  border-radius: 7px; padding: 10px; font: inherit; font-size: 12px; color: var(--text);
+}
+.plenaro-timer-manual .button,.plenaro-segment-form .button { justify-self: start; }
+.plenaro-segment-form { display: grid; gap: 12px; border: 1px solid var(--border); background: var(--surface-soft); border-radius: 10px; padding: 13px; }
+.plenaro-segment-form-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.plenaro-segment-form-heading strong { font-size: 12px; }
+.plenaro-segment-date { display: grid; grid-template-columns: minmax(0,1.35fr) repeat(2,minmax(0,1fr)); gap: 8px; }
+.plenaro-segment-history { display: grid; gap: 10px; }
+.plenaro-segment-item { padding: 12px; display: grid; gap: 8px; border: 1px solid var(--border); border-radius: 9px; }
+.plenaro-segment-actions { display: flex; gap: 6px; }
+.plenaro-segment-actions .button { padding: 6px 9px; }
+.classic-calendar-event.classic-calendar-task-segment { border-color: #309e85; background: rgba(38,157,134,.13); color: var(--text); }
+.classic-calendar-task-segment strong { color: #248973; }
+@media(max-width: 570px) { .plenaro-segment-date { grid-template-columns: minmax(0,1fr); } }

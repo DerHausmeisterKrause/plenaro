@@ -149,3 +149,15 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [ ] Live-Entra-End-to-End-Test für Konto-/Token-Verknüpfung auf echtem Microsoft-Tenant
 - [ ] Detailfelder Ticket-URL, Timer-/Buchungslogik, Zeitsegmente, Znuny-Kandidaten und echte Terminplanung vervollständigen
 - [ ] Datenbankpasswort auf Docker-Secrets umstellen (derzeit noch Klartext als Environment-Wert im Compose)
+
+## Aufgabenzeit und Segmentplanung – nächste Phase-2-Umsetzung
+
+- [x] Aufgabentimer: Start/Stop in „Heute“, serverseitig persistente Sessions, maximal ein aktiver Timer pro Benutzer
+- [x] Manuelle Zeitkorrekturen (+/−15/30/60 Minuten und freier Betrag) mit optionalem Notiz-/Korrekturjournal
+- [x] Segment-CRUD mit Datum, Start-/Enduhrzeit, Kurzbeschreibung und Teilnehmer-E-Mail-Adressen im rechten Classic-Panel
+- [x] Eigene Segmente im lokalen Wochenkalender (Mo–Fr, Zeitraster) und in Tagesdetails darstellen, auch ohne Microsoft
+- [x] Auth-, CSRF-, Cross-User-Isolation und Integrationschecks für Timer, Anpassungen, Segment-CRUD im bestehenden CI-Job
+- [ ] Kalendereinladung, Outlook-/Teams-Synchronisation und Konflikt-/Verfügbarkeitsprüfung
+- [ ] Desktop-Datenimport von Zeitbuchungen und Zeitsegmenten; lokale Browser-Abnahme
+- [ ] Drag-and-drop und weitere Planungsoptimierungen; Reports und Monatsübersichten
+- [x] Kommen/Gehen/Pausen/Sollzeit weiterhin bewusst ausgeschlossen

@@ -196,3 +196,19 @@ Die unabhängige, auf dem Docker-Host geschützte **Vault-Masterkey-Datei** ist 
 Bei einem **bereits mit Plenaro verknüpften** Microsoft-Benutzer fragt die Entra-Anmeldung zusätzlich nach den delegierten Graph-Scopes `Calendars.Read`, `User.Read` und `offline_access`. Nach erfolgreicher Einwilligung wird der Refresh-Token **pro lokalem Benutzer verschlüsselt** abgelegt, und dessen Outlook-Kalender erscheint in der Wochenansicht. Beim **erstmaligen Verknüpfen** bleibt aus Sicherheitsgründen die ausdrückliche Bestätigung notwendig; danach kann Outlook einmalig über „Outlook verbinden“ aktiviert werden, oder bei der nächsten Entra-Anmeldung automatisch. Ohne Zustimmung bleiben lokale Kalenderdaten immer nutzbar.
 
 **Nicht gegen einen echten Tenant abgenommen.** Siehe [Einrichtung](docs/ENTRA_SSO.md).
+
+## Aufgaben-Timer, manuelle Buchung und Zeitsegmente (Phase 2)
+
+Im **Heute-Arbeitsbereich rechts** kann für jede ausgewählte Aufgabe ein persistenter Timer gestartet und gestoppt werden. Der Timer wird in PostgreSQL gespeichert und läuft auch beim Schließen des Browser-Tabs weiter. **Nur ein Timer pro Benutzer gleichzeitig**, doppelte Starts werden serverseitig abgelehnt. Abgeschlossene und abgebrochene Aufgaben können keinen neuen Timer starten; ein bereits laufender Timer kann weiterhin gestoppt werden.
+
+Mit den Schaltflächen **+15/+30/+60 und −15/−30/−60 Minuten** oder über die freie Korrektureingabe mit optionaler Notiz werden separate, nachvollziehbare Korrekturbuchungen gespeichert. Der Anzeigewert wird niemals negativ; die Korrekturen selbst werden nicht verschleiert. Das ist **aufgabenbezogene Zeit**, keine Kommen-/Gehen-, Pausen- oder Sollzeiterfassung. Vorhandene ältere `time_entries` bleiben erhalten.
+
+Unter **Planung (Segmente)** lassen sich je Aufgabe Uhrzeit, Datum, Kurzbeschreibung und bis zu 20 Teilnehmeradressen speichern, bearbeiten und löschen. Die lokale **Mo–Fr-Wochenplanung** zeigt die Segmente im entsprechenden Stundenraster sowie in den Tagesdetails, auch ohne Entra ID. **Noch keine Outlook-Termineinladung, Graph-Schreibzugriffe, Konflikterkennung oder Drag-and-drop**; Teilnehmeradressen sind zunächst nur Planungshinweise.
+
+Alle Endpunkte erfordern Anmeldung, Benutzer-Eigentum und bei Mutationen CSRF. Datenbankmigration `0011_task_timer_segments.sql` ergänzt ein Korrekturjournal, Segmentteilnehmer und einen eindeutigen Index für einen laufenden Aufgabentimer pro Benutzer. Keine bestehenden Tabellen werden gelöscht.
+
+Bei einem Update:
+```bash
+git pull --ff-only
+docker compose up -d --build --wait
+```

@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { CalendarDays, CheckCircle2, Clock3, ExternalLink, Plus, RotateCcw, Save, Ticket } from 'lucide-react';
+import { CheckCircle2, ExternalLink, Plus, RotateCcw, Save, Ticket } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { changeTaskStatus, createTask, listTasks, localDate, todayTasks, updateTask, type WorkTask, type TaskInput } from './tasksApi';
 import { getMonthMarkers, saveDayMarker, type DayType, type DayMarker } from './dayMarkersApi';
+import { TaskTimerPanel, TaskSegmentsPanel } from './TaskWorkPanels';
 
 type Tab = 'today' | 'active' | 'new' | 'completed';
 const labels: { key: Tab; label: string }[] = [
@@ -171,18 +172,8 @@ export function ClassicTodayPage() {
             </div>
           </>}
         </section>
-        <section className="content-card plenaro-timer">
-          <span className="eyebrow">TIMER / BUCHUNG</span>
-          <div className="plenaro-timer-time"><Clock3 size={20}/>––:––:––</div>
-          <p>Aufgabenbezogener Timer und manuelle Buchung folgen als eigener Funktionsschritt.</p>
-          <p className="um-hint">Keine automatische Arbeitszeiterfassung, kein Kommen/Gehen und keine Pausenbuchung.</p>
-        </section>
-        <section className="content-card plenaro-segments">
-          <span className="eyebrow">PLANUNG (SEGMENTE)</span>
-          <h3>Segmentplanung</h3>
-          <p>Hier werden künftig Termine mit Start- und Endzeit, Kurzbeschreibung und Teilnehmern für die ausgewählte Aufgabe geplant.</p>
-          <Link to="/week" className="button button-secondary"><CalendarDays size={15}/>Lokalen Kalender öffnen</Link>
-        </section>
+        <TaskTimerPanel taskId={chosen && visibleSelected ? chosen.id : null}/>
+        <TaskSegmentsPanel taskId={chosen && visibleSelected ? chosen.id : null}/>
       </aside>
     </div>
   </div>;

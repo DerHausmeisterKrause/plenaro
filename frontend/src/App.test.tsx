@@ -25,6 +25,7 @@ beforeEach(() => {
       remainingBrDays: null, brExhausted: false, brExceeded: false,
     }) };
     if (path.startsWith('/api/v1/day-markers/?')) return { ok: true, status: 200, json: async () => [] };
+    if (path.startsWith('/api/v1/segments/?')) return { ok: true, status: 200, json: async () => [] };
     if (path.startsWith('/api/v1/tasks/')) return {
       ok: true, status: 200, json: async () => ([]),
     };
@@ -142,7 +143,8 @@ describe('Plenaro web shell', () => {
     expect(screen.getByRole('complementary', { name: 'Aufgabedetails und Planung' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Aktuelle Aufgaben' })).toBeTruthy();
     expect(screen.getByLabelText('Neue Aufgabe')).toBeTruthy();
-    expect(screen.getByText('Segmentplanung')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Aufgabenbezogener Timer' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Aufgabensegmente' })).toBeTruthy();
   });
 
   it('zeigt Normal, UL, AM, HO und BR als Tagesmarker ohne Microsoft', async () => {

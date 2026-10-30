@@ -393,6 +393,7 @@ app.MapPlenaroSettings();
 app.MapPlenaroSecrets();
 app.MapPlenaroGraph();
 app.MapPlenaroTasks();
+app.MapPlenaroTaskWork();
 app.MapPlenaroDayMarkers();
 app.MapFallbackToFile("index.html");
 app.Run();
