@@ -74,7 +74,7 @@ Legende: `[x]` = implementierter Code / vorhandene Datei; `[ ]` = offen. Ein gr�
 - [x] Monatsberichte für aufgabenbezogene Timer und Korrekturen, monatsgenaue Europe/Berlin-Grenzen, CSV-Export ohne fremde Nutzer (PR #25; CI-/Host-Abnahme offen)
 - [ ] Homeoffice-Workflows
 - [ ] Aufgaben teilen, Einladungen und Besitzerrechte
-- [x] Erster SQLite-v1–v32-Importpfad: lokaler bereinigender Export, Web-Vorschau, transaktionaler Import, ID-Deduplizierung und snapshotgeschützte Rücknahme (PR nach CI; Host-Abnahme offen)
+- [x] Erster SQLite-v1–v32-Importpfad: lokaler bereinigender Export, Web-Vorschau, transaktionaler Import, ID-Deduplizierung und snapshotgeschützte Rücknahme ([PR #29](https://github.com/DerHausmeisterKrause/plenaro/pull/29), [CI erfolgreich](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41136074441); Host-Abnahme offen)
 - [ ] **Vollständige** Datenmigration/Classic-Feldparität (Ticket-/Outlook-Verknüpfungen, Buchungen, weitere Einstellungen und Legacy-Datenmengen)
 
 **Abnahme:** Kernabläufe der Desktop-Aufgaben-/Zeitverwaltung funktionieren im Browser.
