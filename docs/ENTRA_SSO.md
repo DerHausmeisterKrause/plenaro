@@ -9,11 +9,12 @@ Die Microsoft-Entra-Konfiguration wird **nicht mehr aus der .env** geladen. Plen
 
 ```bash
 mkdir -p secrets
-openssl rand -hex 32 > secrets/vault.key
-chmod 600 secrets/vault.key
+openssl rand -hex 32 | sudo tee secrets/vault.key >/dev/null
+sudo chown root:1654 secrets/vault.key
+sudo chmod 0640 secrets/vault.key
 ```
 
-In die `.env` gehört **nur der Dateipfad** `PLENARO_VAULT_KEY_FILE=/run/plenaro-secrets/vault.key`, niemals der Schlüsselwert. Der Docker-Compose-Mount `./secrets:/run/plenaro-secrets:ro` liest die Schlüsseldatei nur beim Containerstart. Container-User-Berechtigungen prüfen.
+In die `.env` gehört **nur der Dateipfad** `PLENARO_VAULT_KEY_FILE=/run/plenaro-secrets/vault.key`, niemals der Schlüsselwert. Der Docker-Compose-Mount `./secrets:/run/plenaro-secrets:ro` liest die Schlüsseldatei nur beim Containerstart. Der .NET-Container startet standardmäßig als nicht privilegierter Benutzer mit UID/GID 1654. Die Gruppe 1654 darf den Schlüssel lesen, andere Benutzer nicht. Bei abweichender Container-UID/-GID die Zugriffsrechte entsprechend anpassen.
 
 3. In Microsoft Entra [App registrations](https://entra.microsoft.com/) eine **Single-Tenant-Webanwendung** anlegen. Als **Web Redirect URIs** beide URLs eintragen: `https://DEIN-FQDN/signin-entra` und `https://DEIN-FQDN/signin-graph`.
 4. Ein Client-Secret erstellen. Die **Secret Value**, Tenant-ID und Client-ID notieren. Graph delegierte API-Berechtigungen **User.Read** und **Calendars.Read** hinzufügen. `offline_access` wird im Auth-Code-Flow als Scope angefordert. Zustimmung ist vom jeweiligen Nutzer oder abhängig von Tenant-Regeln vom Administrator nötig.
