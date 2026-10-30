@@ -38,7 +38,7 @@ async function get<T>(url: string): Promise<T> {
   return await response.json() as T;
 }
 
-async function modify<T>(url: string, method: 'POST' | 'PUT' | 'DELETE',
+async function modify<T>(url: string, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   body?: object): Promise<T> {
   const token = await csrfToken();
   const response = await fetch(url, {
@@ -76,6 +76,9 @@ export const createTaskSegment = (id: string, input: SegmentInput) =>
   modify<{ id: string }>(taskPath(id) + '/segments', 'POST', input);
 export const updateTaskSegment = (id: string, segmentId: string, input: SegmentInput) =>
   modify<void>(taskPath(id) + '/segments/' + encodeURIComponent(segmentId), 'PUT', input);
+export const rescheduleTaskSegment = (id: string, segmentId: string, input: {
+  startsAt: string; endsAt: string; expectedStartsAt: string; expectedEndsAt: string;
+}) => modify<void>(taskPath(id) + '/segments/' + encodeURIComponent(segmentId) + '/schedule', 'PATCH', input);
 export const deleteTaskSegment = (id: string, segmentId: string) =>
   modify<void>(taskPath(id) + '/segments/' + encodeURIComponent(segmentId), 'DELETE');
 

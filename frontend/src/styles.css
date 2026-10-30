@@ -621,3 +621,29 @@ h1,h2,h3,p { margin-top: 0; }
 @media (max-width: 480px) {
   .reports-summary { grid-template-columns: 1fr; }
 }
+
+/* Calendar segment drag-and-drop. The slot itself is not a button:
+   selection and draggable segments remain independent focusable controls. */
+.classic-calendar-slot { position: relative; }
+.classic-calendar-slot-select {
+  display: block; border: 0; background: transparent; padding: 2px 3px;
+  font-size: 9px; color: var(--muted); text-align: left; align-self: stretch;
+  min-height: 18px;
+}
+.classic-calendar-slot-select:hover, .classic-calendar-slot-select:focus-visible { color: var(--blue); }
+.classic-calendar-slot.drop-target { outline: 2px dashed var(--blue); outline-offset: -3px; background: var(--blue-pale); }
+.classic-draggable-segment {
+  width: 100%; display: flex !important; align-items: flex-start; gap: 4px;
+  border-top: 0; border-right: 0; border-bottom: 0;
+  text-align: left; cursor: grab; color: var(--text);
+}
+.classic-draggable-segment:active { cursor: grabbing; }
+.classic-draggable-segment.is-picked { outline: 2px solid var(--blue); }
+.classic-draggable-segment svg { flex-shrink: 0; margin-top: 1px; }
+.classic-drop-indicator { background: var(--blue); color: white; border-radius: 4px; text-align: center; font-size: 10px; font-weight: 700; padding: 2px; pointer-events: none; }
+.classic-drag-hint { margin: 0 0 12px; line-height: 1.6; }
+.classic-segment-reschedule { display: grid; gap: 10px; padding: 13px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-soft); }
+.classic-segment-reschedule > strong { overflow-wrap: anywhere; font-size: 12px; }
+.classic-segment-reschedule label { display: grid; gap: 4px; font-size: 12px; color: var(--muted-strong); }
+.classic-segment-reschedule select { width: 100%; min-width: 0; padding: 8px 9px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 7px; }
+.classic-segment-reschedule .button { width: 100%; justify-content: center; }

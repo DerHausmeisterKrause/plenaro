@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, Cloud, Link2, RefreshCw, Unplug } from 'lucide-react';
+import { useEffect, useMemo, useState, type DragEvent, type FormEvent } from 'react';
+import { CalendarDays, ChevronLeft, ChevronRight, Cloud, GripVertical, Link2, RefreshCw, Save, Unplug } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DayMarkersPanel } from './DayMarkersPanel';
 import { getMonthMarkers, type DayMarker } from './dayMarkersApi';
 import { graphStatus, readOutlookWeek, disconnectOutlook, type GraphStatus, type OutlookEvent } from './graphApi';
 import { listTasks, localDate, type WorkTask } from './tasksApi';
-import { listWeekSegments, type TaskSegment } from './taskWorkApi';
+import { listWeekSegments, rescheduleTaskSegment, type TaskSegment } from './taskWorkApi';
+import { calendarMove, halfHourFromPosition } from './segmentPlanner';
 
 function startOfWeek(value: Date) {
   const date = new Date(value.getFullYear(), value.getMonth(), value.getDate());
@@ -41,6 +42,14 @@ export function WeekCalendarPage() {
   const [refresh, setRefresh] = useState(0);
   const [showMarkers, setShowMarkers] = useState(false);
   const [selectedDay, setSelectedDay] = useState(() => localDate());
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [moveDay, setMoveDay] = useState('');
+  const [moveClock, setMoveClock] = useState('09:00');
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [hover, setHover] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
+  const [moveError, setMoveError] = useState('');
+  const [moveNotice, setMoveNotice] = useState('');
   const days = useMemo(() => Array.from({ length: 5 }, (_, i) => plusDays(weekStart, i)), [weekStart]);
   const until = useMemo(() => plusDays(weekStart, 5), [weekStart]);
 
@@ -97,6 +106,60 @@ export function WeekCalendarPage() {
     if (graphResult === 'failed') setGraphError('Outlook-Verbindung fehlgeschlagen oder abgebrochen.');
   }, [graphResult]);
 
+  function chooseSegment(segment: TaskSegment) {
+    setSelectedSegmentId(segment.id);
+    const start = new Date(segment.startsAt);
+    setMoveDay(localDate(start));
+    const clampedHour = Math.min(17, Math.max(6, start.getHours()));
+    const roundedMinute = start.getHours() > 17 ? 30 : start.getMinutes() >= 30 ? 30 : 0;
+    setMoveClock(`${String(clampedHour).padStart(2, '0')}:${String(roundedMinute).padStart(2, '0')}`);
+    setMoveError(''); setMoveNotice('');
+  }
+
+  async function moveSegment(segment: TaskSegment, day: string, hour: number, minute: number) {
+    if (moving) return;
+    setMoveError(''); setMoveNotice('');
+    let input: ReturnType<typeof calendarMove>;
+    try {
+      input = calendarMove(segment, day, hour, minute);
+    } catch (e) {
+      setMoveError(e instanceof Error ? e.message : 'Ungültiges Ziel.');
+      return;
+    }
+    if (input.startsAt === new Date(segment.startsAt).toISOString()) {
+      setMoveNotice('Das Segment liegt bereits in diesem Zeitfenster.');
+      return;
+    }
+    setMoving(true);
+    try {
+      await rescheduleTaskSegment(segment.taskId, segment.id, input);
+      // Only update the local segment after the server confirmed the change.
+      // A follow-up reload also drops segments moved outside the selected week.
+      setSegments(previous => previous.map(s => s.id === segment.id
+        ? { ...s, startsAt: input.startsAt, endsAt: input.endsAt } : s));
+      setSelectedDay(day); setSelectedSegmentId(segment.id);
+      setMoveDay(day); setMoveClock(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+      setMoveNotice('Zeitsegment verschoben und gespeichert.');
+      setRefresh(n => n + 1);
+    } catch (e) {
+      setMoveError(e instanceof Error ? e.message : 'Verschieben fehlgeschlagen.');
+      setRefresh(n => n + 1); // Reload in case a concurrent edit changed the schedule.
+    } finally { setMoving(false); setDragId(null); setHover(null); }
+  }
+
+  function dropMinute(event: DragEvent<HTMLElement>): 0 | 30 {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return halfHourFromPosition(event.clientY, rect.top, rect.height);
+  }
+
+  async function saveSchedule(event: FormEvent) {
+    event.preventDefault();
+    const segment = segments.find(s => s.id === selectedSegmentId);
+    if (!segment) return;
+    const [hour, minute] = moveClock.split(':').map(Number);
+    await moveSegment(segment, moveDay, hour, minute);
+  }
+
   async function unlink() {
     if (busy) return;
     setBusy(true);
@@ -114,6 +177,7 @@ export function WeekCalendarPage() {
   const selectedMarker = markers.find(m => m.day === selectedDay);
   const selectedEvents = eventsOn(selectedDay);
   const selectedSegments = segments.filter(s => localDate(new Date(s.startsAt)) === selectedDay);
+  const selectedSegment = segments.find(s => s.id === selectedSegmentId);
   const byHour = (date: string, hour: number) => eventsOn(date).filter(e => !e.isAllDay && hourOf(e.start) === hour);
 
   return <div className="page classic-workspace">
@@ -144,6 +208,10 @@ export function WeekCalendarPage() {
         : <span>Ohne Microsoft nutzbar</span>}
     </div>
     {localError && <p role="alert" className="um-feedback failure">{localError}</p>}
+    {moveError && <p role="alert" className="um-feedback failure">{moveError}</p>}
+    {moveNotice && <p role="status" className="um-feedback success">{moveNotice}</p>}
+    <p className="um-hint classic-drag-hint">Lokale Zeitsegmente mit dem Griff in ein anderes Stundenfeld ziehen (30-Minuten-Raster).
+      Alternativ ein Segment anklicken und im Tagesdetail per Formular verschieben. Outlook-Termine sind nicht verschiebbar.</p>
     {graphError && <p role="alert" className="um-feedback failure">Outlook: {graphError} – lokale Planung bleibt verfügbar.</p>}
     {hasMore && <p role="status" className="um-feedback failure">Outlook liefert weitere Termine. Die erste Graph-Version zeigt maximal 100 pro Woche.</p>}
 
@@ -173,18 +241,48 @@ export function WeekCalendarPage() {
                 const date = localDate(day);
                 const slotEvents = byHour(date, hour);
                 const slotSegments = segments.filter(s => localDate(new Date(s.startsAt)) === date && hourOf(s.startsAt) === hour);
-                return <button type="button" key={date} className={`classic-calendar-slot${selectedDay === date ? ' selected' : ''}`}
-                  aria-label={`${fmtDay(day)}, ${String(hour).padStart(2, '0')} Uhr`}
-                  onClick={() => setSelectedDay(date)}>
-                  {slotSegments.map(segment => <span className="classic-calendar-event classic-calendar-task-segment"
-                    key={segment.id} title={segment.note || segment.taskTitle}>
-                    <strong>{formatClock(segment.startsAt)}–{formatClock(segment.endsAt)}</strong>
-                    {' '}{segment.taskTitle}
-                  </span>)}
+                const slotKey = `${date}-${hour}`;
+                return <div key={date}
+                  className={`classic-calendar-slot${selectedDay === date ? ' selected' : ''}${hover?.startsWith(slotKey + '-') ? ' drop-target' : ''}`}
+                  data-testid={`calendar-slot-${slotKey}`}
+                  onDragOver={event => {
+                    if (!dragId || moving) return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                    setHover(`${slotKey}-${dropMinute(event)}`);
+                  }}
+                  onDragLeave={() => setHover(null)}
+                  onDrop={event => {
+                    event.preventDefault();
+                    const selected = segments.find(s => s.id === dragId);
+                    const minute = dropMinute(event);
+                    setHover(null); setDragId(null);
+                    if (selected && !moving) void moveSegment(selected, date, hour, minute);
+                  }}>
+                  <button type="button" className="classic-calendar-slot-select"
+                    aria-label={`${fmtDay(day)}, ${String(hour).padStart(2, '0')} Uhr auswählen`}
+                    onClick={() => setSelectedDay(date)}>+ Zeitfeld</button>
+                  {slotSegments.map(segment =>
+                    <button type="button" draggable={!moving} className={`classic-calendar-event classic-calendar-task-segment classic-draggable-segment${selectedSegmentId === segment.id ? ' is-picked' : ''}`}
+                      key={segment.id} title="Zum Verschieben ziehen oder für genaue Uhrzeit auswählen"
+                      aria-label={`Zeitsegment ${segment.taskTitle}, ${formatClock(segment.startsAt)} auswählen und verschieben`}
+                      onClick={() => { setSelectedDay(date); chooseSegment(segment); }}
+                      onDragStart={event => {
+                        setDragId(segment.id); setMoveError(''); setMoveNotice('');
+                        event.dataTransfer.effectAllowed = 'move';
+                        event.dataTransfer.setData('text/plain', segment.id);
+                      }}
+                      onDragEnd={() => { setDragId(null); setHover(null); }}>
+                      <GripVertical size={13} aria-hidden="true"/>
+                      <span><strong>{formatClock(segment.startsAt)}–{formatClock(segment.endsAt)}</strong>
+                        {' '}{segment.taskTitle}</span>
+                    </button>)}
                   {slotEvents.map(e => <span className="classic-calendar-event" key={e.id} title={e.subject}>
                     <strong>{formatClock(e.start)}</strong> {e.subject || 'Outlook-Termin'}
                   </span>)}
-                </button>;
+                  {hover === `${slotKey}-0` && <span className="classic-drop-indicator" aria-hidden="true">:00</span>}
+                  {hover === `${slotKey}-30` && <span className="classic-drop-indicator" aria-hidden="true">:30</span>}
+                </div>;
               })}
             </div>)}
           </div>
@@ -216,7 +314,30 @@ export function WeekCalendarPage() {
             <small>{formatClock(segment.startsAt)}–{formatClock(segment.endsAt)}</small>
             {segment.note && <small>{segment.note}</small>}
             {segment.participants.length > 0 && <small>{segment.participants.join(', ')}</small>}
+            <button type="button" className="classic-text-action" disabled={moving}
+              onClick={() => chooseSegment(segment)}>Zeitsegment verschieben</button>
           </div>) : <p className="um-hint">Keine Zeitsegmente für diesen Tag geplant.</p>}
+        {selectedSegment && days.some(day => localDate(day) === moveDay) &&
+          <form className="classic-segment-reschedule" aria-label="Zeitsegment verschieben" onSubmit={e => void saveSchedule(e)}>
+            <strong>{selectedSegment.taskTitle} verschieben</strong>
+            <label>Zieltag
+              <select value={moveDay} onChange={e => setMoveDay(e.target.value)}>
+                {days.map(d => <option key={localDate(d)} value={localDate(d)}>{fmtDay(d)}</option>)}
+              </select>
+            </label>
+            <label>Neue Startzeit
+              <select value={moveClock} onChange={e => setMoveClock(e.target.value)}>
+                {Array.from({ length: 24 }, (_, i) => {
+                  const value = `${String(6 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`;
+                  return <option key={value} value={value}>{value}</option>;
+                })}
+              </select>
+            </label>
+            <button className="button button-primary" type="submit" disabled={moving}>
+              <Save size={15}/>{moving ? 'Speichere …' : 'Zeitsegment verschieben'}
+            </button>
+            <p className="um-hint">Die Dauer bleibt erhalten. Notiz und Teilnehmer werden nicht verändert.</p>
+          </form>}
         {graph?.connected && <>
           <h3>Outlook-Termine</h3>
           {selectedEvents.length ? selectedEvents.map(e => <div key={e.id} className="classic-day-entry">

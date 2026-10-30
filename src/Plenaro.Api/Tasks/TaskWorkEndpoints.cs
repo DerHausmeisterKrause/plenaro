@@ -17,6 +17,8 @@ public static class TaskWorkEndpoints
     public sealed record AdjustmentInput(int DeltaMinutes, string? Note);
     public sealed record SegmentInput(DateTimeOffset StartsAt, DateTimeOffset EndsAt,
         string? Note, string[]? Participants);
+    public sealed record SegmentRescheduleInput(DateTimeOffset StartsAt, DateTimeOffset EndsAt,
+        DateTimeOffset ExpectedStartsAt, DateTimeOffset ExpectedEndsAt);
     public sealed record SegmentView(Guid Id, Guid TaskId, string TaskTitle,
         DateTimeOffset StartsAt, DateTimeOffset EndsAt, string Note, string[] Participants);
     public sealed record TimeSummary(long BookedSeconds, long RunningSeconds,
@@ -194,6 +196,49 @@ public static class TaskWorkEndpoints
             return await cmd.ExecuteScalarAsync(ct) is null ? Results.NotFound() : Results.NoContent();
         });
 
+
+        // Calendar drag-and-drop changes only scheduling fields, never notes or participants.
+        // Expected values protect against overwriting a concurrent schedule edit.
+        tasks.MapPatch("/segments/{segmentId:guid}/schedule", async (Guid taskId, Guid segmentId,
+            SegmentRescheduleInput input, HttpContext http, UserManager<ApplicationUser> users,
+            IConfiguration config, IAntiforgery anti, CancellationToken ct) =>
+        {
+            if (!await ValidCsrfAsync(http, anti)) return CsrfError();
+            var owner = await OwnerAsync(http, users);
+            if (owner is null) return Results.Unauthorized();
+            if (ValidatePeriod(input.StartsAt, input.EndsAt) is { } error)
+                return Results.BadRequest(new { error });
+            if (ValidatePeriod(input.ExpectedStartsAt, input.ExpectedEndsAt) is not null)
+                return Results.BadRequest(new { error = "Ursprünglicher Zeitraum ist ungültig." });
+
+            await using var db = await OpenAsync(config, ct);
+            await using var cmd = new NpgsqlCommand("""
+                UPDATE task_segments SET starts_at=@start, ends_at=@end
+                WHERE id=@id AND task_id=@task AND owner_user_id=@owner
+                  AND starts_at=@expected_start AND ends_at=@expected_end
+                RETURNING id
+                """, db);
+            cmd.Parameters.AddWithValue("id", segmentId);
+            cmd.Parameters.AddWithValue("task", taskId);
+            cmd.Parameters.AddWithValue("owner", owner.Value);
+            cmd.Parameters.Add("start", NpgsqlDbType.TimestampTz).Value = input.StartsAt.UtcDateTime;
+            cmd.Parameters.Add("end", NpgsqlDbType.TimestampTz).Value = input.EndsAt.UtcDateTime;
+            cmd.Parameters.Add("expected_start", NpgsqlDbType.TimestampTz).Value = input.ExpectedStartsAt.UtcDateTime;
+            cmd.Parameters.Add("expected_end", NpgsqlDbType.TimestampTz).Value = input.ExpectedEndsAt.UtcDateTime;
+            if (await cmd.ExecuteScalarAsync(ct) is not null) return Results.NoContent();
+
+            await using var exists = new NpgsqlCommand("""
+                SELECT EXISTS(SELECT 1 FROM task_segments
+                WHERE id=@id AND task_id=@task AND owner_user_id=@owner)
+                """, db);
+            exists.Parameters.AddWithValue("id", segmentId);
+            exists.Parameters.AddWithValue("task", taskId);
+            exists.Parameters.AddWithValue("owner", owner.Value);
+            return (bool)(await exists.ExecuteScalarAsync(ct) ?? false)
+                ? Results.Conflict(new { error = "Das Zeitsegment wurde zwischenzeitlich verändert. Bitte Kalender aktualisieren." })
+                : Results.NotFound();
+        });
+
         tasks.MapDelete("/segments/{segmentId:guid}", async (Guid taskId, Guid segmentId,
             HttpContext http, UserManager<ApplicationUser> users, IConfiguration config,
             IAntiforgery anti, CancellationToken ct) =>
@@ -260,12 +305,18 @@ public static class TaskWorkEndpoints
         return result;
     }
 
+    private static string? ValidatePeriod(DateTimeOffset start, DateTimeOffset end)
+    {
+        if (start.Year < 2000 || end.Year > 2100 || end <= start ||
+            end - start > TimeSpan.FromHours(24))
+            return "Start und Ende müssen innerhalb von maximal 24 Stunden liegen.";
+        return null;
+    }
+
     private static string? ValidateSegment(SegmentInput input)
     {
-        if (input.StartsAt.Year < 2000 || input.EndsAt.Year > 2100 ||
-            input.EndsAt <= input.StartsAt ||
-            input.EndsAt - input.StartsAt > TimeSpan.FromHours(24))
-            return "Start und Ende müssen innerhalb von maximal 24 Stunden liegen.";
+        if (ValidatePeriod(input.StartsAt, input.EndsAt) is { } periodError)
+            return periodError;
         if (input.Note?.Length > 1000) return "Kurzbeschreibung darf maximal 1000 Zeichen haben.";
         var addresses = input.Participants ?? [];
         if (addresses.Length > 20 || addresses.Any(x => x.Length is < 3 or > 254))
