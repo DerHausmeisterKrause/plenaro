@@ -6,7 +6,7 @@ import { getMonthMarkers, type DayMarker } from './dayMarkersApi';
 import { graphStatus, readOutlookWeek, disconnectOutlook, type GraphStatus, type OutlookEvent } from './graphApi';
 import { listTasks, localDate, type WorkTask } from './tasksApi';
 import { listWeekSegments, rescheduleTaskSegment, type TaskSegment } from './taskWorkApi';
-import { calendarMove, halfHourFromPosition } from './segmentPlanner';
+import { calendarMove, conflictingLocalSegments, halfHourFromPosition, intervalsOverlap } from './segmentPlanner';
 
 function startOfWeek(value: Date) {
   const date = new Date(value.getFullYear(), value.getMonth(), value.getDate());
@@ -130,6 +130,17 @@ export function WeekCalendarPage() {
       setMoveNotice('Das Segment liegt bereits in diesem Zeitfenster.');
       return;
     }
+    if (conflictingLocalSegments(segments, input.startsAt, input.endsAt, segment.id).length) {
+      setMoveError('Dieser Zeitraum ist lokal durch ein anderes eigenes Zeitsegment belegt.');
+      return;
+    }
+    // Microsoft Graph is read-only and may be incomplete (first 100 events).
+    // Overlapping personal Outlook events are advisory, never participant free/busy.
+    const busyOutlook = graph?.connected && outlook.some(event =>
+      ['busy', 'oof', 'tentative'].includes(event.showAs.toLowerCase()) &&
+      intervalsOverlap(input.startsAt, input.endsAt, event.start, event.end));
+    if (busyOutlook && !window.confirm('In deinem Outlook-Kalender liegt ein möglicherweise belegter Termin. Nur lokal trotzdem verschieben?'))
+      return;
     setMoving(true);
     try {
       await rescheduleTaskSegment(segment.taskId, segment.id, input);
@@ -178,6 +189,18 @@ export function WeekCalendarPage() {
   const selectedEvents = eventsOn(selectedDay);
   const selectedSegments = segments.filter(s => localDate(new Date(s.startsAt)) === selectedDay);
   const selectedSegment = segments.find(s => s.id === selectedSegmentId);
+  const proposedMove = (() => {
+    if (!selectedSegment || !moveDay) return null;
+    try {
+      const [hour, minute] = moveClock.split(':').map(Number);
+      return calendarMove(selectedSegment, moveDay, hour, minute);
+    } catch { return null; }
+  })();
+  const proposedLocalConflicts = proposedMove
+    ? conflictingLocalSegments(segments, proposedMove.startsAt, proposedMove.endsAt, selectedSegmentId ?? undefined) : [];
+  const proposedOutlookConflicts = proposedMove && graph?.connected
+    ? outlook.filter(event => ['busy', 'oof', 'tentative'].includes(event.showAs.toLowerCase()) &&
+      intervalsOverlap(proposedMove.startsAt, proposedMove.endsAt, event.start, event.end)) : [];
   const byHour = (date: string, hour: number) => eventsOn(date).filter(e => !e.isAllDay && hourOf(e.start) === hour);
 
   return <div className="page classic-workspace">
@@ -333,7 +356,16 @@ export function WeekCalendarPage() {
                 })}
               </select>
             </label>
-            <button className="button button-primary" type="submit" disabled={moving}>
+            {proposedMove && proposedLocalConflicts.length > 0 && <p className="um-feedback failure" role="status">
+              Lokal belegt durch: {proposedLocalConflicts.map(s => s.taskTitle).join(', ')}
+            </p>}
+            {proposedMove && proposedLocalConflicts.length === 0 &&
+              <p className="um-hint" role="status">Keine Überschneidung in den angezeigten lokalen Segmenten. Der Server prüft vor dem Speichern erneut.</p>}
+            {proposedOutlookConflicts.length > 0 && <p className="um-feedback failure" role="status">
+              Outlook-Warnung: {proposedOutlookConflicts.length} möglicherweise belegte eigene Termine. Keine Teilnehmerprüfung.
+            </p>}
+            {graph?.connected && (graphError || hasMore) && <p className="um-hint">Outlook-Daten möglicherweise unvollständig.</p>}
+            <button className="button button-primary" type="submit" disabled={moving || !proposedMove || proposedLocalConflicts.length > 0}>
               <Save size={15}/>{moving ? 'Speichere …' : 'Zeitsegment verschieben'}
             </button>
             <p className="um-hint">Die Dauer bleibt erhalten. Notiz und Teilnehmer werden nicht verändert.</p>

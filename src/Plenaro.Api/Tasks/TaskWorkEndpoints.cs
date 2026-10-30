@@ -155,6 +155,21 @@ public static class TaskWorkEndpoints
             return Results.Ok(await ReadSegmentsAsync(cmd, ct));
         });
 
+        segments.MapGet("/availability", async (DateTimeOffset start, DateTimeOffset end,
+            Guid? excludeId, HttpContext http, UserManager<ApplicationUser> users,
+            IConfiguration config, CancellationToken ct) =>
+        {
+            var owner = await OwnerAsync(http, users);
+            if (owner is null) return Results.Unauthorized();
+            if (ValidatePeriod(start, end) is { } error)
+                return Results.BadRequest(new { error });
+            await using var db = await OpenAsync(config, ct);
+            if (excludeId.HasValue && !await SegmentExistsAsync(db, excludeId.Value, owner.Value, null, ct))
+                return Results.NotFound();
+            return Results.Ok(await SegmentAvailability.ReadAsync(
+                db, owner.Value, start, end, excludeId, null, ct));
+        });
+
         tasks.MapPost("/segments", async (Guid taskId, SegmentInput input, HttpContext http,
             UserManager<ApplicationUser> users, IConfiguration config, IAntiforgery anti, CancellationToken ct) =>
         {
@@ -164,15 +179,23 @@ public static class TaskWorkEndpoints
             var error = ValidateSegment(input);
             if (error is not null) return Results.BadRequest(new { error });
             await using var db = await OpenAsync(config, ct);
+            await using var tx = await db.BeginTransactionAsync(ct);
+            await SegmentAvailability.LockOwnerAsync(db, tx, owner.Value, ct);
+            if (!await TaskExistsAsync(db, taskId, owner.Value, ct, tx))
+                return Results.NotFound();
+            var check = await SegmentAvailability.ReadAsync(db, owner.Value,
+                input.StartsAt, input.EndsAt, null, tx, ct);
+            if (!check.Available) return SlotConflict(check);
             var id = Guid.NewGuid();
             await using var cmd = new NpgsqlCommand("""
                 INSERT INTO task_segments(id,task_id,owner_user_id,starts_at,ends_at,note,participants)
                 SELECT @id,@task,@owner,@start,@end,@note,@participants
                 FROM tasks WHERE id=@task AND owner_user_id=@owner
                 RETURNING id
-                """, db);
+                """, db, tx);
             BindSegment(cmd, input, owner.Value, taskId, id);
             if (await cmd.ExecuteScalarAsync(ct) is null) return Results.NotFound();
+            await tx.CommitAsync(ct);
             return Results.Created($"/api/v1/tasks/{taskId}/segments", new { id });
         });
 
@@ -186,19 +209,28 @@ public static class TaskWorkEndpoints
             var error = ValidateSegment(input);
             if (error is not null) return Results.BadRequest(new { error });
             await using var db = await OpenAsync(config, ct);
+            await using var tx = await db.BeginTransactionAsync(ct);
+            await SegmentAvailability.LockOwnerAsync(db, tx, owner.Value, ct);
+            if (!await SegmentExistsAsync(db, segmentId, owner.Value, tx, ct, taskId))
+                return Results.NotFound();
+            var check = await SegmentAvailability.ReadAsync(db, owner.Value,
+                input.StartsAt, input.EndsAt, segmentId, tx, ct);
+            if (!check.Available) return SlotConflict(check);
             await using var cmd = new NpgsqlCommand("""
                 UPDATE task_segments SET starts_at=@start,ends_at=@end,
                     note=@note,participants=@participants
                 WHERE id=@id AND owner_user_id=@owner AND task_id=@task
                 RETURNING id
-                """, db);
+                """, db, tx);
             BindSegment(cmd, input, owner.Value, taskId, segmentId);
-            return await cmd.ExecuteScalarAsync(ct) is null ? Results.NotFound() : Results.NoContent();
+            if (await cmd.ExecuteScalarAsync(ct) is null) return Results.NotFound();
+            await tx.CommitAsync(ct);
+            return Results.NoContent();
         });
 
 
-        // Calendar drag-and-drop changes only scheduling fields, never notes or participants.
-        // Expected values protect against overwriting a concurrent schedule edit.
+        // The update checks both optimistic version and local availability under
+        // the same owner-specific transaction lock as creation and full edits.
         tasks.MapPatch("/segments/{segmentId:guid}/schedule", async (Guid taskId, Guid segmentId,
             SegmentRescheduleInput input, HttpContext http, UserManager<ApplicationUser> users,
             IConfiguration config, IAntiforgery anti, CancellationToken ct) =>
@@ -210,14 +242,34 @@ public static class TaskWorkEndpoints
                 return Results.BadRequest(new { error });
             if (ValidatePeriod(input.ExpectedStartsAt, input.ExpectedEndsAt) is not null)
                 return Results.BadRequest(new { error = "Ursprünglicher Zeitraum ist ungültig." });
-
             await using var db = await OpenAsync(config, ct);
+            await using var tx = await db.BeginTransactionAsync(ct);
+            await SegmentAvailability.LockOwnerAsync(db, tx, owner.Value, ct);
+            if (!await SegmentExistsAsync(db, segmentId, owner.Value, tx, ct, taskId))
+                return Results.NotFound();
+            await using (var expected = new NpgsqlCommand("""
+                SELECT EXISTS(SELECT 1 FROM task_segments
+                    WHERE id=@id AND owner_user_id=@owner AND task_id=@task
+                    AND starts_at=@old_start AND ends_at=@old_end)
+                """, db, tx))
+            {
+                expected.Parameters.AddWithValue("id", segmentId);
+                expected.Parameters.AddWithValue("owner", owner.Value);
+                expected.Parameters.AddWithValue("task", taskId);
+                expected.Parameters.Add("old_start", NpgsqlDbType.TimestampTz).Value = input.ExpectedStartsAt.UtcDateTime;
+                expected.Parameters.Add("old_end", NpgsqlDbType.TimestampTz).Value = input.ExpectedEndsAt.UtcDateTime;
+                if (!(bool)(await expected.ExecuteScalarAsync(ct) ?? false))
+                    return Results.Conflict(new { error = "Das Zeitsegment wurde zwischenzeitlich verändert. Bitte Kalender aktualisieren." });
+            }
+            var check = await SegmentAvailability.ReadAsync(db, owner.Value,
+                input.StartsAt, input.EndsAt, segmentId, tx, ct);
+            if (!check.Available) return SlotConflict(check);
             await using var cmd = new NpgsqlCommand("""
                 UPDATE task_segments SET starts_at=@start, ends_at=@end
                 WHERE id=@id AND task_id=@task AND owner_user_id=@owner
                   AND starts_at=@expected_start AND ends_at=@expected_end
                 RETURNING id
-                """, db);
+                """, db, tx);
             cmd.Parameters.AddWithValue("id", segmentId);
             cmd.Parameters.AddWithValue("task", taskId);
             cmd.Parameters.AddWithValue("owner", owner.Value);
@@ -225,18 +277,10 @@ public static class TaskWorkEndpoints
             cmd.Parameters.Add("end", NpgsqlDbType.TimestampTz).Value = input.EndsAt.UtcDateTime;
             cmd.Parameters.Add("expected_start", NpgsqlDbType.TimestampTz).Value = input.ExpectedStartsAt.UtcDateTime;
             cmd.Parameters.Add("expected_end", NpgsqlDbType.TimestampTz).Value = input.ExpectedEndsAt.UtcDateTime;
-            if (await cmd.ExecuteScalarAsync(ct) is not null) return Results.NoContent();
-
-            await using var exists = new NpgsqlCommand("""
-                SELECT EXISTS(SELECT 1 FROM task_segments
-                WHERE id=@id AND task_id=@task AND owner_user_id=@owner)
-                """, db);
-            exists.Parameters.AddWithValue("id", segmentId);
-            exists.Parameters.AddWithValue("task", taskId);
-            exists.Parameters.AddWithValue("owner", owner.Value);
-            return (bool)(await exists.ExecuteScalarAsync(ct) ?? false)
-                ? Results.Conflict(new { error = "Das Zeitsegment wurde zwischenzeitlich verändert. Bitte Kalender aktualisieren." })
-                : Results.NotFound();
+            if (await cmd.ExecuteScalarAsync(ct) is null)
+                return Results.Conflict(new { error = "Segmentänderung konnte nicht übernommen werden." });
+            await tx.CommitAsync(ct);
+            return Results.NoContent();
         });
 
         tasks.MapDelete("/segments/{segmentId:guid}", async (Guid taskId, Guid segmentId,
@@ -347,11 +391,31 @@ public static class TaskWorkEndpoints
             .Value = input.Participants ?? [];
     }
 
+    private static IResult SlotConflict(SegmentAvailability.Result check) =>
+        Results.Conflict(new {
+            error = "Dieser Zeitraum überschneidet sich mit einem bestehenden eigenen Zeitsegment.",
+            conflicts = check.Conflicts
+        });
+
+    private static async Task<bool> SegmentExistsAsync(NpgsqlConnection db, Guid id, Guid owner,
+        NpgsqlTransaction? transaction, CancellationToken ct, Guid? taskId = null)
+    {
+        await using var cmd = new NpgsqlCommand("""
+            SELECT EXISTS(SELECT 1 FROM task_segments
+            WHERE id=@id AND owner_user_id=@owner AND (@task IS NULL OR task_id=@task))
+            """, db, transaction);
+        cmd.Parameters.AddWithValue("id", id);
+        cmd.Parameters.AddWithValue("owner", owner);
+        cmd.Parameters.Add("task", NpgsqlDbType.Uuid).Value =
+            taskId.HasValue ? taskId.Value : DBNull.Value;
+        return (bool)(await cmd.ExecuteScalarAsync(ct) ?? false);
+    }
+
     private static async Task<bool> TaskExistsAsync(NpgsqlConnection db, Guid task, Guid owner,
-        CancellationToken ct)
+        CancellationToken ct, NpgsqlTransaction? transaction = null)
     {
         await using var cmd = new NpgsqlCommand(
-            "SELECT EXISTS(SELECT 1 FROM tasks WHERE id=@task AND owner_user_id=@owner)", db);
+            "SELECT EXISTS(SELECT 1 FROM tasks WHERE id=@task AND owner_user_id=@owner)", db, transaction);
         cmd.Parameters.AddWithValue("task", task);
         cmd.Parameters.AddWithValue("owner", owner);
         return (bool)(await cmd.ExecuteScalarAsync(ct) ?? false);

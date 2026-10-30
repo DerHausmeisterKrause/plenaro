@@ -23,6 +23,19 @@ export type SegmentInput = {
   participants: string[];
 };
 
+export type SegmentConflict = {
+  id: string;
+  taskId: string;
+  taskTitle: string;
+  startsAt: string;
+  endsAt: string;
+};
+export type SegmentAvailability = {
+  available: boolean;
+  conflicts: SegmentConflict[];
+};
+
+
 async function csrfToken(): Promise<string> {
   const response = await fetch('/api/v1/auth/csrf', { credentials: 'same-origin', cache: 'no-store' });
   if (!response.ok) throw new Error('Sicherheitstoken konnte nicht geladen werden.');
@@ -48,7 +61,9 @@ async function modify<T>(url: string, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE
   });
   if (!response.ok) {
     const json = await response.json().catch(() => ({})) as { error?: string };
-    throw new Error(json.error || 'Änderung konnte nicht gespeichert werden.');
+    throw new Error(json.error || (response.status === 409
+      ? 'Der Zeitraum ist bereits belegt. Bitte einen freien Zeitpunkt wählen.'
+      : 'Änderung konnte nicht gespeichert werden.'));
   }
   if (response.status === 204) return undefined as T;
   return await response.json() as T;
@@ -72,6 +87,11 @@ export const listTaskSegments = (id: string) =>
 export const listWeekSegments = (start: string, end: string) =>
   get<TaskSegment[]>('/api/v1/segments/?' +
     new URLSearchParams({ start, end }).toString());
+export const readSegmentAvailability = (startsAt: string, endsAt: string, excludeId?: string) =>
+  get<SegmentAvailability>('/api/v1/segments/availability?' +
+    new URLSearchParams({
+      start: startsAt, end: endsAt, ...(excludeId ? { excludeId } : {}),
+    }).toString());
 export const createTaskSegment = (id: string, input: SegmentInput) =>
   modify<{ id: string }>(taskPath(id) + '/segments', 'POST', input);
 export const updateTaskSegment = (id: string, segmentId: string, input: SegmentInput) =>

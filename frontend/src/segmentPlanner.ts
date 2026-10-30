@@ -39,3 +39,16 @@ export function calendarMove(segment: TaskSegment, day: string, hour: number, mi
 export function halfHourFromPosition(clientY: number, top: number, height: number): 0 | 30 {
   return height > 0 && clientY - top >= height / 2 ? 30 : 0;
 }
+
+export function intervalsOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  const a = Date.parse(aStart), z = Date.parse(aEnd);
+  const b = Date.parse(bStart), y = Date.parse(bEnd);
+  return [a, z, b, y].every(Number.isFinite) && a < z && b < y && a < y && b < z;
+}
+
+export function conflictingLocalSegments(
+  segments: TaskSegment[], start: string, end: string, exceptId?: string,
+): TaskSegment[] {
+  return segments.filter(s =>
+    s.id !== exceptId && intervalsOverlap(start, end, s.startsAt, s.endsAt));
+}

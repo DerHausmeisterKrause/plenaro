@@ -249,3 +249,21 @@ Plenaro speichert nur die neuen Zeitgrenzen (gesonderte `PATCH`-API);
 Notizen und Teilnehmer bleiben unverändert. Bei einem inzwischen anders
 geänderten Termin erscheint ein Konflikthinweis statt eines stillen Überschreibens.
 Kein Outlook-/Teams-Schreibzugriff oder Versand von Einladungen.
+
+## Lokale Verfügbarkeitsprüfung beim Planen (Phase 5)
+
+- Eigene Zeitsegmente werden bei Erstellung, Bearbeitung und Verschiebung serverseitig
+  auf zeitliche Überschneidungen geprüft. Ein direkter Anschluss (Ende = nächster Beginn)
+  bleibt zulässig.
+- Das Segmentformular zeigt eine lokale Verfügbarkeitsvorschau. Über
+  `GET /api/v1/segments/availability?start=...&end=...&excludeId=...` können nur
+  angemeldete Benutzer **ihre eigenen** Konflikte abfragen. `excludeId` darf nur
+  auf ein eigenes Segment zeigen.
+- POST, PUT und PATCH verweigern lokale Doppelbuchungen mit HTTP 409 und laufen
+  unter einer nutzergebundenen Transaktionssperre gegen parallele Änderungen.
+  Ein alter, bereits geänderter Segmentstand wird weiterhin mit HTTP 409 abgewiesen.
+- Ein optional verbundener Outlook-Kalender kann in der Wochenansicht als **Hinweis**
+  auf eigene belegte Termine dienen. Diese Lesedaten können unvollständig sein und
+  werden weder gespeichert noch als verbindliche Freigabe interpretiert.
+- Noch keine **Teilnehmerverfügbarkeit**, keine Einladungen oder Teams-Termine:
+  Microsoft-Graph-Schreibrechte, Consent und Live-Abnahme folgen separat.
