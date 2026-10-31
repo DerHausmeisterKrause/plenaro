@@ -39,7 +39,7 @@ class ClassicExportTest(unittest.TestCase):
                 ALTER TABLE tasks ADD COLUMN ticket_url TEXT;
                 ALTER TABLE tasks ADD COLUMN is_pinned INTEGER DEFAULT 0;
                 ALTER TABLE tasks ADD COLUMN ticket_state TEXT;
-                UPDATE tasks SET ticket_url='https://tickets.example.invalid/index.pl?Action=AgentTicketZoom&TicketID=55',
+                UPDATE tasks SET ticket_url='https://secretuser:secretpass@tickets.example.invalid/index.pl?Action=AgentTicketZoom&TicketID=55&access_token=PRIVATE_TOKEN',
                     is_pinned=1,ticket_state='open';
                 CREATE TABLE ticket_time_bookings(
                     id TEXT,task_id TEXT,ticket_id TEXT,ticket_number TEXT,
@@ -81,6 +81,10 @@ class ClassicExportTest(unittest.TestCase):
             self.assertEqual(len(payload["taskMetadata"]), 1)
             self.assertTrue(payload["taskMetadata"][0]["isPinned"])
             self.assertEqual(payload["taskMetadata"][0]["ticketState"], "open")
+            self.assertIn("TicketID=55", payload["taskMetadata"][0]["ticketUrl"])
+            self.assertNotIn("secretuser", content)
+            self.assertNotIn("secretpass", content)
+            self.assertNotIn("PRIVATE_TOKEN", content)
             self.assertEqual(len(payload["ticketBookings"]), 1)
             self.assertEqual(payload["ticketBookings"][0]["status"], "Succeeded")
             self.assertEqual(len(payload["monthlyAdjustments"]), 1)
