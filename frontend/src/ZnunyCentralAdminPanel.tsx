@@ -22,7 +22,8 @@ export function ZnunyCentralAdminPanel() {
       initialLookbackDays:next.initialLookbackDays,
       deltaIntervalMinutes:next.deltaIntervalMinutes,
       openIntervalMinutes:next.openIntervalMinutes,
-      maxRequestsPerCycle:next.maxRequestsPerCycle
+      maxRequestsPerCycle:next.maxRequestsPerCycle,
+      candidateDefaultAgentId:next.candidateDefaultAgentId
     });
   }
   useEffect(()=>{
@@ -35,7 +36,8 @@ export function ZnunyCentralAdminPanel() {
           initialLookbackDays:next.initialLookbackDays,
           deltaIntervalMinutes:next.deltaIntervalMinutes,
           openIntervalMinutes:next.openIntervalMinutes,
-          maxRequestsPerCycle:next.maxRequestsPerCycle});
+          maxRequestsPerCycle:next.maxRequestsPerCycle,
+      candidateDefaultAgentId:next.candidateDefaultAgentId});
       })
       .catch(e=>{if(alive)setError(e instanceof Error?e.message:'Sync-Status nicht verfügbar.');});
     return ()=>{alive=false;};
@@ -107,12 +109,17 @@ export function ZnunyCentralAdminPanel() {
           ['deltaIntervalMinutes','Änderungen prüfen (Minuten)',3,1440],
           ['openIntervalMinutes','Alte offene Tickets prüfen (Minuten)',15,10080],
           ['maxRequestsPerCycle','Maximale API-Anfragen je Durchlauf',20,1000],
+          ['candidateDefaultAgentId','Standard-OTRS-Agenten-ID (unzugewiesene Tickets)',1,2147483647],
         ] as const).map(([key,label,min,max])=>
           <label key={key}>{label}
             <input type="number" min={min} max={max} required value={settings[key]}
               onChange={e=>edit(key,Number(e.target.value))}/>
           </label>)}
       </div>
+      <p className="um-hint">Znuny/OTRS verwendet häufig Agenten-ID 1 für den technischen Standardbesitzer
+        (root@localhost). Falls euer Standardbenutzer eine andere ID besitzt, hier anpassen.
+        In „Neue Aufgaben“ erscheinen ausschließlich offene Tickets, deren Besitzer UND Verantwortlicher
+        fehlen oder diesem Standardagenten entsprechen.</p>
       <label className="um-check">
         <input type="checkbox" checked={settings.enabled}
           onChange={e=>edit('enabled',e.target.checked)}/>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Inbox, RefreshCw, Search, Ticket } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ZnunyTicketPlanPanel } from './ZnunyTicketPlanPanel';
 import {
   getCachedTickets,getTicketAccess,type CachedTicket,type TicketAccess,
 } from './znunySyncApi';
@@ -11,7 +12,8 @@ export function TicketsWorkspacePage() {
   const [tickets,setTickets]=useState<CachedTicket[]>([]);
   const [selectedId,setSelectedId]=useState<string|null>(null);
   const [access,setAccess]=useState<TicketAccess|null>(null);
-  const [view,setView]=useState<'mine'|'new'>('mine');
+  const [view,setView]=useState<'mine'|'new'|'completed'>('mine');
+  const [params]=useSearchParams();
   const [search,setSearch]=useState('');
   const [page,setPage]=useState(0);
   const [loading,setLoading]=useState(true);
@@ -24,10 +26,11 @@ export function TicketsWorkspacePage() {
       setAccess(nextAccess);
       setTickets(nextTickets);
       setSelectedId(old=>nextTickets.some(ticket=>ticket.ticketId===old)?old:
+        nextTickets.find(ticket=>ticket.ticketId===params.get('ticket'))?.ticketId??
         nextTickets[0]?.ticketId??null);
     } catch(e) {setError(e instanceof Error?e.message:'Ticketliste nicht verfügbar.');}
     finally{setLoading(false);}
-  },[view,search,page]);
+  },[view,search,page,params]);
   useEffect(()=>{
     void refresh();
     const interval=window.setInterval(()=>{if(!document.hidden)void refresh();},60_000);
@@ -44,7 +47,7 @@ export function TicketsWorkspacePage() {
     <div className="classic-split">
       <section className="classic-list-pane" aria-label="Ticketliste">
         <div className="classic-list-header">
-          <div><strong>{view==='mine'?'Meine Tickets':'Neue Aufgaben'}</strong>
+          <div><strong>{view==='mine'?'Meine aktuellen Tickets':view==='new'?'Neue Aufgaben':'Erledigte Aufgaben'}</strong>
             <span>{access?.approved?`${tickets.length} Tickets im Cache`:
               'Agentenzuordnung noch nicht freigegeben'}</span></div>
           <button className="button button-secondary" type="button"
@@ -56,6 +59,8 @@ export function TicketsWorkspacePage() {
             aria-pressed={view==='mine'} onClick={()=>{setPage(0);setView('mine');}}>Meine Tickets</button>
           <button type="button" className={view==='new'?'active':''}
             aria-pressed={view==='new'} onClick={()=>{setPage(0);setView('new');}}>Neue Aufgaben</button>
+          <button type="button" className={view==='completed'?'active':''}
+            aria-pressed={view==='completed'} onClick={()=>{setPage(0);setView('completed');}}>Erledigte Aufgaben</button>
         </div>
         <label className="classic-search">
           <Search size={16}/>
@@ -117,6 +122,7 @@ export function TicketsWorkspacePage() {
           </dl>
           <p className="um-hint">Nur lesbare Metadaten aus der zentralen Datenbank.
             Keine erneuten API-Anfragen beim Öffnen und keine Ticketbuchung.</p>
+          {view!=='completed'&&<ZnunyTicketPlanPanel ticketId={selected.ticketId}/>}
         </div>}
       </section>
     </div>

@@ -11,7 +11,8 @@ public static class ZnunySyncEndpoints
 {
     public sealed record SyncConfiguration(bool Enabled,string ServiceUsername,
         int InitialLookbackDays=365,int DeltaIntervalMinutes=15,
-        int OpenIntervalMinutes=360,int MaxRequestsPerCycle=200);
+        int OpenIntervalMinutes=360,int MaxRequestsPerCycle=200,
+        int CandidateDefaultAgentId=1);
     public sealed record ServicePassword(string Password);
     public sealed record ResetRequest(string Confirmation);
 
@@ -33,14 +34,16 @@ public static class ZnunySyncEndpoints
                 input.InitialLookbackDays is < 7 or > 3650 ||
                 input.DeltaIntervalMinutes is < 3 or > 1440 ||
                 input.OpenIntervalMinutes is < 15 or > 10080 ||
-                input.MaxRequestsPerCycle is < 20 or > 1000)
+                input.MaxRequestsPerCycle is < 20 or > 1000 ||
+                input.CandidateDefaultAgentId < 1)
                 return Results.BadRequest(new {error="Ungültige Sync-Einstellungen."});
             await using var db=await Open(config,ct);
             await using var cmd=new NpgsqlCommand("""
                 UPDATE znuny_sync_control SET enabled=@enabled,
                     service_username=@username,initial_lookback_days=@lookback,
                     delta_interval_minutes=@delta,open_interval_minutes=@open,
-                    max_requests_per_cycle=@budget,updated_at=now()
+                    max_requests_per_cycle=@budget,
+                    candidate_default_agent_id=@defaultAgent,updated_at=now()
                 WHERE id=true
                 """,db);
             cmd.Parameters.AddWithValue("enabled",input.Enabled);
@@ -49,6 +52,7 @@ public static class ZnunySyncEndpoints
             cmd.Parameters.AddWithValue("delta",input.DeltaIntervalMinutes);
             cmd.Parameters.AddWithValue("open",input.OpenIntervalMinutes);
             cmd.Parameters.AddWithValue("budget",input.MaxRequestsPerCycle);
+            cmd.Parameters.AddWithValue("defaultAgent",input.CandidateDefaultAgentId);
             await cmd.ExecuteNonQueryAsync(ct);
             return Results.NoContent();
         });
@@ -124,7 +128,7 @@ public static class ZnunySyncEndpoints
         {
             var account=await users.GetUserAsync(http.User);
             if(account is null || account.IsDisabled)return Results.Unauthorized();
-            if(view is not (null or "mine" or "new"))
+            if(view is not (null or "mine" or "new" or "completed"))
                 return Results.BadRequest(new{error="Ungültige Ansicht."});
             if(search is {Length:>100})
                 return Results.BadRequest(new{error="Suchbegriff zu lang."});
@@ -137,22 +141,26 @@ public static class ZnunySyncEndpoints
                     t.state_type,t.owner_agent_id,t.responsible_agent_id,
                     t.created_at,t.changed_at
                 FROM znuny_cached_tickets t
-                INNER JOIN znuny_approved_agent_bindings b
-                    ON b.user_id=@user
-                LEFT JOIN znuny_user_settings p ON p.user_id=b.user_id
+                INNER JOIN znuny_approved_agent_bindings b ON b.user_id=@user
+                CROSS JOIN znuny_sync_control c
                 WHERE (
-                     (COALESCE(p.include_owner,true) AND t.owner_agent_id=b.agent_id)
-                  OR (COALESCE(p.include_responsible,true) AND t.responsible_agent_id=b.agent_id)
+                    (@view='new' AND
+                      (t.owner_agent_id IS NULL OR t.owner_agent_id IN (0,c.candidate_default_agent_id)) AND
+                      (t.responsible_agent_id IS NULL OR t.responsible_agent_id IN (0,c.candidate_default_agent_id)))
+                    OR (@view<>'new' AND
+                      (t.owner_agent_id=b.agent_id OR t.responsible_agent_id=b.agent_id))
                 )
-                AND (@new=false OR lower(t.state_type)='new'
-                    OR lower(t.state)='new')
+                AND (
+                    (@view='completed' AND lower(t.state_type)='closed')
+                    OR (@view<>'completed' AND lower(t.state_type)<>'closed')
+                )
                 AND (@query='' OR t.ticket_number ILIKE '%'||@query||'%'
                     OR t.title ILIKE '%'||@query||'%')
                 ORDER BY t.changed_at DESC NULLS LAST,t.ticket_id DESC
                 LIMIT @max OFFSET @skip
                 """,db);
             cmd.Parameters.AddWithValue("user",account.Id);
-            cmd.Parameters.AddWithValue("new",view=="new");
+            cmd.Parameters.AddWithValue("view",view??"mine");
             // This search is applied only *after* agent authorization in SQL.
             cmd.Parameters.AddWithValue("query",search?.Trim()??"");
             cmd.Parameters.AddWithValue("max",pageSize);
@@ -174,6 +182,8 @@ public static class ZnunySyncEndpoints
             }
             return Results.Ok(tickets);
         });
+
+        ZnunyTicketPlanningEndpoints.Map(reader);
 
         reader.MapGet("/tickets/status",async(HttpContext http,
             UserManager<ApplicationUser> users,IConfiguration config,
