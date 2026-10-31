@@ -63,6 +63,7 @@ export function ZnunySettingsPanel({ admin }: { admin: boolean }) {
       const {
         passwordConfigured: _passwordConfigured,
         vaultReady: _vaultReady,
+        agentId: _agentId,
         ...values
       } = personal;
       await saveZnunyPersonal(values);
@@ -130,7 +131,7 @@ export function ZnunySettingsPanel({ admin }: { admin: boolean }) {
 
     {personal && <section className="content-card um-panel">
       <div className="um-section-title"><PlugZap size={20}/><h3>Meine Znuny-Verbindung</h3></div>
-      <p>Benutzername, Agenten-ID und persönliche Ticketfilter. Andere Plenaro-Benutzer sehen diese Einstellungen nicht.</p>
+      <p>Persönliche Zugangsdaten und Ticketfilter. Die Znuny-Agenten-ID wird ausschließlich in der Benutzerverwaltung von einem Administrator vergeben.</p>
       <form className="um-form znuny-settings-form" onSubmit={e => void saveUser(e)}>
         <label htmlFor="znuny-username">Znuny-Benutzername</label>
         <input id="znuny-username" required maxLength={256} autoComplete="username"
@@ -140,9 +141,10 @@ export function ZnunySettingsPanel({ admin }: { admin: boolean }) {
           value={password} onChange={e => setPassword(e.target.value)}
           disabled={!personal.vaultReady} placeholder={personal.passwordConfigured ? 'Gespeichert – zum Ersetzen neu eingeben' : 'Passwort eingeben'}/>
         <p className="um-hint"><ShieldCheck size={14}/> Das Passwort wird ausschließlich verschlüsselt im Secret-Vault gespeichert und nie zurück an den Browser ausgegeben.</p>
-        <label htmlFor="znuny-agent">Eigene Agenten-ID</label>
-        <input id="znuny-agent" type="number" min={0} max={2147483647} required
-          value={personal.agentId} onChange={e => editUser('agentId',Number(e.target.value))}/>
+        <div className="um-account-data">
+          <span>Znuny-Agenten-ID (durch Administrator vergeben)</span>
+          <strong>{personal.agentId ?? 'Keine Zuordnung'}</strong>
+        </div>
         <label htmlFor="znuny-candidate-id">Kandidaten-Benutzer-ID</label>
         <input id="znuny-candidate-id" type="number" min={1} max={2147483647} required
           value={personal.candidateUserId} onChange={e => editUser('candidateUserId',Number(e.target.value))}/>
