@@ -290,10 +290,10 @@ public static class ZnunyEndpoints
             !string.IsNullOrEmpty(uri.Query) ||
             !string.IsNullOrEmpty(uri.Fragment))
             return false;
+        // Local domain suffixes are valid for self-hosted Znuny (after DNS peer
+        // validation), but localhost must never become a test target.
         if (uri.Host.Equals("localhost",StringComparison.OrdinalIgnoreCase) ||
-            uri.Host.EndsWith(".localhost",StringComparison.OrdinalIgnoreCase) ||
-            uri.Host.EndsWith(".local",StringComparison.OrdinalIgnoreCase) ||
-            uri.Host.EndsWith(".internal",StringComparison.OrdinalIgnoreCase))
+            uri.Host.EndsWith(".localhost",StringComparison.OrdinalIgnoreCase))
             return false;
         if (IPAddress.TryParse(uri.Host,out var ip))
             return IsRoutableTarget(ip);
