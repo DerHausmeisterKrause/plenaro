@@ -11,10 +11,13 @@ import json
 from pathlib import Path
 import re
 import sqlite3
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
-TZ = ZoneInfo("Europe/Berlin")
+try:
+    TZ = ZoneInfo("Europe/Berlin")
+except ZoneInfoNotFoundError:
+    raise SystemExit("Europe/Berlin-Zeitzonendaten fehlen. Unter Windows: py -m pip install tzdata")
 SAFE_LIMIT = 20000
 
 
@@ -96,9 +99,12 @@ def main():
     def records(name):
         if name not in tables:
             return []
-        rows = con.execute("SELECT * FROM " + name).fetchmany(SAFE_LIMIT + 1)
-        if len(rows) > SAFE_LIMIT:
-            parser.error(f"Too many {name} rows; contact maintainer for bulk import.")
+        limit = 2000 if name == "tasks" else (4000 if name in
+            ("task_segments", "time_logs", "work_days", "ticket_time_bookings",
+             "monthly_report_time_adjustments") else SAFE_LIMIT)
+        rows = con.execute("SELECT * FROM " + name).fetchmany(limit + 1)
+        if len(rows) > limit:
+            parser.error(f"Zu viele {name}-Einträge ({len(rows)} > {limit}); Bulk-Migration nötig.")
         return [dict(row) for row in rows]
 
     warnings = []
