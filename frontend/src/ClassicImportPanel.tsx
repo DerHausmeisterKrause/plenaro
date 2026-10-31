@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
 import { DatabaseBackup, FileJson2, RotateCcw, Upload } from 'lucide-react';
+import { ClassicArchiveOverviewPanel, ClassicImportedSettings } from './ClassicArchivePanels';
 import {
   commitClassicImport, listClassicImports, parseClassicFile, previewClassicImport,
   undoClassicImport, type ClassicImport, type ImportBatch, type ImportPreview,
@@ -9,12 +10,14 @@ export function ClassicImportPanel() {
   const [document, setDocument] = useState<ClassicImport | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [settingsBatch, setSettingsBatch] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
   async function refreshBatches() {
-    try { setBatches(await listClassicImports()); }
+    try { setBatches(await listClassicImports()); setRefreshVersion(value => value + 1); }
     catch (e) { setError(e instanceof Error ? e.message : 'Importverlauf nicht verfügbar.'); }
   }
   useEffect(() => { void refreshBatches(); }, []);
@@ -81,6 +84,9 @@ export function ClassicImportPanel() {
         <span>Zeitsegmente <strong>{preview.newSegments} / {preview.segmentCount}</strong></span>
         <span>Zeitbuchungen <strong>{preview.newTimeEntries} / {preview.timeCount}</strong></span>
         <span>Tagesmarker <strong>{preview.newMarkers} / {preview.markerCount}</strong></span>
+        {(preview.metadataCount ?? 0) > 0 && <span>Classic-Feldinformationen <strong>{preview.newMetadata} / {preview.metadataCount}</strong></span>}
+        {(preview.bookingCount ?? 0) > 0 && <span>Historische Ticketbuchungen <strong>{preview.newBookings} / {preview.bookingCount}</strong></span>}
+        {(preview.monthlyCount ?? 0) > 0 && <span>Alte Monatskorrekturen <strong>{preview.newMonthly} / {preview.monthlyCount}</strong></span>}
       </div>
       <p className="um-hint">Jeweils: neu / im Export. Bereits importierte Einträge werden nicht doppelt angelegt.
         Bestehende Webdaten werden nicht überschrieben.</p>
@@ -96,18 +102,27 @@ export function ClassicImportPanel() {
         <Upload size={16}/>Import ausführen
       </button>
     </>}
+    <ClassicArchiveOverviewPanel refreshVersion={refreshVersion}/>
     <h3>Importverlauf und sichere Rücknahme</h3>
     {batches.length === 0 ? <p className="um-hint">Noch kein Import ausgeführt.</p> :
       <div className="classic-import-batches">{batches.map(batch =>
         <div className="classic-import-batch" key={batch.id}>
           <span><strong>{new Intl.DateTimeFormat('de-DE',{dateStyle:'short',timeStyle:'short'}).format(new Date(batch.createdAt))}</strong>
             <small>{batch.rowCount} Datensätze · Quelle: {batch.sourceId}</small></span>
-          <button className="button button-secondary" type="button" disabled={busy}
-            onClick={() => void rollback(batch.id)}><RotateCcw size={14}/>Rückgängig</button>
+          <div className="classic-archive-batch-actions">
+            <button className="button button-secondary" type="button"
+              onClick={() => setSettingsBatch(current => current === batch.id ? null : batch.id)}>
+              {settingsBatch === batch.id ? 'Einstellungen schließen' : 'Archivierte Einstellungen'}
+            </button>
+            <button className="button button-secondary" type="button" disabled={busy}
+              onClick={() => void rollback(batch.id)}><RotateCcw size={14}/>Rückgängig</button>
+          </div>
+          {settingsBatch === batch.id && <ClassicImportedSettings batchId={batch.id}/>} 
         </div>)}</div>}
     <p className="um-hint">Rücknahme ist nur möglich, wenn die importierten Datensätze unverändert sind und keine
       weiteren Zeitdaten an diesen Aufgaben hängen. Vor dem Import zusätzlich eine Datenbanksicherung erstellen.</p>
     <p className="um-hint">Noch nicht migriert: Ticketbuchungen, Outlook-Verknüpfungen, Wiki-Caches,
-      Zugangsdaten, Monatskorrekturen, offene Timer und Anwesenheits-/Pausenzeiten.</p>
+      Zugangsdaten, offene Timer und Anwesenheits-/Pausenzeiten. Historische Ticketbuchungen,
+      Classic-Feldinformationen und Monatskorrekturen stehen im Archiv, sind aber nicht aktiv.</p>
   </section>;
 }
