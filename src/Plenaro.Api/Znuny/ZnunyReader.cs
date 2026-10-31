@@ -236,6 +236,12 @@ public sealed class ZnunyReader(IHttpClientFactory factory)
         JsonElement list=default;
         foreach(var key in new[]{"Agents","Agent","Users","User"})
             if(root.TryGetProperty(key,out list))break;
+        if(list.ValueKind==JsonValueKind.Undefined &&
+            root.TryGetProperty("Data",out var nested) &&
+            nested.ValueKind==JsonValueKind.Object)
+            nested.TryGetProperty("Agents",out list);
+        if(list.ValueKind is not (JsonValueKind.Array or JsonValueKind.Object))
+            throw new RemoteFailure("unsupported-agent-list");
         var agents=new List<Agent>();
         if(list.ValueKind==JsonValueKind.Array)
         {
@@ -243,8 +249,11 @@ public sealed class ZnunyReader(IHttpClientFactory factory)
                 if(a.ValueKind==JsonValueKind.Object){
                     var id=Int(a,"UserID")??Int(a,"AgentID");
                     if(id is >0)agents.Add(new Agent(id.Value,
-                        String(a,"UserFullname",256) is {Length:>0} name?
-                        name:String(a,"UserLogin",256)));
+                        new[]{String(a,"Name",256),
+                            String(a,"FirstName",128)+" "+String(a,"LastName",128),
+                            String(a,"Login",256),String(a,"UserLogin",256)}
+                            .FirstOrDefault(name=>!string.IsNullOrWhiteSpace(name))?.Trim()
+                            ?? "Agent #"+id));
                 }
         }
         else if(list.ValueKind==JsonValueKind.Object)
