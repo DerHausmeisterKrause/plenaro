@@ -105,7 +105,8 @@ export function TicketsWorkspacePage() {
             Ticketmetadaten. Ticketaktionen und Artikelverläufe folgen separat.</p>
           <Link to="/settings" className="button button-secondary">Integrationseinstellungen öffnen</Link>
         </div>:
-        <ClassicTicketDetailPanel key={selected.ticketId} ticket={selected}/>}
+        <ClassicTicketDetailPanel key={selected.ticketId} ticket={selected}
+          onChanged={()=>void refresh()}/>}
       </section>
     </div>
   </div>;
