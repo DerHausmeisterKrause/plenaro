@@ -420,3 +420,78 @@ Neue Aufgaben, Ticketaktionen, automatische Synchronisierung und
 Benachrichtigungen über Ticketänderungen. Die Standard-Routenkonfiguration
 ist keine Zusage, dass der konkret eingerichtete Znuny-Webservice alle
 Operationen anbietet; dies muss später bei der Live-Abnahme geprüft werden.
+
+## Zentrale Znuny-Ticketsynchronisation
+
+Anders als beim Desktop-Plenaro wird **nicht pro Benutzer** das gesamte Znuny
+abgefragt. Ein einziger Hintergrunddienst mit eigener Service-Anmeldung liest
+`TicketSearch`/`TicketGet` und aktualisiert `znuny_cached_tickets`.
+Ein PostgreSQL-Advisory-Lock verhindert doppelte Syncs bei mehreren Web-Replikas.
+Die Synchronisation ist bis zur expliziten Einrichtung standardmäßig **aus**.
+
+### Einrichtung
+
+1. Unter **Einstellungen → Ticketsystem** die bisherige admin-gesteuerte
+   Znuny-API-Basisadresse, Search-/Get-Methoden und Routen konfigurieren;
+   `SERVER` muss durch den tatsächlichen HTTPS-Server ersetzt sein.
+2. Im Abschnitt **Zentrale Znuny-Synchronisation** einen technischen Benutzer mit
+   ausreichendem Leserecht auf die gewünschten Tickets eintragen und dessen
+   Passwort im globalen AES-GCM-Vault speichern. Nicht jeder normale Nutzer
+   braucht einen eigenen API-Zugang für den Cache.
+3. Erstimport-Rückblick (Standard **365 Tage**), Delta-Abfrage (Standard
+   **15 Minuten**), historischen Open-Sweep (Standard **360 Minuten**)
+   und API-Budget einstellen. Sync aktivieren und ggf. manuell anstoßen.
+4. **Agentenzuordnungen** für die einzelnen Plenaro-Benutzer ausdrücklich
+   administrativ genehmigen. Die vom Benutzer selbst eingegebene Agenten-ID
+   kann die Freigabe nicht ersetzen oder umgehen. Gleiche Agent-ID kann
+   nicht gleichzeitig mehreren Benutzern zugewiesen werden.
+5. Unter **Ticketsystem** die Ansichten „Meine Tickets“ und „Neue Aufgaben“
+   aus dem zentralen Cache öffnen.
+
+### Einmaliger Import und laufende Änderungen
+
+* Erstimport: eine langlebig gespeicherte Zeitachse von **heute − 365 Tage**
+  bis zum Zeitpunkt des Importstarts. Der Worker verarbeitet höchstens
+  acht Tage pro Durchlauf und merkt sich den erfolgreichen Abschnitt in
+  PostgreSQL. Nach Abbruch/Neustart folgt die Fortsetzung. Ein mehrfach
+  gelesenes Ticket wird anhand seiner Znuny-TicketID aktualisiert, nicht dupliziert.
+* Delta: `TicketLastChangeTimeNewerDate` seit dem letzten sicheren Wasserstand
+  mit **24 Stunden Sicherheitsüberschneidung**. Erst wenn die gesamte Suche
+  und die zugehörigen TicketGets erfolgreich waren, wird der Wasserstand
+  vorgezogen.
+* Ältere offene Tickets: zunächst eine **einzige globale** Suche mit
+  `StateType=Open` und einem Alter über der Erstimportgrenze. Bei weniger
+  Treffern als dem SearchLimit werden diese direkt aktualisiert. Nur wenn
+  die Ergebnismenge das Limit erreicht, folgt ein fortsetzbarer Sweep in
+  90-Tages-Abschnitten ab 2000. Nach Abschluss wird die Prüfung im
+  eingestellten Intervall wiederholt.
+* Wenn TicketSearch das Suchlimit erreicht, halbiert der Connector das
+  Zeitfenster bis eindeutige, nicht abgeschnittene Resultate vorliegen.
+  Ein nicht sicher vollständig lesbarer Bereich setzt **weder den Bootstrap-,
+  noch den Delta-/Open-Cursor vor**. Fehlercodes erscheinen im Admin-Status.
+* **Keine** automatischen Artikel-Downloads, Ticketantworten, Updates,
+  Schließungen oder Buchungen in dieser Stufe. Der Benutzerbereich liest
+  ausschließlich die zentral gespeicherten Ticketmetadaten; er ruft
+  nicht selbst Znuny auf.
+
+### Datenschutz und Administratorrechte
+
+Die zentrale Serviceanmeldung benötigt einen vertrauenswürdigen Admin und
+Leserechte in Znuny. Passwörter liegen ausschließlich im globalen Vault;
+Znuny-SessionIDs sind flüchtig und werden nicht geloggt oder gespeichert.
+Agentenzuordnungen erfolgen ausschließlich durch einen Plenaro-Administrator.
+Selbst wenn ein Benutzer seine persönliche Agenten-ID umstellt, bleibt der
+autorisiert sichtbare Bestand auf die **separat freigegebene** ID begrenzt.
+Unvollständige Zuordnungsfelder im TicketGet werden nicht erraten: Solche
+Tickets bleiben bis zur eindeutigen Zuordnung unsichtbar.
+
+Bei Wechsel des Znuny-Servers wird der Sync angehalten, bis der Cache bei
+deaktiviertem Sync explizit zurückgesetzt wird. Der Reset löscht die
+lokal zwischengespeicherten Ticketmetadaten und Sync-Cursor; nicht jedoch
+Aufgaben oder historische Classic-Archiveinträge.
+
+Der Worker setzt das seit Classic konfigurierte Search-API-REST-Mapping
+voraus. Manche Znuny-Instanzen verwenden `POST /Ticket/Search` statt
+`GET /Ticket`; die zentrale Admin-API-Einstellung kann dies anpassen.
+Ein vollständiger realer Integrationstest mit dem jeweils bereitgestellten
+Webservice und seinen Berechtigungen steht noch aus.

@@ -8,6 +8,7 @@ import { EntraAdminSettings } from './EntraAdminSettings';
 import { DayMarkerBudgetSettings } from './DayMarkersPanel';
 import { ReminderSettingsPanel } from './ReminderSettingsPanel';
 import { ZnunySettingsPanel } from './ZnunySettingsPanel';
+import { ZnunyCentralAdminPanel } from './ZnunyCentralAdminPanel';
 import { ClassicImportPanel } from './ClassicImportPanel';
 import { type PersonalPreferences, type WorkspacePreferences } from './settingsApi';
 import { addUser, changePassword, listUsers, resetUserPassword, saveUser, type ManagedUser } from './userApi';
@@ -236,7 +237,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved }: {
         <a href="/week" className="button button-secondary">Wochenplanung öffnen</a>
       </section>
     </>}
-    {section === 'ticket' && <ZnunySettingsPanel admin={admin}/>}
+    {section === 'ticket' && <><ZnunySettingsPanel admin={admin}/>{admin && <ZnunyCentralAdminPanel/>}</>}
     {section === 'security' && <>
       <section className="content-card um-account">
         <div className="um-section-title"><ShieldCheck size={20}/><h2>Mein Konto</h2></div>

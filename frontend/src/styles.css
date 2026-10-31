@@ -739,3 +739,24 @@ h1,h2,h3,p { margin-top: 0; }
 .znuny-settings-grid label { display: grid; gap: 6px; }
 .znuny-settings-form .um-hint { display: flex; align-items: center; gap: 8px; }
 @media(max-width: 620px){ .znuny-settings-grid {grid-template-columns: 1fr;} }
+
+/* Central Znuny synchronization admin controls and cached read-only ticket views. */
+.znuny-central-admin { display: grid; gap: 12px; }
+.znuny-central-status { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.znuny-central-status > span { display: grid; gap: 4px; background: var(--surface-soft); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 12px; }
+.znuny-central-status > p { grid-column: 1 / -1; overflow-wrap: anywhere; }
+.znuny-bindings { display: grid; gap: 8px; }
+.znuny-binding { display: grid; gap: 7px; background: var(--surface-soft); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.znuny-binding small { color: var(--muted-strong); }
+.znuny-binding input { width: 130px; max-width: 100%; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 7px; padding: 6px 8px; }
+.classic-ticket-views { display: flex; gap: 8px; padding: 9px 12px; }
+.classic-ticket-views button { border: 1px solid var(--border); border-radius: 7px; background: var(--surface-soft); color: var(--text); cursor: pointer; padding: 7px 12px; }
+.classic-ticket-views button.active { border-color: var(--accent); font-weight: 700; }
+.classic-ticket-detail { padding: 22px; overflow-wrap: anywhere; }
+.classic-ticket-detail h2 { margin: 12px 0 18px; }
+.classic-ticket-detail dl { display: grid; grid-template-columns: minmax(120px,1fr) minmax(0,2fr); gap: 12px; font-size: 13px; }
+.classic-ticket-detail dt { color: var(--muted-strong); font-weight: 600; }
+.classic-ticket-detail dd { margin: 0; overflow-wrap: anywhere; }
+@media(max-width:560px) { .znuny-central-status {grid-template-columns:1fr;} .classic-ticket-detail dl {grid-template-columns:1fr;} }
+
+.znuny-ticket-pagination { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 12px; font-size: 12px; }

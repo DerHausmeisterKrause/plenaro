@@ -23,6 +23,25 @@ beforeEach(() => {
     if (path === '/api/v1/notifications/settings') return {
       ok: true, status: 200, json: async () => ({ enabled: true, leadMinutes: 2 }),
     };
+    if (path === '/api/v1/admin/znuny/sync') return {
+      ok: true,status:200,json:async()=>({
+        enabled:false,serviceUsername:'',passwordConfigured:false,
+        sourceApiUrl:null,initialLookbackDays:365,deltaIntervalMinutes:15,
+        openIntervalMinutes:360,maxRequestsPerCycle:200,bootstrapCursor:null,
+        bootstrapEnd:null,bootstrapFinishedAt:null,deltaWatermark:null,
+        lastDeltaAt:null,lastOpenAt:null,openCursor:null,lastAttemptAt:null,
+        lastError:null,cachedTickets:0,
+      })
+    };
+    if (path === '/api/v1/admin/znuny/bindings') return {
+      ok:true,status:200,json:async()=>[],
+    };
+    if (path === '/api/v1/znuny/tickets/status') return {
+      ok:true,status:200,json:async()=>({approved:false,agentId:null,syncEnabled:false}),
+    };
+    if (path.startsWith('/api/v1/znuny/tickets?')) return {
+      ok:true,status:200,json:async()=>[],
+    };
     if (path === '/api/v1/znuny/server') return {
       ok: true, status: 200, json: async () => ({
         webUrl: 'https://SERVER/index.pl',
@@ -137,7 +156,16 @@ describe('Plenaro web shell', () => {
     expect(await screen.findByRole('heading', { name: 'Ticketsystem' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Ticketliste' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Ticketdetails' })).toBeTruthy();
-    expect(screen.getByText('Noch keine Tickets geladen')).toBeTruthy();
+    expect(await screen.findByText('Noch keine Tickets geladen')).toBeTruthy();
+  });
+
+  it('verwendet zentrale Ticketsuche ohne persönlichen Znuny-API-Aufruf', async () => {
+    renderAt('/tickets');
+    expect(await screen.findByText('Noch keine Tickets geladen')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Neue Aufgaben' }));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>
+      String(url).includes('/api/v1/znuny/tickets?view=new'))).toBe(true));
+    expect(screen.getByText(/Agenten-ID freigeben/)).toBeTruthy();
   });
 
   it('bietet den Dunkelmodus mit umschaltbarem Zustand', async () => {
@@ -198,7 +226,7 @@ describe('Plenaro web shell', () => {
     fireEvent.click(screen.getByText('Classic-Routen, Sync-Zeiten und weitere API-Standardwerte'));
     expect((screen.getByLabelText('TicketSearch-Route') as HTMLInputElement).value).toBe('/Ticket');
     expect((screen.getByLabelText('Maximaler TicketSearch-Umfang') as HTMLInputElement).value).toBe('100');
-    expect((screen.getByLabelText('Kandidaten-Abfrage (Minuten)') as HTMLInputElement).value).toBe('5');
+    expect((screen.getByLabelText('Classic-Kandidatenintervall (Legacy, nicht aktiv)') as HTMLInputElement).value).toBe('5');
   });
 
   it('zeigt getrennte Formulare für persönliche und globale Einstellungen', async () => {
