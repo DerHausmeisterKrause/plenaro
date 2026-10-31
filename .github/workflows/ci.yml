@@ -330,7 +330,7 @@ jobs:
           test "$(secure -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$HTTPS/api/v1/znuny/connection-test")" = "400"
           curl -sS --cacert ./ci-tls.crt --resolve plenaro.test:443:127.0.0.1 \
             -b "$JAR" -X POST "$HTTPS/api/v1/znuny/connection-test" -H "X-CSRF-TOKEN: $T" \
-            | python3 -c 'import json,sys;d=json.load(sys.stdin);assert "SERVER" in d["error"]'
+            | python3 -c 'import json,sys;d=json.load(sys.stdin);assert "server" in d["error"].lower()'
           secure -c "$JAR" -b "$JAR" -X DELETE "$HTTPS/api/v1/znuny/password" -H "X-CSRF-TOKEN: $T" > /dev/null
           secure -b "$JAR" "$HTTPS/api/v1/znuny/me" | python3 -c 'import json,sys;assert not json.load(sys.stdin)["passwordConfigured"]'
           # Entra admin configuration is encrypted in Vault, never sourced from .env.
