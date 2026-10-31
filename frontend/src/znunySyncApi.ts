@@ -2,14 +2,15 @@ export type SyncStatus = {
   enabled: boolean; serviceUsername: string; passwordConfigured: boolean;
   sourceApiUrl: string | null; initialLookbackDays: number;
   deltaIntervalMinutes: number; openIntervalMinutes: number;
-  maxRequestsPerCycle: number; bootstrapCursor: string | null;
+  maxRequestsPerCycle: number; candidateDefaultAgentId: number;
+  bootstrapCursor: string | null;
   bootstrapEnd: string | null; bootstrapFinishedAt: string | null;
   deltaWatermark: string | null; lastDeltaAt: string | null;
   lastOpenAt: string | null; openCursor: string | null;
   lastAttemptAt: string | null; lastError: string | null; cachedTickets: number;
 };
 export type SyncConfig = Pick<SyncStatus,'enabled'|'serviceUsername'|'initialLookbackDays'|
-  'deltaIntervalMinutes'|'openIntervalMinutes'|'maxRequestsPerCycle'>;
+  'deltaIntervalMinutes'|'openIntervalMinutes'|'maxRequestsPerCycle'|'candidateDefaultAgentId'>;
 export type SyncRunResult = {
   started: boolean; status: string; requests: number; tickets: number;
 };
@@ -19,6 +20,10 @@ export type CachedTicket = {
   createdAt: string|null; changedAt: string|null;
 };
 export type TicketAccess = { approved: boolean; agentId:number|null; syncEnabled:boolean };
+export type TicketSegment = {
+  id: string; startsAt: string; endsAt: string; note: string;
+};
+export type TicketAgendaSegment = TicketSegment & CachedTicket;
 
 async function request<T>(url: string): Promise<T> {
   const result=await fetch(url,{credentials:'same-origin',cache:'no-store'});
@@ -55,6 +60,20 @@ export const resetCentralCache=async()=>{
   await mutate('/api/v1/admin/znuny/sync/reset','POST',{confirmation:'ZNUNY CACHE ZURUECKSETZEN'});
 };
 export const getTicketAccess=()=>request<TicketAccess>('/api/v1/znuny/tickets/status');
-export const getCachedTickets=(view:'mine'|'new'='mine',search='',page=0)=>
+export const getCachedTickets=(view:'mine'|'new'|'completed'='mine',search='',page=0)=>
   request<CachedTicket[]>('/api/v1/znuny/tickets?view='+view+
     '&search='+encodeURIComponent(search)+'&page='+page);
+
+export const getTicketAgenda=(day:string)=>
+  request<TicketAgendaSegment[]>('/api/v1/znuny/tickets/agenda?date='+encodeURIComponent(day));
+export const getTicketSegments=(ticketId:string)=>
+  request<TicketSegment[]>('/api/v1/znuny/tickets/'+encodeURIComponent(ticketId)+'/segments');
+export const planTicketSegment=async(ticketId:string,input:{
+  startsAt:string;endsAt:string;note:string;
+})=>{
+  await mutate('/api/v1/znuny/tickets/'+encodeURIComponent(ticketId)+'/segments','POST',input);
+};
+export const deleteTicketSegment=async(ticketId:string,segmentId:string)=>{
+  await mutate('/api/v1/znuny/tickets/'+encodeURIComponent(ticketId)+
+    '/segments/'+encodeURIComponent(segmentId),'DELETE');
+};
