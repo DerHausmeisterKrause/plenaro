@@ -7,6 +7,7 @@ import type { TaskSegment } from './taskWorkApi';
 import type { TaskReminder } from './notificationApi';
 import type { OutlookEvent } from './graphApi';
 import type { ManagedUser } from './userApi';
+import type { CachedTicket, TicketAgendaSegment } from './znunySyncApi';
 
 let calendarSegments: TaskSegment[] = [];
 let reminderItems: TaskReminder[] = [];
@@ -15,6 +16,10 @@ let allTasksFixture: WorkTask[] = [];
 let outlookFixture: OutlookEvent[] = [];
 let outlookEnabled = false;
 let managedUsersFixture: ManagedUser[] = [];
+let ticketFixture: Record<'mine'|'new'|'completed',CachedTicket[]> = {
+  mine:[],new:[],completed:[],
+};
+let ticketAgendaFixture: TicketAgendaSegment[] = [];
 
 
 beforeEach(() => {
@@ -25,6 +30,8 @@ beforeEach(() => {
   outlookFixture = [];
   outlookEnabled = false;
   managedUsersFixture = [];
+  ticketFixture = {mine:[],new:[],completed:[]};
+  ticketAgendaFixture = [];
   vi.stubGlobal('fetch', vi.fn(async (path: string) => {
     if (path === '/api/v1/classic-import/batches') return {
       ok: true, status: 200, json: async () => [],
@@ -42,16 +49,23 @@ beforeEach(() => {
         openIntervalMinutes:360,maxRequestsPerCycle:200,bootstrapCursor:null,
         bootstrapEnd:null,bootstrapFinishedAt:null,deltaWatermark:null,
         lastDeltaAt:null,lastOpenAt:null,openCursor:null,lastAttemptAt:null,
-        lastError:null,cachedTickets:0,
+        lastError:null,cachedTickets:0,candidateDefaultAgentId:1,
       })
     };
     if (path === '/api/v1/admin/users/') return {
       ok: true, status: 200, json: async () => managedUsersFixture,
     };
+    if (path.startsWith('/api/v1/znuny/tickets/agenda?')) return {
+      ok:true,status:200,json:async()=>ticketAgendaFixture,
+    };
     if (path === '/api/v1/znuny/tickets/status') return {
       ok:true,status:200,json:async()=>({approved:false,agentId:null,syncEnabled:false}),
     };
     if (path.startsWith('/api/v1/znuny/tickets?')) return {
+      ok:true,status:200,json:async()=>ticketFixture[
+        new URL('http://localhost'+path).searchParams.get('view') as keyof typeof ticketFixture ?? 'mine']??[],
+    };
+    if (path.includes('/api/v1/znuny/tickets/')&&path.endsWith('/segments')) return {
       ok:true,status:200,json:async()=>[],
     };
     if (path === '/api/v1/znuny/server') return {
@@ -388,57 +402,87 @@ describe('Plenaro web shell', () => {
     expect(await screen.findByLabelText('Titel')).toBeTruthy();
   });
 
-  it('zeigt Heute mit Classic-Schnellerfassung, Reitern und festem Detailbereich', async () => {
+  it('zeigt Heute mit vier Ticketreitern und separatem lokalen Aufgabenbereich', async () => {
     renderAt('/today');
-    expect(await screen.findByRole('heading', { name: 'Arbeitstag heute' })).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Arbeitsbereich Heute' })).toBeTruthy();
-    expect(screen.getByRole('complementary', { name: 'Aufgabedetails und Planung' })).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Aktuelle Aufgaben' })).toBeTruthy();
-    expect(screen.getByLabelText('Neue Aufgabe')).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Aufgabenbezogener Timer' })).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Aufgabensegmente' })).toBeTruthy();
+    expect(await screen.findByRole('heading',{name:'Arbeitstag heute'})).toBeTruthy();
+    expect(screen.getByRole('region',{name:'Arbeitsbereich Heute'})).toBeTruthy();
+    expect(screen.getByRole('complementary',{name:'Ticketdetails und Planung'})).toBeTruthy();
+    expect(screen.getByRole('tab',{name:'Aktuelle Aufgaben'})).toBeTruthy();
+    expect(screen.getByRole('tab',{name:'Neue Aufgaben'})).toBeTruthy();
+    expect(screen.getByRole('tab',{name:'Erledigte Aufgaben'})).toBeTruthy();
+    expect(screen.getByRole('link',{name:'Lokale Aufgaben öffnen'})).toBeTruthy();
+    expect(screen.queryByRole('region',{name:'Aufgabenbezogener Timer'})).toBeNull();
   });
 
-  it('Heute zeigt nur heutige Aufgabensegmente und Termine, nicht den gesamten Bestand', async () => {
-    const day = localDate();
-    const morning = new Date(day + 'T09:00:00');
-    const ten = new Date(day + 'T10:00:00');
-    const eleven = new Date(day + 'T11:00:00');
-    const noon = new Date(day + 'T12:00:00');
-    const template = (id: string, title: string, plannedFor: string | null): WorkTask => ({
-      id, title, plannedFor, description: '', status: 'planned',
-      priority: 3, tags: [], createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(), completedAt: null,
-    });
-    const todayTask = template('today-task', 'Heutiges Kundengespräch', day);
-    const currentTask = template('other-task', 'Nur aktuelle Aufgabe', null);
-    const segmentTask = template('segment-task', 'Heute mit Segment', null);
-    allTasksFixture = [currentTask, todayTask, segmentTask];
-    todayFixture = [todayTask, segmentTask];
-    calendarSegments = [{
-      id: 'seg1', taskId: segmentTask.id, taskTitle: segmentTask.title,
-      startsAt: ten.toISOString(), endsAt: eleven.toISOString(), note: '', participants: [],
+  it('Heute zeigt nur lokale Znuny-Ticketsegmente und heutige Outlook-Termine',async()=>{
+    const day=localDate();
+    const morning=new Date(day+'T09:00:00');
+    const ten=new Date(day+'T10:00:00');
+    const eleven=new Date(day+'T11:00:00');
+    ticketAgendaFixture=[{
+      id:'seg1',ticketId:'77',ticketNumber:'2026#77',
+      title:'Kundenticket für heute',queue:'IT',state:'open',stateType:'open',
+      ownerId:77,responsibleId:null,createdAt:null,changedAt:null,
+      startsAt:ten.toISOString(),endsAt:eleven.toISOString(),note:'Vorbereiten'
     }];
-    outlookEnabled = true;
-    outlookFixture = [{
+    const localTask:WorkTask={
+      id:'task',title:'Lokale Aufgabe heute',plannedFor:day,
+      status:'active',description:'',priority:3,tags:[],
+      createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),completedAt:null
+    };
+    allTasksFixture=[localTask];todayFixture=[localTask];
+    ticketFixture.mine=[{
+      ticketId:'77',ticketNumber:'2026#77',title:'Kundenticket für heute',
+      queue:'IT',state:'open',stateType:'open',ownerId:77,responsibleId:null,
+      createdAt:null,changedAt:null
+    }];
+    outlookEnabled=true;
+    outlookFixture=[{
       id:'event1',subject:'Outlook Projektbesprechung',
       start:morning.toISOString(),end:ten.toISOString(),isAllDay:false,
-      showAs:'busy',location:'Besprechungsraum',webLink:'https://outlook.office.com/calendar',
+      showAs:'busy',location:'Besprechungsraum',
+      webLink:'https://outlook.office.com/calendar',
     }];
     renderAt('/today');
-    const agenda = await screen.findByLabelText('Tagesagenda');
-    await waitFor(() => expect(within(agenda).getAllByRole('button')).toHaveLength(3));
-    const names = within(agenda).getAllByRole('button').map(button => button.textContent || '');
-    expect(names[0]).toContain('Heutiges Kundengespräch'); // all-day first
-    expect(names[1]).toContain('Outlook Projektbesprechung'); // 09:00
-    expect(names[2]).toContain('Heute mit Segment'); // 10:00
-    expect(agenda.textContent).not.toContain('Nur aktuelle Aufgabe');
-    fireEvent.click(within(agenda).getByRole('button', { name: /Outlook Projektbesprechung/ }));
-    expect(await screen.findByRole('heading', { name: 'Outlook Projektbesprechung' })).toBeTruthy();
-    expect(screen.getByRole('link', { name: /In Outlook öffnen/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole('tab', { name: 'Aktuelle Aufgaben' }));
-    expect(await screen.findByText('Nur aktuelle Aufgabe')).toBeTruthy();
-    expect(noon.getTime()).toBeGreaterThan(eleven.getTime());
+    const agenda=await screen.findByLabelText('Tagesagenda');
+    await waitFor(()=>expect(within(agenda).getAllByRole('button')).toHaveLength(2));
+    const names=within(agenda).getAllByRole('button').map(b=>b.textContent||'');
+    expect(names[0]).toContain('Outlook Projektbesprechung');
+    expect(names[1]).toContain('Kundenticket für heute');
+    expect(agenda.textContent).not.toContain('Lokale Aufgabe heute');
+    fireEvent.click(within(agenda).getByRole('button',{name:/Kundenticket für heute/}));
+    expect(await screen.findByRole('heading',{name:'Kundenticket für heute'})).toBeTruthy();
+    expect(await screen.findByRole('region',{name:'Ticket-Zeitplanung'})).toBeTruthy();
+    fireEvent.click(within(agenda).getByRole('button',{name:/Outlook Projektbesprechung/}));
+    expect(await screen.findByRole('heading',{name:'Outlook Projektbesprechung'})).toBeTruthy();
+    expect(screen.getByRole('link',{name:/In Outlook öffnen/})).toBeTruthy();
+  });
+
+  it('Aktuelle, Neue und Erledigte Aufgaben verwenden jeweils ihren Ticket-API-Filter',async()=>{
+    ticketFixture.mine=[{
+      ticketId:'42',ticketNumber:'42',title:'Aktuelles Znuny-Ticket',queue:'IT',
+      state:'open',stateType:'open',ownerId:77,responsibleId:null,
+      createdAt:null,changedAt:null,
+    }];
+    ticketFixture.new=[{
+      ticketId:'43',ticketNumber:'43',title:'Unzugewiesener Znuny-Kandidat',
+      queue:'IT',state:'new',stateType:'new',ownerId:1,responsibleId:null,
+      createdAt:null,changedAt:null,
+    }];
+    ticketFixture.completed=[{
+      ticketId:'44',ticketNumber:'44',title:'Geschlossenes Znuny-Ticket',
+      queue:'IT',state:'closed successful',stateType:'closed',ownerId:77,
+      responsibleId:null,createdAt:null,changedAt:null,
+    }];
+    renderAt('/today');
+    fireEvent.click(screen.getByRole('tab',{name:'Aktuelle Aufgaben'}));
+    expect(await screen.findByText('Aktuelles Znuny-Ticket')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab',{name:'Neue Aufgaben'}));
+    expect(await screen.findByText('Unzugewiesener Znuny-Kandidat')).toBeTruthy();
+    expect(screen.queryByText('Aktuelles Znuny-Ticket')).toBeNull();
+    fireEvent.click(screen.getByRole('tab',{name:'Erledigte Aufgaben'}));
+    expect(await screen.findByText('Geschlossenes Znuny-Ticket')).toBeTruthy();
+    expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('view=completed'))).toBe(true);
   });
 
   it('zeigt Normal, UL, AM, HO und BR als Tagesmarker ohne Microsoft', async () => {
