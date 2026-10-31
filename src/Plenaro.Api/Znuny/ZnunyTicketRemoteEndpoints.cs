@@ -207,11 +207,13 @@ public static class ZnunyTicketRemoteEndpoints
                 COALESCE(p.username,''),
                 c.service_username,
                 CASE WHEN @ticket IS NULL THEN true
-                     ELSE (t.owner_agent_id=b.agent_id OR t.responsible_agent_id=b.agent_id
+                     ELSE COALESCE((
+                         t.owner_agent_id=b.agent_id OR t.responsible_agent_id=b.agent_id
                          OR ((t.owner_agent_id IS NULL OR
                                t.owner_agent_id IN(0,c.candidate_default_agent_id))
                          AND (t.responsible_agent_id IS NULL OR
-                               t.responsible_agent_id IN(0,c.candidate_default_agent_id)))) END,
+                               t.responsible_agent_id IN(0,c.candidate_default_agent_id)))
+                     ),false) END,
                 COALESCE(t.owner_agent_id=b.agent_id OR t.responsible_agent_id=b.agent_id,false),
                 t.ticket_id
             FROM znuny_approved_agent_bindings b
