@@ -459,11 +459,12 @@ Die Synchronisation ist bis zur expliziten Einrichtung standardmäßig **aus**.
   mit **24 Stunden Sicherheitsüberschneidung**. Erst wenn die gesamte Suche
   und die zugehörigen TicketGets erfolgreich waren, wird der Wasserstand
   vorgezogen.
-* Ältere offene Tickets: ein separat fortsetzbarer Sweep mit
-  `StateType=Open` und Create-Zeitfenstern, in 90-Tages-Abschnitten ab 2000
-  bis zur Erstimportgrenze. Nach Abschluss wird er im eingestellten Intervall
-  wiederholt. Alte offene Tickets werden so ohne neue Vollsynchronisation
-  für jeden Benutzer berücksichtigt.
+* Ältere offene Tickets: zunächst eine **einzige globale** Suche mit
+  `StateType=Open` und einem Alter über der Erstimportgrenze. Bei weniger
+  Treffern als dem SearchLimit werden diese direkt aktualisiert. Nur wenn
+  die Ergebnismenge das Limit erreicht, folgt ein fortsetzbarer Sweep in
+  90-Tages-Abschnitten ab 2000. Nach Abschluss wird die Prüfung im
+  eingestellten Intervall wiederholt.
 * Wenn TicketSearch das Suchlimit erreicht, halbiert der Connector das
   Zeitfenster bis eindeutige, nicht abgeschnittene Resultate vorliegen.
   Ein nicht sicher vollständig lesbarer Bereich setzt **weder den Bootstrap-,
