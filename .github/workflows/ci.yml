@@ -204,6 +204,8 @@ jobs:
           test -n "$V2_BATCH"
           ARCHIVE_TASK_ID=$(curl -fsS -b "$COOKIE" "$API/api/v1/tasks/" | python3 -c 'import json,sys;print(next(t["id"] for t in json.load(sys.stdin) if t["title"]=="Importierte Altaufgabe"))')
           curl -fsS -b "$COOKIE" "$API/api/v1/classic-import/archive/overview" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert (d["metadataCount"],d["bookingCount"],d["monthlyCount"],d["settingsBatches"])==(1,1,1,1)'
+          curl -fsS -b "$COOKIE" "$API/api/v1/classic-import/archive/monthly" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert len(d)==1 and d[0]["seconds"]==5400 and d[0]["month"]=="2026-01-01"'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/classic-import/archive/monthly" | python3 -c 'import json,sys;assert json.load(sys.stdin)==[]'
           curl -fsS -b "$COOKIE" "$API/api/v1/classic-import/archive/tasks/$ARCHIVE_TASK_ID" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["metadata"]["isPinned"] and len(d["ticketBookings"])==1 and d["ticketBookings"][0]["status"]=="Succeeded"'
           curl -fsS -b "$COOKIE" "$API/api/v1/classic-import/archive/settings/$V2_BATCH" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["showWeekendInWeekView"] and d["defaultSegmentDurationMinutes"]==45 and "clientSecret" not in d'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/classic-import/archive/tasks/$ARCHIVE_TASK_ID")" = "404"
