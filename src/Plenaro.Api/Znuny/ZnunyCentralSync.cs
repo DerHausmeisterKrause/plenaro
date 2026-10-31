@@ -80,6 +80,13 @@ public sealed class ZnunyCentralSync(
     {
         var state=await LoadAsync(db,ct);
         if(!state.Enabled) return new(false,"disabled",0,0);
+        var tickNow=DateTimeOffset.UtcNow;
+        if(!force && state.Finished is not null && state.OpenCursor is null &&
+            state.LastDelta is { } delta &&
+            tickNow-delta<TimeSpan.FromMinutes(state.DeltaMinutes) &&
+            state.LastOpen is { } open &&
+            tickNow-open<TimeSpan.FromMinutes(state.OpenMinutes))
+            return new(false,"not-due",0,0);
         if(!vault.IsConfigured || string.IsNullOrWhiteSpace(state.Username))
             return new(false,"service-credentials-missing",0,0);
         var password=await vault.GetForIntegrationAsync("global",null,ServiceSecret,ct);
