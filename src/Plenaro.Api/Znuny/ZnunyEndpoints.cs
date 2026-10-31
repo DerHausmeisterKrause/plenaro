@@ -331,7 +331,7 @@ public static class ZnunyEndpoints
         return null;
     }
 
-    private static async Task<ServerSettings> LoadServerAsync(NpgsqlConnection db,CancellationToken ct)
+    internal static async Task<ServerSettings> LoadServerAsync(NpgsqlConnection db,CancellationToken ct)
     {
         await using var cmd = new NpgsqlCommand("""
             SELECT setting_value::text FROM system_settings WHERE setting_key=@key

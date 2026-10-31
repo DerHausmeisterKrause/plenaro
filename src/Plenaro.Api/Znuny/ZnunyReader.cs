@@ -157,6 +157,158 @@ public sealed class ZnunyReader(IHttpClientFactory factory)
         }
     }
 
+
+    // Read full ticket articles only after the API endpoint has performed the
+    // approved-agent/owner authorization check. No HTTP body is logged.
+    public sealed record Article(string Id,string Subject,string Body,string From,
+        string To,string ReplyTo,string SenderType,string Channel,string Created);
+    public sealed record Detail(string TicketId,string TicketNumber,string Title,
+        IReadOnlyList<Article> Articles);
+    public sealed record Agent(int Id,string Name);
+
+    public async Task<Detail> GetArticlesAsync(ServerSettings settings,string session,
+        string ticketId,Counter counter,CancellationToken ct)
+    {
+        var route=settings.TicketGetRouteTemplate.Replace("{TicketID}",
+            Uri.EscapeDataString(ticketId),StringComparison.Ordinal);
+        var values=new Dictionary<string,string>{
+            ["SessionID"]=session,["AllArticles"]="1",["DynamicFields"]="1",
+            ["ArticleLimit"]=settings.ArticleLimit.ToString(CultureInfo.InvariantCulture)
+        };
+        using var request=JsonRequest(settings.ApiUrl.TrimEnd('/')+route,
+            settings.TicketGetMethod,values);
+        using var doc=await SendAsync(request,counter,ct);
+        var root=doc.RootElement;
+        if(!root.TryGetProperty("Ticket",out var ticket))
+            throw new RemoteFailure("missing-ticket");
+        if(ticket.ValueKind==JsonValueKind.Array)
+        {
+            if(ticket.GetArrayLength()!=1)throw new RemoteFailure("invalid-ticket");
+            ticket=ticket[0];
+        }
+        if(ticket.ValueKind!=JsonValueKind.Object||
+            String(ticket,"TicketID",80)!=ticketId)
+            throw new RemoteFailure("ticket-id-mismatch");
+        var articles=new List<Article>();
+        if(!ticket.TryGetProperty("Article",out var data) &&
+            !ticket.TryGetProperty("Articles",out data))
+        {
+            root.TryGetProperty("Article",out data);
+        }
+        if(data.ValueKind==JsonValueKind.Array)
+        {
+            foreach(var row in data.EnumerateArray())AddArticle(row);
+        }
+        else if(data.ValueKind==JsonValueKind.Object) AddArticle(data);
+        void AddArticle(JsonElement row)
+        {
+            if(row.ValueKind!=JsonValueKind.Object ||
+                articles.Count>=500)return;
+            var body=String(row,"Body",24000);
+            var mime=String(row,"ContentType",120);
+            if(mime.Contains("html",StringComparison.OrdinalIgnoreCase)||
+                body.Contains("<p",StringComparison.OrdinalIgnoreCase))
+            {
+                body=System.Text.RegularExpressions.Regex.Replace(body,
+                    "<(br|/p|/div|/li)[^>]*>","\\n",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                body=System.Text.RegularExpressions.Regex.Replace(body,"<[^>]+>","");
+                body=WebUtility.HtmlDecode(body);
+            }
+            articles.Add(new Article(String(row,"ArticleID",80),
+                String(row,"Subject",500),body,
+                String(row,"From",320),String(row,"To",320),
+                String(row,"ReplyTo",320),String(row,"SenderType",80),
+                String(row,"CommunicationChannel",100),
+                String(row,"CreateTime",80)));
+        }
+        return new Detail(ticketId,String(ticket,"TicketNumber",100),
+            String(ticket,"Title",500),
+            articles.OrderBy(a=>a.Created,StringComparer.Ordinal)
+                .TakeLast(settings.ArticleLimit).ToArray());
+    }
+
+    public async Task<IReadOnlyList<Agent>> GetAgentsAsync(ServerSettings settings,
+        string session,Counter counter,CancellationToken ct)
+    {
+        using var request=JsonRequest(settings.ApiUrl.TrimEnd('/')+settings.AgentListRoute,
+            "GET",new Dictionary<string,string>{["SessionID"]=session});
+        using var doc=await SendAsync(request,counter,ct);
+        var root=doc.RootElement;
+        JsonElement list=default;
+        foreach(var key in new[]{"Agents","Agent","Users","User"})
+            if(root.TryGetProperty(key,out list))break;
+        if(list.ValueKind==JsonValueKind.Undefined &&
+            root.TryGetProperty("Data",out var nested) &&
+            nested.ValueKind==JsonValueKind.Object)
+            nested.TryGetProperty("Agents",out list);
+        if(list.ValueKind is not (JsonValueKind.Array or JsonValueKind.Object))
+            throw new RemoteFailure("unsupported-agent-list");
+        var agents=new List<Agent>();
+        if(list.ValueKind==JsonValueKind.Array)
+        {
+            foreach(var a in list.EnumerateArray())
+                if(a.ValueKind==JsonValueKind.Object){
+                    var id=Int(a,"UserID")??Int(a,"AgentID");
+                    if(id is >0)agents.Add(new Agent(id.Value,
+                        new[]{String(a,"Name",256),
+                            String(a,"FirstName",128)+" "+String(a,"LastName",128),
+                            String(a,"Login",256),String(a,"UserLogin",256)}
+                            .FirstOrDefault(name=>!string.IsNullOrWhiteSpace(name))?.Trim()
+                            ?? "Agent #"+id));
+                }
+        }
+        else if(list.ValueKind==JsonValueKind.Object)
+        {
+            foreach(var p in list.EnumerateObject()){
+                if(int.TryParse(p.Name,out var id)&&id>0)
+                    agents.Add(new Agent(id,p.Value.ToString()[..Math.Min(256,p.Value.ToString().Length)]));
+            }
+        }
+        return agents.GroupBy(a=>a.Id).Select(a=>a.First())
+            .OrderBy(a=>a.Name,StringComparer.OrdinalIgnoreCase).Take(1000).ToArray();
+    }
+
+    public async Task<bool> UpdateAsync(ServerSettings settings,string session,
+        string ticketId,Dictionary<string,object> contents,Counter counter,CancellationToken ct)
+    {
+        // WPF used POST /Ticket/{TicketID}/Update with Ticket and/or Article.
+        // No automatic retries; an interrupted write has an uncertain outcome.
+        var route=settings.TicketUpdateRoute.Replace("{TicketID}",
+            Uri.EscapeDataString(ticketId),StringComparison.Ordinal);
+        var body=new Dictionary<string,object>(contents){
+            ["SessionID"]=session,["TicketID"]=ticketId
+        };
+        using var request=new HttpRequestMessage(HttpMethod.Post,
+            settings.ApiUrl.TrimEnd('/')+route){
+            Content=new StringContent(JsonSerializer.Serialize(body),Encoding.UTF8,
+                "application/json")
+        };
+        using var doc=await SendAsync(request,counter,ct);
+        var root=doc.RootElement;
+        // GenericInterface generally returns TicketID (and optionally ArticleID).
+        // Some custom implementations only return {} on success; reject these
+        // unconfirmable writes rather than presenting false success.
+        return root.TryGetProperty("TicketID",out var id) &&
+            id.ToString()==ticketId ||
+            root.TryGetProperty("ArticleID",out var article) &&
+            article.ValueKind is JsonValueKind.String or JsonValueKind.Number &&
+            article.ToString().Length>0;
+    }
+
+    private static HttpRequestMessage JsonRequest(string url,string method,
+        Dictionary<string,string> values)
+    {
+        if(method=="POST")
+            return new HttpRequestMessage(HttpMethod.Post,url){
+                Content=new StringContent(JsonSerializer.Serialize(values),Encoding.UTF8,
+                    "application/json")
+            };
+        return new HttpRequestMessage(HttpMethod.Get,url+"?"+
+            string.Join("&",values.Select(pair=>
+                Uri.EscapeDataString(pair.Key)+"="+Uri.EscapeDataString(pair.Value))));
+    }
+
     public async Task<IReadOnlyList<string>> SearchWindowAsync(
         ServerSettings settings,string session,string mode,DateTimeOffset start,
         DateTimeOffset end,Counter counter,CancellationToken ct)

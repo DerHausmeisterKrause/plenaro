@@ -313,6 +313,22 @@ builder.Services.AddRateLimiter(options =>
         _ => new FixedWindowRateLimiterOptions {
             PermitLimit=5, Window=TimeSpan.FromMinutes(5), QueueLimit=0, AutoReplenishment=true
         }));
+    // Interactive ticket details need more than five reads per five minutes.
+    // Limit writes separately, per authenticated local user.
+    options.AddPolicy("znuny-ticket-read", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ??
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions {
+            PermitLimit=40, Window=TimeSpan.FromMinutes(5), QueueLimit=0,
+            AutoReplenishment=true
+        }));
+    options.AddPolicy("znuny-ticket-write", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ??
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions {
+            PermitLimit=10, Window=TimeSpan.FromMinutes(5), QueueLimit=0,
+            AutoReplenishment=true
+        }));
     options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions
