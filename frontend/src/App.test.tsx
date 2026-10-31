@@ -6,6 +6,7 @@ import { localDate, type WorkTask } from './tasksApi';
 import type { TaskSegment } from './taskWorkApi';
 import type { TaskReminder } from './notificationApi';
 import type { OutlookEvent } from './graphApi';
+import type { ManagedUser } from './userApi';
 
 let calendarSegments: TaskSegment[] = [];
 let reminderItems: TaskReminder[] = [];
@@ -13,6 +14,7 @@ let todayFixture: WorkTask[] = [];
 let allTasksFixture: WorkTask[] = [];
 let outlookFixture: OutlookEvent[] = [];
 let outlookEnabled = false;
+let managedUsersFixture: ManagedUser[] = [];
 
 
 beforeEach(() => {
@@ -22,6 +24,7 @@ beforeEach(() => {
   allTasksFixture = [];
   outlookFixture = [];
   outlookEnabled = false;
+  managedUsersFixture = [];
   vi.stubGlobal('fetch', vi.fn(async (path: string) => {
     if (path === '/api/v1/classic-import/batches') return {
       ok: true, status: 200, json: async () => [],
@@ -42,8 +45,8 @@ beforeEach(() => {
         lastError:null,cachedTickets:0,
       })
     };
-    if (path === '/api/v1/admin/znuny/bindings') return {
-      ok:true,status:200,json:async()=>[],
+    if (path === '/api/v1/admin/users/') return {
+      ok: true, status: 200, json: async () => managedUsersFixture,
     };
     if (path === '/api/v1/znuny/tickets/status') return {
       ok:true,status:200,json:async()=>({approved:false,agentId:null,syncEnabled:false}),
@@ -73,7 +76,7 @@ beforeEach(() => {
     };
     if (path === '/api/v1/znuny/me') return {
       ok: true, status: 200, json: async () => ({
-        username: '', agentId: 0, candidateUserId: 1,
+        username: '', agentId: null, candidateUserId: 1,
         candidateKeywords: '', candidateExcludeKeywords: '',
         includeOwner: true, includeResponsible: true,
         notifyOnNewAssignedTickets: true, notifyOnTicketChanges: true,
@@ -240,7 +243,9 @@ describe('Plenaro web shell', () => {
     expect((screen.getByLabelText('API-Basisadresse') as HTMLInputElement).value)
       .toBe('https://SERVER/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST');
     expect((screen.getByLabelText('Znuny-Benutzername') as HTMLInputElement).value).toBe('');
-    expect((screen.getByLabelText('Eigene Agenten-ID') as HTMLInputElement).value).toBe('0');
+    expect(screen.queryByLabelText('Eigene Agenten-ID')).toBeNull();
+    expect(screen.getByText('Keine Zuordnung')).toBeTruthy();
+    expect(screen.getByText(/durch Administrator vergeben/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Verbindung prüfen' })).toHaveProperty('disabled', true);
     fireEvent.click(screen.getByText('Classic-Routen, Sync-Zeiten und weitere API-Standardwerte'));
     expect((screen.getByLabelText('TicketSearch-Route') as HTMLInputElement).value).toBe('/Ticket');
@@ -264,6 +269,30 @@ describe('Plenaro web shell', () => {
     expect(screen.getByRole('heading', { name: 'Outlook-Kalender' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Administration' }));
     expect(await screen.findByRole('heading', { name: 'Benutzerverwaltung' })).toBeTruthy();
+  });
+
+  it('legt Znuny-Agenten-IDs nur in der Administration beim Benutzeranlegen und Bearbeiten fest', async () => {
+    managedUsersFixture = [{
+      id: '00000000-0000-0000-0000-000000000002',
+      email:'user@example.invalid',displayName:'Test User',
+      role:'User',disabled:false,agentId:17,
+    }];
+    renderAt('/settings');
+    fireEvent.click(await screen.findByRole('button', { name: 'Administration' }));
+    expect(await screen.findByRole('heading', { name: 'Benutzerverwaltung' })).toBeTruthy();
+    expect(await screen.findByText('Znuny #17')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'Benutzer anlegen'}));
+    expect(screen.getByLabelText('Znuny-Agenten-ID (optional)')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'Abbrechen'}));
+    fireEvent.click(screen.getByRole('listitem',{name:/Test User/}));
+    const agentInput = screen.getByLabelText('Znuny-Agenten-ID (nur Administration)') as HTMLInputElement;
+    expect(agentInput.value).toBe('17');
+    fireEvent.change(agentInput,{target:{value:'51'}});
+    fireEvent.click(screen.getByRole('button',{name:'Änderungen speichern'}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,options])=>
+      String(url).endsWith('/admin/users/00000000-0000-0000-0000-000000000002') &&
+      (options as RequestInit)?.method === 'PUT' &&
+      JSON.parse(String((options as RequestInit)?.body)).agentId === 51)).toBe(true));
   });
 
   it('versteckt Microsoft SSO wenn Entra nicht eingerichtet ist', async () => {
