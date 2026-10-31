@@ -1,9 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { CheckCircle2, ExternalLink, Plus, RotateCcw, Save, Ticket } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Clock3, ExternalLink, MapPin, Plus, RotateCcw, Save, Ticket } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { changeTaskStatus, createTask, listTasks, localDate, todayTasks, updateTask, type WorkTask, type TaskInput } from './tasksApi';
 import { getMonthMarkers, saveDayMarker, type DayType, type DayMarker } from './dayMarkersApi';
 import { TaskTimerPanel, TaskSegmentsPanel } from './TaskWorkPanels';
+import { listWeekSegments, type TaskSegment } from './taskWorkApi';
+import { graphStatus, readOutlookWeek, type OutlookEvent } from './graphApi';
+import { agendaTimeLabel, buildTodayAgenda, localDayBounds } from './todayAgenda';
 
 type Tab = 'today' | 'active' | 'new' | 'completed';
 const labels: { key: Tab; label: string }[] = [
@@ -16,6 +19,12 @@ const labels: { key: Tab; label: string }[] = [
 export function ClassicTodayPage() {
   const [tasks, setTasks] = useState<WorkTask[]>([]);
   const [todayTasksList, setTodayTasks] = useState<WorkTask[]>([]);
+  const [segments, setSegments] = useState<TaskSegment[]>([]);
+  const [outlookEvents, setOutlookEvents] = useState<OutlookEvent[]>([]);
+  const [calendarError, setCalendarError] = useState('');
+  const [outlookConnected, setOutlookConnected] = useState(false);
+  const [refreshCalendar, setRefreshCalendar] = useState(0);
+  const [selectedAgendaKey, setSelectedAgendaKey] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('today');
   const [selected, setSelected] = useState<string | null>(null);
   const [quick, setQuick] = useState('');
@@ -25,38 +34,78 @@ export function ClassicTodayPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const day = localDate();
-  const today = new Date();
+  const [day, setDay] = useState(() => localDate());
+  const today = new Date(day + 'T12:00:00');
+  // Remain correct when the browser stays open over midnight.
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const next = localDate();
+      setDay(previous => previous === next ? previous : next);
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, []);
   const [yy, mm] = day.slice(0, 7).split('-').map(Number);
 
   async function reload() {
-    const [all, todayItems, days] = await Promise.all([
+    const { start, end } = localDayBounds(day);
+    const [all, todayItems, days, plannedSegments] = await Promise.all([
       listTasks(), todayTasks(day), getMonthMarkers(yy, mm),
+      listWeekSegments(start.toISOString(), end.toISOString()),
     ]);
     setTasks(all);
     setTodayTasks(todayItems);
+    setSegments(plannedSegments);
     setMarker(days.find(item => item.day === day) ?? null);
-    setSelected(id => id && all.some(t => t.id === id) ? id : all[0]?.id ?? null);
+    setSelected(id => id && [...all, ...todayItems].some(t => t.id === id) ? id : null);
+    setRefreshCalendar(value => value + 1);
   }
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    void Promise.all([listTasks(), todayTasks(day), getMonthMarkers(yy, mm)])
-      .then(([all, due, days]) => {
-        if (!active) return;
-        setTasks(all); setTodayTasks(due);
-        setMarker(days.find(item => item.day === day) ?? null);
-        setSelected(all[0]?.id ?? null); setLoading(false);
-      }).catch(e => { if (active) { setError(e instanceof Error ? e.message : 'Aufgaben konnten nicht geladen werden.'); setLoading(false); } });
+    const { start, end } = localDayBounds(day);
+    void Promise.all([
+      listTasks(), todayTasks(day), getMonthMarkers(yy, mm),
+      listWeekSegments(start.toISOString(), end.toISOString()),
+    ]).then(([all, due, days, plannedSegments]) => {
+      if (!active) return;
+      setTasks(all); setTodayTasks(due); setSegments(plannedSegments);
+      setMarker(days.find(item => item.day === day) ?? null);
+      setSelected(null); setSelectedAgendaKey(null);
+      setLoading(false);
+    }).catch(e => { if (active) { setError(e instanceof Error ? e.message : 'Tagesplanung konnte nicht geladen werden.'); setLoading(false); } });
     return () => { active = false; };
   }, [day, yy, mm]);
 
-  const chosen = tasks.find(t => t.id === selected);
-  const rows = tab === 'today' ? todayTasksList :
-    tab === 'active' ? tasks.filter(t => t.status === 'active' || t.status === 'planned') :
+  // Outlook is optional: a Graph error must not hide local tasks and segments.
+  useEffect(() => {
+    let active = true;
+    setOutlookEvents([]); setCalendarError(''); setOutlookConnected(false);
+    const { start, end } = localDayBounds(day);
+    void graphStatus().then(async status => {
+      if (!active || !status.connected) return;
+      setOutlookConnected(true);
+      const result = await readOutlookWeek(start, end);
+      if (active) {
+        setOutlookEvents(result.events);
+        if (result.hasMore) setCalendarError('Outlook liefert mehr Termine als diese Abfrage anzeigen kann.');
+      }
+    }).catch(e => {
+      if (active) setCalendarError(e instanceof Error ? e.message : 'Outlook-Termine nicht verfügbar.');
+    });
+    return () => { active = false; };
+  }, [day, refreshCalendar]);
+
+  const agenda = buildTodayAgenda(day, todayTasksList, segments, outlookEvents);
+  const chosen = tasks.find(t => t.id === selected) ?? todayTasksList.find(t => t.id === selected);
+  const rows = tab === 'active' ? tasks.filter(t => t.status === 'active' || t.status === 'planned') :
     tab === 'completed' ? tasks.filter(t => t.status === 'completed') : [];
-  const visibleSelected = rows.some(t => t.id === selected);
+  const selectedAppointment = tab === 'today'
+    ? agenda.find(item => item.kind === 'outlook' && item.key === selectedAgendaKey)
+    : undefined;
+  const visibleSelected = tab === 'today'
+    ? agenda.some(item => item.kind === 'task' && item.key === selectedAgendaKey && item.taskId === selected)
+    : rows.some(t => t.id === selected);
   useEffect(() => {
     setDescription(chosen?.description ?? '');
   }, [chosen?.id, chosen?.description]);
@@ -126,13 +175,37 @@ export function ClassicTodayPage() {
           <div className="plenaro-tabs" role="tablist" aria-label="Aufgabenansichten">
             {labels.map(item => <button role="tab" type="button" key={item.key}
               className={tab === item.key ? 'active' : ''} aria-selected={tab === item.key}
-              onClick={() => setTab(item.key)}>{item.label}{item.key === 'new' ? ' (0)' : ''}</button>)}
+              onClick={() => { setTab(item.key); setSelected(null); setSelectedAgendaKey(null); }}>
+              {item.label}{item.key === 'new' ? ' (0)' : ''}</button>)}
           </div>
           <div className="plenaro-list-title">
             <h2>{labels.find(item => item.key === tab)?.label}:</h2>
             <Link to="/tasks" className="classic-text-action">Alle Aufgaben</Link>
           </div>
-          {loading ? <p role="status" className="um-hint">Lade Aufgaben …</p> :
+          {tab === 'today' && outlookConnected && calendarError &&
+            <p role="status" className="um-hint">{calendarError}</p>}
+          {loading ? <p role="status" className="um-hint">Lade Tagesplanung …</p> :
+            tab === 'today' ? (agenda.length === 0
+              ? <p className="plenaro-empty-list">Heute keine geplanten Aufgaben oder Termine.</p>
+              : <div className="plenaro-rows" aria-label="Tagesagenda">
+                {agenda.map(item => <button type="button" key={item.key}
+                  className={`plenaro-task-row plenaro-agenda-row${selectedAgendaKey === item.key ? ' selected' : ''}`}
+                  onClick={() => {
+                    setSelectedAgendaKey(item.key);
+                    setSelected(item.taskId);
+                  }}>
+                  <span className="plenaro-agenda-time">
+                    {item.allDay ? <CalendarDays size={15}/> : <Clock3 size={15}/>}
+                    {agendaTimeLabel(item)}
+                  </span>
+                  <span className="plenaro-agenda-content">
+                    <strong>{item.title}</strong>
+                    {item.description && <small>{item.description}</small>}
+                    {item.location && <small><MapPin size={12}/>{item.location}</small>}
+                  </span>
+                  <span className="plenaro-agenda-kind">{item.kind === 'outlook' ? 'Outlook' : 'Aufgabe'}</span>
+                </button>)}
+              </div>) :
             tab === 'new' ? <div className="plenaro-empty-list">
               <Ticket size={22}/>
               <strong>Keine neuen Tickets verfügbar</strong>
@@ -150,8 +223,17 @@ export function ClassicTodayPage() {
       <aside className="plenaro-today-right" aria-label="Aufgabedetails und Planung">
         <section className="content-card plenaro-today-detail" aria-label="Task Details">
           <span className="eyebrow">TASK DETAILS</span>
-          {!chosen || (!visibleSelected && tab !== 'new') ? <div className="classic-detail-empty">
-            <h2>Aufgabe auswählen</h2><p>Wähle links eine Aufgabe aus, um ihre Details hier zu öffnen.</p>
+          {selectedAppointment ? <div className="plenaro-agenda-appointment">
+            <h2>{selectedAppointment.title}</h2>
+            <p><Clock3 size={15}/>{agendaTimeLabel(selectedAppointment)}</p>
+            {selectedAppointment.location && <p><MapPin size={15}/>{selectedAppointment.location}</p>}
+            {selectedAppointment.webLink && <a className="button button-secondary"
+              href={selectedAppointment.webLink} target="_blank" rel="noopener noreferrer">
+              <ExternalLink size={14}/>In Outlook öffnen</a>}
+            <p className="um-hint">Persönlicher Outlook-Termin, nur lesbar.</p>
+          </div> : !chosen || !visibleSelected ? <div className="classic-detail-empty">
+            <h2>{tab === 'today' ? 'Tagespunkt auswählen' : 'Aufgabe auswählen'}</h2>
+            <p>Wähle links eine Aufgabe oder einen Termin aus, um die Details zu öffnen.</p>
           </div> : <>
             <h2>{chosen.title}</h2>
             <label htmlFor="today-description">Beschreibung</label>
