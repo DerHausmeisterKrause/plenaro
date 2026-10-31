@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import sqlite3
 from zoneinfo import ZoneInfo
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 TZ = ZoneInfo("Europe/Berlin")
 SAFE_LIMIT = 20000
@@ -36,6 +37,28 @@ def parse_utc(value):
     d = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     # Classic persisted UTC fields are UTC even when SQLite lacks offset.
     return d.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if d.tzinfo is None else d.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def safe_ticket_url(raw):
+    """Preserve non-secret ticket links; drop URL userinfo, fragments and unknown query parameters."""
+    if not raw:
+        return ""
+    try:
+        parsed = urlsplit(str(raw).strip())
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return ""
+        host = parsed.hostname
+        if ":" in host:
+            host = "[" + host + "]"
+        netloc = host + (f":{parsed.port}" if parsed.port else "")
+        params = parse_qsl(parsed.query.replace(";", "&"), keep_blank_values=False)
+        safe_params = [(key, value) for key, value in params
+                       if key in ("Action", "TicketID", "TicketNumber", "ID")
+                       and len(value) <= 128]
+        return urlunsplit((parsed.scheme, netloc, parsed.path,
+                           urlencode(safe_params), ""))[:2048]
+    except (ValueError, TypeError):
+        return ""
 
 
 def main():
@@ -119,7 +142,7 @@ def main():
             # Outlook links, Znuny actions or access permissions.
             metadata.append({
                 "taskLegacyId": task_id,
-                "ticketUrl": str(row.get("ticket_url") or "")[:2048],
+                "ticketUrl": safe_ticket_url(row.get("ticket_url")),
                 "isPinned": bool(row.get("is_pinned") or 0),
                 "isZnunyAssigned": bool(row.get("is_znuny_assigned", 1)),
                 "isPlenaroShared": bool(row.get("is_plenaro_shared") or 0),
