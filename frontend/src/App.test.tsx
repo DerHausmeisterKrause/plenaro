@@ -226,7 +226,7 @@ describe('Plenaro web shell', () => {
     fireEvent.click(screen.getByText('Classic-Routen, Sync-Zeiten und weitere API-Standardwerte'));
     expect((screen.getByLabelText('TicketSearch-Route') as HTMLInputElement).value).toBe('/Ticket');
     expect((screen.getByLabelText('Maximaler TicketSearch-Umfang') as HTMLInputElement).value).toBe('100');
-    expect((screen.getByLabelText('Kandidaten-Abfrage (Minuten)') as HTMLInputElement).value).toBe('5');
+    expect((screen.getByLabelText('Classic-Kandidatenintervall (Legacy, nicht aktiv)') as HTMLInputElement).value).toBe('5');
   });
 
   it('zeigt getrennte Formulare für persönliche und globale Einstellungen', async () => {
