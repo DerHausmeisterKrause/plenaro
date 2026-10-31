@@ -88,34 +88,46 @@ public sealed class ZnunyCentralSync(
             tickNow-open<TimeSpan.FromMinutes(state.OpenMinutes))
             return new(false,"not-due",0,0);
         if(!vault.IsConfigured || string.IsNullOrWhiteSpace(state.Username))
+        {
+            await SetErrorAsync(db,"service-credentials-missing",ct);
             return new(false,"service-credentials-missing",0,0);
+        }
         var password=await vault.GetForIntegrationAsync("global",null,ServiceSecret,ct);
         if(string.IsNullOrWhiteSpace(password))
+        {
+            await SetErrorAsync(db,"service-credentials-missing",ct);
             return new(false,"service-credentials-missing",0,0);
+        }
         var server=await ReadServerAsync(db,ct);
         if(ValidateServer(server) is not null ||
             Uri.TryCreate(server.ApiUrl,UriKind.Absolute,out var parsed) &&
             parsed.Host.Equals("SERVER",StringComparison.OrdinalIgnoreCase))
+        {
+            await SetErrorAsync(db,"server-not-configured",ct);
             return new(false,"server-not-configured",0,0);
+        }
         if(state.SourceUrl is not null &&
             !string.Equals(state.SourceUrl,server.ApiUrl,StringComparison.Ordinal))
+        {
+            await SetErrorAsync(db,"source-changed-reset-required",ct);
             return new(false,"source-changed-reset-required",0,0);
+        }
 
         var now=DateTimeOffset.UtcNow;
         await ExecuteAsync(db,"UPDATE znuny_sync_control SET last_attempt_at=now(),last_error=NULL WHERE id=true",ct);
-        if(state.SourceUrl is null)
-        {
-            await using var origin=new NpgsqlCommand("""
-                UPDATE znuny_sync_control SET source_api_url=@url WHERE id=true
-                """,db);
-            origin.Parameters.AddWithValue("url",server.ApiUrl);
-            await origin.ExecuteNonQueryAsync(ct);
-        }
         var counter=new ZnunyReader.Counter(state.Budget);
         var imported=0;
         try
         {
             var session=await reader.SessionAsync(server,state.Username,password,counter,ct);
+            if(state.SourceUrl is null)
+            {
+                await using var origin=new NpgsqlCommand("""
+                    UPDATE znuny_sync_control SET source_api_url=@url WHERE id=true
+                    """,db);
+                origin.Parameters.AddWithValue("url",server.ApiUrl);
+                await origin.ExecuteNonQueryAsync(ct);
+            }
             if(state.Finished is null)
             {
                 var start=state.Cursor ?? now.AddDays(-state.Lookback);
