@@ -19,7 +19,7 @@ CREATE INDEX ix_znuny_ticket_changed ON znuny_cached_tickets(changed_at DESC);
 -- Browser supplied agent_id is *not* an authorization proof.
 CREATE TABLE znuny_approved_agent_bindings (
   user_id uuid PRIMARY KEY REFERENCES "AspNetUsers"("Id") ON DELETE CASCADE,
-  agent_id integer NOT NULL CHECK (agent_id > 0),
+  agent_id integer NOT NULL UNIQUE CHECK (agent_id > 0),
   approved_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE znuny_sync_control (
