@@ -203,7 +203,7 @@ public sealed class ZnunyReader(IHttpClientFactory factory)
         void AddArticle(JsonElement row)
         {
             if(row.ValueKind!=JsonValueKind.Object ||
-                articles.Count>=settings.ArticleLimit)return;
+                articles.Count>=500)return;
             var body=String(row,"Body",24000);
             var mime=String(row,"ContentType",120);
             if(mime.Contains("html",StringComparison.OrdinalIgnoreCase)||
@@ -223,7 +223,9 @@ public sealed class ZnunyReader(IHttpClientFactory factory)
                 String(row,"CreateTime",80)));
         }
         return new Detail(ticketId,String(ticket,"TicketNumber",100),
-            String(ticket,"Title",500),articles);
+            String(ticket,"Title",500),
+            articles.OrderBy(a=>a.Created,StringComparer.Ordinal)
+                .TakeLast(settings.ArticleLimit).ToArray());
     }
 
     public async Task<IReadOnlyList<Agent>> GetAgentsAsync(ServerSettings settings,
