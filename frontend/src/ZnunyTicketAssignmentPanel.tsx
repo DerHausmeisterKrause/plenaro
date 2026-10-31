@@ -55,7 +55,7 @@ export function ZnunyTicketAssignmentPanel({ticket,onChanged}:{
         <select aria-label="Ticket Besitzer" value={owner??''}
           disabled={!loaded||closed||busy} onChange={e=>setOwner(
             e.target.value===''?null:Number(e.target.value))}>
-          <option value="">Nicht vergeben</option>
+          <option value="" disabled={ticket.ownerId!==null}>Nicht vergeben</option>
           {options(owner).map(a=><option key={a.id} value={a.id}>{a.name} (#{a.id})</option>)}
         </select>
       </label>
@@ -63,7 +63,7 @@ export function ZnunyTicketAssignmentPanel({ticket,onChanged}:{
         <select aria-label="Ticket Verantwortlicher" value={responsible??''}
           disabled={!loaded||closed||busy} onChange={e=>setResponsible(
             e.target.value===''?null:Number(e.target.value))}>
-          <option value="">Nicht vergeben</option>
+          <option value="" disabled={ticket.responsibleId!==null}>Nicht vergeben</option>
           {options(responsible).map(a=><option key={a.id} value={a.id}>{a.name} (#{a.id})</option>)}
         </select>
       </label>
