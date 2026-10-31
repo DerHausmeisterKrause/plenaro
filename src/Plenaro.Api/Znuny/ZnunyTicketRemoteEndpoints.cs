@@ -41,7 +41,7 @@ public static class ZnunyTicketRemoteEndpoints
                     ticketNumber=detail.TicketNumber,title=detail.Title,
                     articles=detail.Articles});
             }catch(ZnunyReader.RemoteFailure e){return RemoteReadError(e.Code);}
-        }).RequireRateLimiting("znuny-test");
+        }).RequireRateLimiting("znuny-ticket-read");
 
         group.MapGet("/agents",async(HttpContext http,UserManager<ApplicationUser> users,
             IConfiguration config,SecretVault vault,ZnunyReader reader,CancellationToken ct)=>{
@@ -55,7 +55,7 @@ public static class ZnunyTicketRemoteEndpoints
                     cred.Value.Password,counter,ct);
                 return Results.Ok(await reader.GetAgentsAsync(context.Server!,session,counter,ct));
             }catch(ZnunyReader.RemoteFailure e){return RemoteReadError(e.Code);}
-        }).RequireRateLimiting("znuny-test");
+        }).RequireRateLimiting("znuny-ticket-read");
 
         group.MapPut("/tickets/{ticketId}/assignment",async(string ticketId,
             AssignmentRequest input,HttpContext http,IAntiforgery anti,
@@ -101,7 +101,7 @@ public static class ZnunyTicketRemoteEndpoints
             }catch(PostgresException){
                 return Results.Ok(new {confirmed=true,cacheUpdated=false});
             }
-        }).RequireRateLimiting("znuny-test");
+        }).RequireRateLimiting("znuny-ticket-write");
 
         group.MapPost("/tickets/{ticketId}/assign-to-me",async(string ticketId,
             HttpContext http,IAntiforgery anti,UserManager<ApplicationUser> users,
@@ -136,14 +136,14 @@ public static class ZnunyTicketRemoteEndpoints
             }catch(PostgresException){
                 return Results.Ok(new{confirmed=true,cacheUpdated=false});
             }
-        }).RequireRateLimiting("znuny-test");
+        }).RequireRateLimiting("znuny-ticket-write");
 
         group.MapPost("/tickets/{ticketId}/reply",async(string ticketId,
             ReplyRequest input,HttpContext http,IAntiforgery anti,
             UserManager<ApplicationUser> users,IConfiguration config,SecretVault vault,
             ZnunyReader reader,CancellationToken ct)=>{
             if(!await Csrf(http,anti))return BadCsrf();
-            if(string.IsNullOrWhiteSpace(input.Body)||input.Body.Length>10000)
+            if(input.Body is null||string.IsNullOrWhiteSpace(input.Body)||input.Body.Length>10000)
                 return Results.BadRequest(new{error="Antwort muss zwischen 1 und 10.000 Zeichen enthalten."});
             var context=await Context(http,users,config,vault,ticketId,true,ct);
             if(context.Error is {} failure)return failure;
@@ -183,7 +183,7 @@ public static class ZnunyTicketRemoteEndpoints
                 if(!confirmed)return UncertainWrite();
                 return Results.Ok(new {confirmed=true});
             }catch(ZnunyReader.RemoteFailure){return UncertainWrite();}
-        }).RequireRateLimiting("znuny-test");
+        }).RequireRateLimiting("znuny-ticket-write");
     }
 
     private sealed record ContextResult(IResult? Error,Guid? UserId,int? AgentId,
