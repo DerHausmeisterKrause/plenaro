@@ -33,7 +33,11 @@ export type TicketAgendaSegment = TicketSegment & CachedTicket;
 
 async function request<T>(url: string): Promise<T> {
   const result=await fetch(url,{credentials:'same-origin',cache:'no-store'});
-  if(!result.ok)throw new Error('Znuny-Daten konnten nicht geladen werden.');
+  if(!result.ok){
+    const details=await result.json().catch(()=>({})) as {error?:string;detail?:string};
+    throw new Error(details.error||details.detail||
+      'Znuny-Daten konnten nicht geladen werden (HTTP '+result.status+').');
+  }
   return await result.json() as T;
 }
 async function mutate(url:string,method:'PUT'|'DELETE'|'POST',body?:unknown):Promise<Response>{
@@ -44,8 +48,9 @@ async function mutate(url:string,method:'PUT'|'DELETE'|'POST',body?:unknown):Pro
     ...(body!==undefined?{body:JSON.stringify(body)}:{}),
   });
   if(!response.ok){
-    const details=await response.json().catch(()=>({})) as {error?:string};
-    throw new Error(details.error||'Vorgang fehlgeschlagen (HTTP '+response.status+').');
+    const details=await response.json().catch(()=>({})) as {error?:string;detail?:string};
+    throw new Error(details.error||details.detail||
+      'Vorgang fehlgeschlagen (HTTP '+response.status+').');
   }
   return response;
 }
