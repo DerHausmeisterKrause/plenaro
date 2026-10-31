@@ -94,6 +94,7 @@ public static partial class ClassicImportEndpoints
             var batchId = Guid.NewGuid();
             int? previousLead = null;
             var hadSettings = false;
+            int? leadToApply = doc.Settings?.ReminderLeadMinutes;
             if (doc.Settings?.ReminderLeadMinutes is not null)
             {
                 await using var previous = new NpgsqlCommand("""
@@ -103,6 +104,10 @@ public static partial class ClassicImportEndpoints
                 var prior = await previous.ExecuteScalarAsync(ct);
                 hadSettings = prior is not null;
                 previousLead = prior is null ? null : Convert.ToInt32(prior);
+                // Re-importing the same Classic settings must not change an
+                // existing timestamp and break undo of an earlier batch.
+                if (hadSettings && previousLead == leadToApply)
+                    leadToApply = null;
             }
             await using (var batch = new NpgsqlCommand("""
                 INSERT INTO classic_import_batches(id,owner_user_id,source_id,previous_lead,
@@ -116,7 +121,7 @@ public static partial class ClassicImportEndpoints
                 batch.Parameters.Add("oldlead", NpgsqlDbType.Smallint).Value =
                     previousLead is null ? DBNull.Value : (object)(short)previousLead.Value;
                 batch.Parameters.Add("newlead", NpgsqlDbType.Smallint).Value =
-                    doc.Settings?.ReminderLeadMinutes is not int lead ? DBNull.Value : (object)(short)lead;
+                    leadToApply is not int lead ? DBNull.Value : (object)(short)lead;
                 batch.Parameters.AddWithValue("had", hadSettings);
                 batch.Parameters.Add("legacy", NpgsqlDbType.Jsonb).Value =
                     JsonSerializer.Serialize(doc.LegacySettings ?? new ImportLegacySettings(),
@@ -228,7 +233,7 @@ public static partial class ClassicImportEndpoints
                 inserted += await ImportArchiveAsync(doc, owner.Value, batchId,
                     registered, db, tx, ct);
 
-                if (doc.Settings?.ReminderLeadMinutes is int newLead)
+                if (leadToApply is int newLead)
                 {
                     await using var settings = new NpgsqlCommand("""
                         INSERT INTO user_reminder_settings(owner_user_id,enabled,lead_minutes)
