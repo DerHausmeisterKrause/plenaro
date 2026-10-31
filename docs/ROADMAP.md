@@ -241,3 +241,19 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [ ] Integration mit realem Znuny-Server und breit abweichenden REST-Mappings; API-Endpunkte können je Webservice-Konfiguration variieren.
 - [ ] Kandidatenpool über Queue-/Rollenfreigaben und Ticketaktionen, Benachrichtigungen, Ticketartikeleinsicht.
 - [ ] Große Alt-Datenbestände und Laufzeiten auf echtem Server messen, Suchlimit/Sessionfehler verifizieren.
+
+## Znuny-Agenten-ID bei Benutzeranlage (Phase 6, PR #34)
+
+- [x] In der **Administration → Benutzerverwaltung** die Znuny-Agenten-ID beim
+  Anlegen und beim Bearbeiten direkt hinterlegen (optional; null = kein Zugriff).
+- [x] Die Zuordnung atomar mit der Benutzeranlage/-bearbeitung in
+  `znuny_approved_agent_bindings` speichern, Eindeutigkeit erzwingen
+  und Doppelbelegungen als HTTP 409 zurückweisen, ohne halbfertige Benutzer.
+- [x] Benutzer können ihre Agenten-ID weder über das persönliche Formular
+  noch über die persönliche API ändern; GET zeigt nur die Admin-Freigabe.
+- [x] Obsoletes Benutzerfeld aus PostgreSQL entfernen, vorhandene
+  Adminfreigaben erhalten und separaten Bindings-Editor/API abschaffen.
+- [x] Ticketcache für frisch angelegte Benutzer ohne persönliche Znuny-Settings
+  mit sicheren Standardfiltern für Owner/Responsible lesbar machen.
+- [ ] Live-Abnahme von SSO-Provisionierung und tatsächlichem Znuny-System
+  unabhängig von den geprüften lokalen Admin-/API-Flows.
