@@ -65,5 +65,6 @@ export const revokeAgent=async(userId:string)=>{
   await mutate('/api/v1/admin/znuny/bindings/'+encodeURIComponent(userId),'DELETE');
 };
 export const getTicketAccess=()=>request<TicketAccess>('/api/v1/znuny/tickets/status');
-export const getCachedTickets=(view:'mine'|'new'='mine',search='')=>
-  request<CachedTicket[]>('/api/v1/znuny/tickets?view='+view+'&search='+encodeURIComponent(search));
+export const getCachedTickets=(view:'mine'|'new'='mine',search='',page=0)=>
+  request<CachedTicket[]>('/api/v1/znuny/tickets?view='+view+
+    '&search='+encodeURIComponent(search)+'&page='+page);
