@@ -1,5 +1,5 @@
 import { useEffect,useState } from 'react';
-import { ExternalLink, FileText, Save, Ticket, WifiOff } from 'lucide-react';
+import { ExternalLink, Save, Ticket, WifiOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { CachedTicket } from './znunySyncApi';
 import { readTicketWorkspace,saveTicketWorkspace,
@@ -7,6 +7,8 @@ import { readTicketWorkspace,saveTicketWorkspace,
 import { getZnunyServer } from './znunyApi';
 import { ZnunyTicketTimerPanel } from './ZnunyTicketTimerPanel';
 import { ZnunyTicketPlanPanel } from './ZnunyTicketPlanPanel';
+import { ZnunyTicketConversationPanel } from './ZnunyTicketConversationPanel';
+import { ZnunyTicketAssignmentPanel } from './ZnunyTicketAssignmentPanel';
 
 function safeLink(value:string):string|null{
   try{
@@ -28,9 +30,8 @@ function classicZnunyUrl(base:string,ticketId:string):string|null{
   }catch{return null;}
 }
 
-/** Matches Views/TaskDetailPanel.xaml sections for a Znuny ticket.
- * Local fields are writable. Remote actions not yet implemented stay disabled.
- * Never suggest that a local change modifies the live Znuny ticket. */
+/** WPF-inspired ticket detail. Local notes remain separate from remote
+ * Znuny article and assignment operations; both are explicitly confirmed. */
 export function ClassicTicketDetailPanel({ticket,onChanged}:{
   ticket:CachedTicket;onChanged?:()=>void;
 }){
@@ -41,7 +42,6 @@ export function ClassicTicketDetailPanel({ticket,onChanged}:{
   const [dirty,setDirty]=useState(false);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
-  const [messagesOpen,setMessagesOpen]=useState(false);
   const [wikiOpen,setWikiOpen]=useState(false);
 
   useEffect(()=>{
@@ -94,22 +94,7 @@ export function ClassicTicketDetailPanel({ticket,onChanged}:{
       <p className="classic-wpf-help">Persönliche Plenaro-Beschreibung.
         Der Originalinhalt des Znuny-Tickets bleibt unverändert.</p>
 
-      <details open={messagesOpen} onToggle={e=>
-        setMessagesOpen((e.currentTarget as HTMLDetailsElement).open)}
-        className="classic-wpf-optional">
-        <summary><FileText size={16}/>Ticket-Nachrichten</summary>
-        <div className="classic-wpf-optional-inner">
-          <label>Nachricht
-            <select disabled aria-label="Ticket-Nachricht auswählen">
-              <option>Nachrichtenabruf noch nicht angebunden</option>
-            </select>
-          </label>
-          <p className="classic-wpf-help">Die zentrale Znuny-Synchronisation liefert bisher
-            Ticketmetadaten, aber keine Artikel oder Nachrichtentexte.
-            „Nachrichten aktualisieren“, „Antworten“ und „Antwort senden“
-            werden mit dem Artikel-/Schreibconnector nachgerüstet.</p>
-        </div>
-      </details>
+      <ZnunyTicketConversationPanel ticketId={ticket.ticketId} closed={closed}/>
 
       <label htmlFor="classic-wpf-ticket-url">Ticket URL</label>
       <div className="classic-wpf-url-row">
@@ -124,27 +109,7 @@ export function ClassicTicketDetailPanel({ticket,onChanged}:{
             title="Zuerst eine gültige Ticket-URL eintragen.">Ticket öffnen</button>}
       </div>
 
-      <div className="classic-wpf-assignment">
-        <h3>Zuweisung</h3>
-        <div className="classic-wpf-assignment-fields">
-          <label>Besitzer
-            <select disabled value={ticket.ownerId??''} aria-label="Ticket Besitzer">
-              <option value={ticket.ownerId??''}>
-                {ticket.ownerId===null?'Nicht vergeben':'Agent-ID '+ticket.ownerId}
-              </option>
-            </select>
-          </label>
-          <label>Verantwortlicher
-            <select disabled value={ticket.responsibleId??''} aria-label="Ticket Verantwortlicher">
-              <option value={ticket.responsibleId??''}>
-                {ticket.responsibleId===null?'Nicht vergeben':'Agent-ID '+ticket.responsibleId}
-              </option>
-            </select>
-          </label>
-        </div>
-        <p className="classic-wpf-help">Zuweisungen ändern den Znuny-Server.
-          Dafür ist der sichere Schreibconnector noch erforderlich.</p>
-      </div>
+      <ZnunyTicketAssignmentPanel ticket={ticket} onChanged={onChanged}/>
 
       <div className="classic-wpf-actions">
         <button type="button" className="button button-primary"
