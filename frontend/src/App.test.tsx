@@ -57,6 +57,23 @@ beforeEach(() => {
     if (path === '/api/v1/admin/users/') return {
       ok: true, status: 200, json: async () => managedUsersFixture,
     };
+    if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/articles')) return {
+      ok:true,status:200,json:async()=>({
+        ticketId:'77',ticketNumber:'2026#77',title:'Ticket mit Details',
+        articles:[{id:'12',subject:'Kundenanfrage',body:'Bitte helfen Sie uns.',
+          from:'Kunde <kunde@example.org>',to:'support@example.org',replyTo:'',
+          senderType:'customer',channel:'Email',created:'2026-10-31 09:00:00'}],
+      }),
+    };
+    if (path==='/api/v1/znuny/agents') return {
+      ok:true,status:200,json:async()=>[
+        {id:77,name:'Agent Siebenundsiebzig'},
+        {id:88,name:'Agent Achtundachtzig'},
+      ],
+    };
+    if (path.includes('/api/v1/znuny/tickets/')&&(
+      path.endsWith('/reply')||path.endsWith('/assignment')||path.endsWith('/assign-to-me')
+    )) return {ok:true,status:200,json:async()=>({confirmed:true,cacheUpdated:true})};
     if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/workspace')) return {
       ok:true,status:200,json:async()=>workspaceFixture,
     };
@@ -505,6 +522,29 @@ describe('Plenaro web shell', () => {
       JSON.parse(String((opts as RequestInit).body)).ticketUrl==='https://example.org/neues-ticket'
     )).toBe(true));
     expect(screen.getByRole('button',{name:'Erledigt'})).toHaveProperty('disabled',true);
+  });
+
+  it('lädt echte Znuny-Nachrichten und bietet Antworten und Zuweisung an',async()=>{
+    ticketFixture.mine=[{
+      ticketId:'77',ticketNumber:'2026#77',title:'Ticket mit Details',
+      queue:'IT',state:'open',stateType:'open',ownerId:77,responsibleId:null,
+      createdAt:null,changedAt:null
+    }];
+    renderAt('/today');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    fireEvent.click(await screen.findByRole('button',{name:/Ticket mit Details/}));
+    expect(await screen.findByText('Bitte helfen Sie uns.')).toBeTruthy();
+    expect(screen.getByRole('button',{name:'Antworten'})).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:/Agenten neu laden/}));
+    expect(await screen.findByRole('option',{name:/Agent Achtundachtzig/})).toBeTruthy();
+    fireEvent.change(screen.getByRole('combobox',{name:'Ticket Besitzer'}),
+      {target:{value:'88'}});
+    fireEvent.click(screen.getByRole('button',{name:'Änderungen übernehmen'}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,options])=>
+      String(url).endsWith('/tickets/77/assignment') &&
+      (options as RequestInit)?.method==='PUT' &&
+      JSON.parse(String((options as RequestInit).body)).ownerId===88
+    )).toBe(true));
   });
 
   it('Aktuelle, Neue und Erledigte Aufgaben verwenden jeweils ihren Ticket-API-Filter',async()=>{
