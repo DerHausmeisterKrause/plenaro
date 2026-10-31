@@ -209,3 +209,14 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [x] Manuelle batchbezogene Rücknahme mit Daten-Snapshots; bei bearbeiteten Datensätzen/abhängigen Einträgen verweigern.
 - [ ] Volle Classic-Übernahme von Ticketbuchungen, Zeitanpassungen, Outlook-/Znuny-/Wiki-Einstellungen und Zuordnungen.
 - [ ] Host-Abnahme mit einer echten Kopie der bisherigen `TaskTool.db` und `settings.json` nach PostgreSQL-Backup.
+
+## Classic-Import Phase 5 – historisches Archiv (PR #30)
+
+- [x] Exportformat 2 ergänzt Desktop-Aufgabenfelder (Pin, Znuny-Zuweisung, Status, Ticketadresse, gebuchte Classic-Zeit und alte Outlook-ID), historische Ticketbuchungen und monatsbezogene Nachkorrekturen.
+- [x] Historische Daten liegen in separaten PostgreSQL-Archivtabellen mit Benutzertrennung. **Keine** automatische Rückbuchung nach Znuny, keine aktive Outlook-Bindung und **keine** Verdopplung der normalen Aufgabenzeiterfassung.
+- [x] Aus `settings.json` werden nur nichtgeheime Planungs-/Hinweis-Einstellungen als inaktive Referenzdaten archiviert (z. B. Wochenenden, Standardsegmentdauer, Kalender-Zeitzone). Einzig der zuvor implementierte `ReminderLeadMinutes` wird als aktive Einstellung übernommen.
+- [x] Anzeige alter Aufgabenfelder/Ticketbuchungen im Aufgaben-Detail, Archivübersicht und importweise Einsicht gespeicherter Settings; Batch-Rücknahme und Quell-Deduplizierung erweitert.
+- [x] Exporter entfernt in Ticket-URLs Credentials und fremde Query-Parameter; Zugangsdaten/API-Schlüssel bleiben ausgeschlossen.
+- [ ] Historische Ticketbuchungen erst nach fachlicher Zuordnung zu Znuny/OTRS in eine echte Buchungsintegration übernehmen; keine automatische Wiederholung alter Buchungen.
+- [ ] Monatskorrekturen als eigene historische Berichtsdaten anzeigen bzw. mit verifizierter, nicht doppelter Zählung in Berichte integrieren.
+- [ ] Migration mit echter Classic-Datenbankkopie/Host prüfen und weitere individuelle/SSO/Outlook-Konfiguration manuell einrichten.

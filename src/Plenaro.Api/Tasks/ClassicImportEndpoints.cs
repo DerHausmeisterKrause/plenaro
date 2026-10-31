@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
 using Npgsql;
@@ -14,7 +16,7 @@ namespace Plenaro.Api.Tasks;
 /// No SQLite files or desktop secrets are uploaded. Preview and commit validate
 /// the same DTO; every commit is fully transactional and owner-isolated.
 /// </summary>
-public static class ClassicImportEndpoints
+public static partial class ClassicImportEndpoints
 {
     public sealed record ImportTask(Guid LegacyId, string Title, string? Description,
         string Status, int? Priority, string[]? Tags, DateOnly? PlannedFor, DateTimeOffset CreatedAt);
@@ -26,7 +28,9 @@ public static class ClassicImportEndpoints
     public sealed record ImportSettings(int? ReminderLeadMinutes);
     public sealed record ImportDocument(int FormatVersion, string SourceId, int SchemaVersion,
         ImportTask[]? Tasks, ImportSegment[]? Segments, ImportTime[]? TimeEntries,
-        ImportMarker[]? DayMarkers, ImportSettings? Settings, string[]? Warnings);
+        ImportMarker[]? DayMarkers, ImportSettings? Settings, string[]? Warnings,
+        ImportMetadata[]? TaskMetadata = null, ImportBooking[]? TicketBookings = null,
+        ImportMonthly[]? MonthlyAdjustments = null, ImportLegacySettings? LegacySettings = null);
 
     private sealed record ImportKey(string Kind, string Key, Guid TargetId);
     private sealed record ImportSnapshot(string Kind, string Key, Guid TargetId, string Hash);
@@ -46,7 +50,7 @@ public static class ClassicImportEndpoints
             if (Validate(doc) is { } problem) return Results.BadRequest(new { error = problem });
             await using var db = await OpenAsync(config, ct);
             var existing = await RegisteredAsync(db, owner.Value, doc.SourceId, null, ct);
-            var keys = Keys(doc, owner.Value).ToArray();
+            var keys = Keys(doc, owner.Value).Concat(ArchiveKeys(doc, owner.Value)).ToArray();
             var newMarkers = 0;
             foreach (var marker in doc.DayMarkers ?? [])
             {
@@ -58,10 +62,17 @@ public static class ClassicImportEndpoints
                 segmentCount = doc.Segments?.Length ?? 0,
                 timeCount = doc.TimeEntries?.Length ?? 0,
                 markerCount = doc.DayMarkers?.Length ?? 0,
+                metadataCount = doc.TaskMetadata?.Length ?? 0,
+                bookingCount = doc.TicketBookings?.Length ?? 0,
+                monthlyCount = doc.MonthlyAdjustments?.Length ?? 0,
                 newTasks = keys.Count(k => k.Kind == "task" && !existing.Contains((k.Kind,k.Key))),
                 newSegments = keys.Count(k => k.Kind == "segment" && !existing.Contains((k.Kind,k.Key))),
                 newTimeEntries = keys.Count(k => k.Kind == "time" && !existing.Contains((k.Kind,k.Key))),
                 newMarkers,
+                newMetadata = keys.Count(k => k.Kind == "metadata" && !existing.Contains((k.Kind,k.Key))),
+                newBookings = keys.Count(k => k.Kind == "booking" && !existing.Contains((k.Kind,k.Key))),
+                newMonthly = keys.Count(k => k.Kind == "monthly" && !existing.Contains((k.Kind,k.Key))),
+                legacySettings = doc.LegacySettings,
                 skippedExistingOrDuplicateMarkers = (doc.DayMarkers?.Length ?? 0) - newMarkers,
                 reminderLeadMinutes = doc.Settings?.ReminderLeadMinutes,
                 warnings = doc.Warnings ?? [],
@@ -83,6 +94,7 @@ public static class ClassicImportEndpoints
             var batchId = Guid.NewGuid();
             int? previousLead = null;
             var hadSettings = false;
+            int? leadToApply = doc.Settings?.ReminderLeadMinutes;
             if (doc.Settings?.ReminderLeadMinutes is not null)
             {
                 await using var previous = new NpgsqlCommand("""
@@ -92,11 +104,15 @@ public static class ClassicImportEndpoints
                 var prior = await previous.ExecuteScalarAsync(ct);
                 hadSettings = prior is not null;
                 previousLead = prior is null ? null : Convert.ToInt32(prior);
+                // Re-importing the same Classic settings must not change an
+                // existing timestamp and break undo of an earlier batch.
+                if (hadSettings && previousLead == leadToApply)
+                    leadToApply = null;
             }
             await using (var batch = new NpgsqlCommand("""
                 INSERT INTO classic_import_batches(id,owner_user_id,source_id,previous_lead,
-                    changed_lead,settings_had_row)
-                VALUES(@id,@owner,@source,@oldlead,@newlead,@had)
+                    changed_lead,settings_had_row,legacy_settings)
+                VALUES(@id,@owner,@source,@oldlead,@newlead,@had,@legacy)
                 """, db, tx))
             {
                 batch.Parameters.AddWithValue("id", batchId);
@@ -105,8 +121,13 @@ public static class ClassicImportEndpoints
                 batch.Parameters.Add("oldlead", NpgsqlDbType.Smallint).Value =
                     previousLead is null ? DBNull.Value : (object)(short)previousLead.Value;
                 batch.Parameters.Add("newlead", NpgsqlDbType.Smallint).Value =
-                    doc.Settings?.ReminderLeadMinutes is not int lead ? DBNull.Value : (object)(short)lead;
+                    leadToApply is not int lead ? DBNull.Value : (object)(short)lead;
                 batch.Parameters.AddWithValue("had", hadSettings);
+                batch.Parameters.Add("legacy", NpgsqlDbType.Jsonb).Value =
+                    JsonSerializer.Serialize(doc.LegacySettings ?? new ImportLegacySettings(),
+                        new JsonSerializerOptions(ArchiveJson) {
+                            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                        });
                 await batch.ExecuteNonQueryAsync(ct);
             }
 
@@ -209,7 +230,10 @@ public static class ClassicImportEndpoints
                     inserted++;
                 }
 
-                if (doc.Settings?.ReminderLeadMinutes is int newLead)
+                inserted += await ImportArchiveAsync(doc, owner.Value, batchId,
+                    registered, db, tx, ct);
+
+                if (leadToApply is int newLead)
                 {
                     await using var settings = new NpgsqlCommand("""
                         INSERT INTO user_reminder_settings(owner_user_id,enabled,lead_minutes)
@@ -233,7 +257,9 @@ public static class ClassicImportEndpoints
                 await tx.CommitAsync(ct);
                 return Results.Ok(new { batchId, inserted, skipped = 
                     (doc.Tasks?.Length ?? 0)+(doc.Segments?.Length ?? 0)+
-                    (doc.TimeEntries?.Length ?? 0)+(doc.DayMarkers?.Length ?? 0)-inserted,
+                    (doc.TimeEntries?.Length ?? 0)+(doc.DayMarkers?.Length ?? 0)+
+                    (doc.TaskMetadata?.Length ?? 0)+(doc.TicketBookings?.Length ?? 0)+
+                    (doc.MonthlyAdjustments?.Length ?? 0)-inserted,
                     reminderLeadMinutes = doc.Settings?.ReminderLeadMinutes });
             }
             catch (Exception ex) when (ex is PostgresException or InvalidOperationException)
@@ -245,6 +271,7 @@ public static class ClassicImportEndpoints
             }
         });
 
+        MapClassicArchiveRoutes(group);
         group.MapGet("/batches", async (HttpContext http,
             UserManager<ApplicationUser> users, IConfiguration config, CancellationToken ct) =>
         {
@@ -345,18 +372,20 @@ public static class ClassicImportEndpoints
                 dependent.Parameters.AddWithValue("task", task.TargetId);
                 dependent.Parameters.AddWithValue("batch", id);
                 dependent.Parameters.AddWithValue("owner", owner.Value);
-                if ((bool)(await dependent.ExecuteScalarAsync(ct) ?? false))
-                    return Results.Conflict(new { error = "Importierte Aufgabe besitzt neuere oder fremde Zeitdaten. Rollback verweigert." });
+                if ((bool)(await dependent.ExecuteScalarAsync(ct) ?? false) ||
+                    await HasUntrackedArchiveChildAsync(db,tx,owner.Value,id,task.TargetId,ct))
+                    return Results.Conflict(new { error = "Importierte Aufgabe besitzt neuere oder fremde Zeit-/Archivdaten. Rollback verweigert." });
             }
-            foreach (var kind in new[] {"time","segment","marker","task"})
+            foreach (var kind in new[] {"time","segment","booking","metadata","monthly","marker","task"})
             foreach (var item in items.Where(x => x.Kind == kind))
             {
                 var table = kind switch {
                     "task" => "tasks", "segment" => "task_segments", "time" => "time_entries",
-                    _ => "day_markers"
+                    "booking" => "classic_ticket_bookings", "metadata" => "classic_task_metadata",
+                    "monthly" => "classic_monthly_adjustments", _ => "day_markers"
                 };
                 var ownerField = kind == "marker" ? "user_id" : "owner_user_id";
-                var idField = kind == "marker" ? "day" : "id";
+                var idField = kind == "marker" ? "day" : kind == "metadata" ? "task_id" : "id";
                 await using var delete = new NpgsqlCommand(
                     $"DELETE FROM {table} WHERE {ownerField}=@owner AND {idField}=@target", db, tx);
                 delete.Parameters.AddWithValue("owner", owner.Value);
@@ -389,7 +418,7 @@ public static class ClassicImportEndpoints
 
     private static string? Validate(ImportDocument doc)
     {
-        if (doc.FormatVersion != 1 || doc.SchemaVersion is < 1 or > 32 ||
+        if (doc.FormatVersion is not (1 or 2) || doc.SchemaVersion is < 1 or > 32 ||
             string.IsNullOrWhiteSpace(doc.SourceId) ||
             !Regex.IsMatch(doc.SourceId, "^[a-zA-Z0-9_-]{6,64}$") ||
             (doc.Tasks?.Length ?? 0) is > 2000 or < 0 ||
@@ -434,7 +463,7 @@ public static class ClassicImportEndpoints
         if ((doc.Warnings?.Length ?? 0) > 500 ||
             (doc.Warnings ?? []).Any(x => x.Length > 500))
             return "Zu viele oder zu lange Importhinweise.";
-        return null;
+        return ValidateArchive(doc, taskIds);
     }
 
     private static bool ValidId(string? value) =>
@@ -511,10 +540,12 @@ public static class ClassicImportEndpoints
     {
         var table = kind switch {
             "task"=>"tasks", "segment"=>"task_segments", "time"=>"time_entries",
-            "marker"=>"day_markers", _=>throw new ArgumentException("Invalid kind")
+            "marker"=>"day_markers", "metadata"=>"classic_task_metadata",
+            "booking"=>"classic_ticket_bookings", "monthly"=>"classic_monthly_adjustments",
+            _=>throw new ArgumentException("Invalid kind")
         };
         var ownerField = kind=="marker" ? "user_id" : "owner_user_id";
-        var idField = kind=="marker" ? "day" : "id";
+        var idField = kind=="marker" ? "day" : kind=="metadata" ? "task_id" : "id";
         await using var cmd = new NpgsqlCommand(
             $"SELECT md5(row_to_json(t)::text) FROM {table} t WHERE {ownerField}=@owner AND {idField}=@target",
             db,tx);

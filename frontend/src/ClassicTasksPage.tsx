@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { ClassicTaskArchivePanel } from './ClassicArchivePanels';
 import { CalendarDays, CheckCircle2, ClipboardList, Pencil, Play, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react';
 import {
   changeTaskStatus, createTask, deleteTask, listTasks, taskStatusLabel, updateTask,
@@ -257,6 +258,7 @@ export function ClassicTasksPage() {
                   <Trash2 size={16}/>Löschen
                 </button>
               </div>
+              <ClassicTaskArchivePanel key={selected.id} taskId={selected.id}/>
               <p className="um-hint">Nur du kannst diese Aufgabe sehen und bearbeiten.</p>
             </div>}
       </section>

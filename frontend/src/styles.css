@@ -703,3 +703,17 @@ h1,h2,h3,p { margin-top: 0; }
 .classic-import-batch span { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
 .classic-import-batch small { color: var(--muted); }
 @media(max-width:500px) { .classic-import-summary { grid-template-columns: 1fr; } .classic-import-batch { align-items: flex-start; flex-direction: column; } }
+
+/* Historic Classic archive remains reference-only and never sends booking actions. */
+.classic-archive-detail h3 { display: flex; align-items: center; gap: 8px; }
+.classic-archive-detail dl, .classic-archive-settings { display: grid; grid-template-columns: minmax(120px,1fr) minmax(0,2fr); gap: 8px; font-size: 12px; }
+.classic-archive-detail dt, .classic-archive-settings dt { color: var(--muted-strong); font-weight: 600; }
+.classic-archive-detail dd, .classic-archive-settings dd { margin: 0; overflow-wrap: anywhere; }
+.classic-archive-bookings { display: grid; gap: 7px; padding: 0; list-style: none; }
+.classic-archive-bookings li { display: grid; gap: 3px; background: var(--surface-soft); border-radius: 8px; padding: 10px; font-size: 12px; }
+.classic-archive-bookings span, .classic-archive-bookings small { color: var(--muted-strong); }
+.classic-import-archive-overview { display: grid; gap: 12px; margin: 14px 0; }
+.classic-archive-batch-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.classic-import-batch { flex-wrap: wrap; }
+.classic-archive-settings { flex-basis: 100%; border-top: 1px solid var(--border); padding-top: 8px; }
+@media(max-width:480px){.classic-archive-detail dl,.classic-archive-settings{grid-template-columns:1fr}}

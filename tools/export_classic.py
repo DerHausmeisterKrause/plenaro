@@ -11,9 +11,13 @@ import json
 from pathlib import Path
 import re
 import sqlite3
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
-TZ = ZoneInfo("Europe/Berlin")
+try:
+    TZ = ZoneInfo("Europe/Berlin")
+except ZoneInfoNotFoundError:
+    raise SystemExit("Europe/Berlin-Zeitzonendaten fehlen. Unter Windows: py -m pip install tzdata")
 SAFE_LIMIT = 20000
 
 
@@ -36,6 +40,28 @@ def parse_utc(value):
     d = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     # Classic persisted UTC fields are UTC even when SQLite lacks offset.
     return d.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z") if d.tzinfo is None else d.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def safe_ticket_url(raw):
+    """Preserve non-secret ticket links; drop URL userinfo, fragments and unknown query parameters."""
+    if not raw:
+        return ""
+    try:
+        parsed = urlsplit(str(raw).strip())
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return ""
+        host = parsed.hostname
+        if ":" in host:
+            host = "[" + host + "]"
+        netloc = host + (f":{parsed.port}" if parsed.port else "")
+        params = parse_qsl(parsed.query.replace(";", "&"), keep_blank_values=False)
+        safe_params = [(key, value) for key, value in params
+                       if key in ("Action", "TicketID", "TicketNumber", "ID")
+                       and len(value) <= 128]
+        return urlunsplit((parsed.scheme, netloc, parsed.path,
+                           urlencode(safe_params), ""))[:2048]
+    except (ValueError, TypeError):
+        return ""
 
 
 def main():
@@ -73,13 +99,17 @@ def main():
     def records(name):
         if name not in tables:
             return []
-        rows = con.execute("SELECT * FROM " + name).fetchmany(SAFE_LIMIT + 1)
-        if len(rows) > SAFE_LIMIT:
-            parser.error(f"Too many {name} rows; contact maintainer for bulk import.")
+        limit = 2000 if name == "tasks" else (4000 if name in
+            ("task_segments", "time_logs", "work_days", "ticket_time_bookings",
+             "monthly_report_time_adjustments") else SAFE_LIMIT)
+        rows = con.execute("SELECT * FROM " + name).fetchmany(limit + 1)
+        if len(rows) > limit:
+            parser.error(f"Zu viele {name}-Einträge ({len(rows)} > {limit}); Bulk-Migration nötig.")
         return [dict(row) for row in rows]
 
     warnings = []
     tasks, segments, entries, markers = [], [], [], []
+    metadata, bookings, monthly = [], [], []
     existing_ids = set()
     for row in records("tasks"):
         try:
@@ -114,6 +144,23 @@ def main():
                           "status": status, "priority": priority, "tags": tags, "plannedFor": planned,
                           "createdAt": created_at})
             existing_ids.add(task_id)
+            # Historical identifiers/flags are archived, never used as live
+            # Outlook links, Znuny actions or access permissions.
+            metadata.append({
+                "taskLegacyId": task_id,
+                "ticketUrl": safe_ticket_url(row.get("ticket_url")),
+                "isPinned": bool(row.get("is_pinned") or 0),
+                "isZnunyAssigned": bool(row.get("is_znuny_assigned", 1)),
+                "isPlenaroShared": bool(row.get("is_plenaro_shared") or 0),
+                "ticketState": str(row.get("ticket_state") or "")[:128],
+                "ticketStateType": str(row.get("ticket_state_type") or "")[:128],
+                "ticketMinutesBooked": max(0, int(row.get("ticket_minutes_booked") or 0)),
+                "ticketSecondsBooked": max(0, int(row.get("ticket_seconds_booked") or 0)),
+                "ticketCreatedUtc": parse_utc(row["ticket_created_utc"]) if row.get("ticket_created_utc") else None,
+                "ticketChangedUtc": parse_utc(row["ticket_changed_utc"]) if row.get("ticket_changed_utc") else None,
+                "localActivityUtc": parse_utc(row["local_activity_utc"]) if row.get("local_activity_utc") else None,
+                "outlookEntryId": str(row.get("outlook_entry_id") or "")[:1024],
+            })
         except (ValueError, KeyError, TypeError) as exc:
             warnings.append(f"Task skipped: {str(row.get('id', '?'))[:40]}: {exc}")
 
@@ -165,15 +212,82 @@ def main():
                 markers.append({"day": day, "dayType": day_type, "isBr": br, "isHo": ho})
         except (ValueError, TypeError, KeyError) as exc:
             warnings.append(f"Marker skipped: {str(row.get('day','?'))[:30]}: {exc}")
+    for row in records("ticket_time_bookings"):
+        try:
+            task_id = str(row.get("task_id") or "")
+            if task_id not in existing_ids:
+                raise ValueError("parent task skipped")
+            booking_id = str(row.get("id") or "").strip()
+            if not booking_id or len(booking_id) > 80:
+                raise ValueError("invalid booking ID")
+            seconds = int(row.get("source_seconds") or 0)
+            if seconds < 0 or seconds > 10**10:
+                raise ValueError("invalid source seconds")
+            status = str(row.get("status") or "Pending")
+            if status not in ("Pending", "Succeeded", "Failed"):
+                raise ValueError("unsupported ticket-booking status")
+            bookings.append({
+                "legacyId": booking_id,
+                "taskLegacyId": task_id,
+                "ticketId": str(row.get("ticket_id") or "")[:128],
+                "ticketNumber": str(row.get("ticket_number") or "")[:128],
+                "bookingId": str(row.get("booking_id") or "")[:128],
+                "articleId": str(row.get("article_id") or "")[:128],
+                "status": status,
+                "sourceSeconds": seconds,
+                "bookedMinutes": float(row.get("booked_minutes") or row.get("minutes") or 0),
+                "bookedAtUtc": parse_utc(row.get("booked_at_utc")),
+                "shortDescription": str(row.get("short_description") or "")[:500],
+                "costCenter": str(row.get("cost_center") or "")[:256],
+                "orderValue": str(row.get("order_value") or "")[:256],
+                "note": str(row.get("note") or "")[:500],
+            })
+        except (ValueError, TypeError, KeyError, OverflowError) as exc:
+            warnings.append(f"Ticket booking skipped: {str(row.get('id','?'))[:40]}: {exc}")
+    for row in records("monthly_report_time_adjustments"):
+        try:
+            import uuid
+            adjustment_id = str(uuid.UUID(str(row["id"])))
+            month = str(row["month"])[:10]
+            parsed = datetime.strptime(month, "%Y-%m-%d")
+            if parsed.day != 1 or not 2000 <= parsed.year <= 2099:
+                raise ValueError("invalid month")
+            seconds = int(row["seconds"])
+            if seconds <= 0 or seconds > 10**10:
+                raise ValueError("invalid adjustment seconds")
+            monthly.append({
+                "legacyId": adjustment_id, "month": month, "seconds": seconds,
+                "note": str(row.get("note") or "")[:500],
+                "createdAt": parse_utc(row["created_utc"]),
+            })
+        except (ValueError, KeyError, TypeError) as exc:
+            warnings.append(f"Monthly adjustment skipped: {str(row.get('id','?'))[:40]}: {exc}")
     con.close()
     lead = settings.get("ReminderLeadMinutes")
     prefs = {"reminderLeadMinutes": lead if isinstance(lead, int) and not isinstance(lead, bool) and 0 <= lead <= 1440 else None}
+    # Explicit safe-settings allowlist. Unsupported settings are not copied or activated.
+    optional_bools = [
+        "ShowWeekendInWeekView", "HidePastTodayItems",
+        "NotificationSoundEnabled", "NotifyOnNewAssignedTickets",
+        "NotifyOnTicketChanges",
+    ]
+    legacy_settings = {key[0].lower() + key[1:]: settings[key] for key in optional_bools
+                       if type(settings.get(key)) is bool}
+    duration = settings.get("DefaultSegmentDurationMinutes")
+    if type(duration) is int and 0 <= duration <= 1440:
+        legacy_settings["defaultSegmentDurationMinutes"] = duration
+    zone = settings.get("CalendarTimeZoneId")
+    if isinstance(zone, str) and 1 <= len(zone) <= 64 and re.fullmatch(r"[a-zA-Z0-9_+/-]+", zone):
+        legacy_settings["calendarTimeZoneId"] = zone
     if args.settings:
-        warnings.append("Only ReminderLeadMinutes is supported from settings.json. Secrets, tokens, passwords, Entra/Outlook credentials, wiki and ticket settings are deliberately NOT exported.")
-    warnings.append("Ticket bookings, open timers, monthly adjustments, Outlook IDs, work attendance and breaks are not imported.")
-    document = {"formatVersion": 1, "sourceId": source_id, "schemaVersion": int(version[0]),
+        warnings.append("Nur unkritische Einstellungen werden als INAKTIVE Classic-Referenz archiviert. Passwörter, Token, API-Keys und Integrationszugänge werden nicht exportiert.")
+    warnings.append("Archivierte Ticketbuchungen werden NICHT erneut an Znuny gesendet und NICHT als neue Zeiterfassung abgerechnet.")
+    warnings.append("Offene Timer, Anwesenheit/Pausen, Wiki-Caches und aktive Outlook-Verknüpfungen werden nicht übernommen.")
+    document = {"formatVersion": 2, "sourceId": source_id, "schemaVersion": int(version[0]),
                 "tasks": tasks, "segments": segments, "timeEntries": entries,
-                "dayMarkers": markers, "settings": prefs, "warnings": warnings}
+                "dayMarkers": markers, "settings": prefs, "warnings": warnings,
+                "taskMetadata": metadata, "ticketBookings": bookings,
+                "monthlyAdjustments": monthly, "legacySettings": legacy_settings}
     data = json.dumps(document, ensure_ascii=False, indent=2)
     if len(data.encode("utf-8")) > 12 * 1024 * 1024:
         parser.error("Converted export is over 12 MiB; split or use an import extension.")
