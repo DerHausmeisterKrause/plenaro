@@ -233,8 +233,10 @@ public static class ZnunyEndpoints
             var password = await vault.GetForIntegrationAsync("user",owner.Value,PasswordKey,ct);
             if (string.IsNullOrWhiteSpace(password))
                 return Results.BadRequest(new { error="Bitte zuerst das Znuny-Passwort speichern." });
-            if (ValidateServer(server) is { } error ||
-                server.ApiUrl.Contains("SERVER",StringComparison.OrdinalIgnoreCase))
+            var error = ValidateServer(server);
+            var isPlaceholder = Uri.TryCreate(server.ApiUrl, UriKind.Absolute, out var endpointUri)
+                && endpointUri.Host.Equals("SERVER", StringComparison.OrdinalIgnoreCase);
+            if (error is not null || isPlaceholder)
                 return Results.BadRequest(new { error=error ??
                     "Bitte zuerst die Znuny-API-URL auf den tatsächlichen Server ändern." });
             return Results.Ok(await tester.TrySessionAsync(server.ApiUrl,personal.Username,password,ct));
