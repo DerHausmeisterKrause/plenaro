@@ -495,3 +495,30 @@ voraus. Manche Znuny-Instanzen verwenden `POST /Ticket/Search` statt
 `GET /Ticket`; die zentrale Admin-API-Einstellung kann dies anpassen.
 Ein vollständiger realer Integrationstest mit dem jeweils bereitgestellten
 Webservice und seinen Berechtigungen steht noch aus.
+
+## Znuny-Agenten-ID nur in der Administrator-Benutzerverwaltung
+
+**Einstellungen → Administration → Benutzerverwaltung → Benutzer anlegen/bearbeiten:**
+Die Znuny-Agenten-ID wird ab diesem Stand direkt beim Erstellen des
+Plenaro-Benutzers oder später im Administrationseditor vergeben. Das Feld kann
+leer bleiben, wenn eine Person keinen Znuny-Zugriff erhalten soll. Eine
+Agenten-ID kann nur einem Plenaro-Benutzer zugeordnet werden; bei Konflikten
+werden Kontoerstellung oder -bearbeitung vollständig zurückgerollt.
+
+**Technische Sicherheit:** Die Tabelle `znuny_approved_agent_bindings` ist die
+einzige maßgebliche Zuordnung für den Ticketcache. Das alte, vom Benutzer
+beschreibbare Feld `znuny_user_settings.agent_id` wird per Migration
+`0017_znuny_admin_agent_ids.sql` gelöscht. Bereits vom Administrator
+freigegebene Zuordnungen bleiben erhalten; vormals lediglich selbst
+eingetragene IDs werden **nicht** automatisch zu Freigaben erhoben.
+`GET /api/v1/znuny/me` zeigt die genehmigte ID nur lesbar an.
+`PUT /api/v1/znuny/me` lehnt `agentId` und andere unbekannte Felder ab;
+selbst manipulierte Browser-Anfragen können die Zuordnung nicht setzen.
+Die separaten alten Endpunkte `/api/v1/admin/znuny/bindings` sind entfernt;
+Zuordnung und Benutzerkonto werden in derselben DB-Transaktion gespeichert.
+Der globale Znuny-Sync und die per-Benutzer-Ticketisolation bleiben unverändert.
+
+Beim Anlegen eines Kontos mit Agenten-ID gelten die Standardfilter für Owner
+und Responsible direkt, auch wenn der Benutzer noch keine persönlichen
+Ticketsystem-Einstellungen gespeichert hat. Wird eine ID vom Admin entfernt,
+entfällt der Zugriff auf die dazugehörigen gecachten Tickets unmittelbar.

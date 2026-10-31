@@ -17,6 +17,10 @@ RUN dotnet publish src/Plenaro.Api/Plenaro.Api.csproj \
     /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
+# Npgsql requires GSSAPI native runtime library during CLI/setup-token as well
+# as normal ASP.NET startup. Keep Debian runtime dependencies explicit.
+RUN apt-get update && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/publish .
 # React/Vite-Ausgabe ersetzt die Phase-1-Statusseite.

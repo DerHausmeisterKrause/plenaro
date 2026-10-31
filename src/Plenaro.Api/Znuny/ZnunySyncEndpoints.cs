@@ -13,7 +13,6 @@ public static class ZnunySyncEndpoints
         int InitialLookbackDays=365,int DeltaIntervalMinutes=15,
         int OpenIntervalMinutes=360,int MaxRequestsPerCycle=200);
     public sealed record ServicePassword(string Password);
-    public sealed record ApproveAgent(int AgentId);
     public sealed record ResetRequest(string Confirmation);
 
     public static void MapPlenaroZnunyCentral(this WebApplication app)
@@ -119,66 +118,6 @@ public static class ZnunySyncEndpoints
             return Results.NoContent();
         });
 
-        admin.MapGet("/bindings",async (IConfiguration config,CancellationToken ct) =>
-        {
-            await using var db=await Open(config,ct);
-            await using var cmd=new NpgsqlCommand("""
-                SELECT u."Id",u."Email",u."UserName",a.agent_id,
-                    COALESCE(p.agent_id,0)
-                FROM "AspNetUsers" u
-                LEFT JOIN znuny_approved_agent_bindings a ON a.user_id=u."Id"
-                LEFT JOIN znuny_user_settings p ON p.user_id=u."Id"
-                ORDER BY u."Email" LIMIT 200
-                """,db);
-            var rows=new List<object>();
-            await using var r=await cmd.ExecuteReaderAsync(ct);
-            while(await r.ReadAsync(ct))
-                rows.Add(new { userId=r.GetGuid(0),
-                    email=r.IsDBNull(1)?"":r.GetString(1),
-                    approvedAgentId=r.IsDBNull(3)?(int?)null:r.GetInt32(3),
-                    requestedAgentId=r.GetInt32(4)});
-            return Results.Ok(rows);
-        });
-
-        admin.MapPut("/bindings/{userId:guid}",async(Guid userId,ApproveAgent body,
-            HttpContext http,IAntiforgery anti,IConfiguration config,
-            UserManager<ApplicationUser> users,CancellationToken ct) =>
-        {
-            if(!await Csrf(http,anti))return BadCsrf();
-            if(body.AgentId<=0)return Results.BadRequest(new{error="Agenten-ID muss positiv sein."});
-            var user=await users.FindByIdAsync(userId.ToString("D"));
-            if(user is null || user.IsDisabled)return Results.NotFound();
-            await using var db=await Open(config,ct);
-            try
-            {
-                await using var cmd=new NpgsqlCommand("""
-                    INSERT INTO znuny_approved_agent_bindings(user_id,agent_id)
-                    VALUES(@user,@agent)
-                    ON CONFLICT(user_id) DO UPDATE SET
-                        agent_id=EXCLUDED.agent_id,approved_at=now()
-                    """,db);
-                cmd.Parameters.AddWithValue("user",userId);
-                cmd.Parameters.AddWithValue("agent",body.AgentId);
-                await cmd.ExecuteNonQueryAsync(ct);
-            }
-            catch(PostgresException ex) when(ex.SqlState==PostgresErrorCodes.UniqueViolation)
-            {return Results.Conflict(new{error="Diese Znuny-Agenten-ID ist bereits einem anderen Plenaro-Benutzer zugewiesen."});}
-            return Results.NoContent();
-        });
-
-        admin.MapDelete("/bindings/{userId:guid}",async(Guid userId,
-            HttpContext http,IAntiforgery anti,IConfiguration config,CancellationToken ct) =>
-        {
-            if(!await Csrf(http,anti))return BadCsrf();
-            await using var db=await Open(config,ct);
-            await using var cmd=new NpgsqlCommand("""
-                DELETE FROM znuny_approved_agent_bindings WHERE user_id=@user
-                """,db);
-            cmd.Parameters.AddWithValue("user",userId);
-            await cmd.ExecuteNonQueryAsync(ct);
-            return Results.NoContent();
-        });
-
         reader.MapGet("/tickets",async(HttpContext http,
             UserManager<ApplicationUser> users,IConfiguration config,
             string? view,string? search,int? limit,int? page,CancellationToken ct) =>
@@ -200,10 +139,10 @@ public static class ZnunySyncEndpoints
                 FROM znuny_cached_tickets t
                 INNER JOIN znuny_approved_agent_bindings b
                     ON b.user_id=@user
-                INNER JOIN znuny_user_settings p ON p.user_id=b.user_id
+                LEFT JOIN znuny_user_settings p ON p.user_id=b.user_id
                 WHERE (
-                     (p.include_owner AND t.owner_agent_id=b.agent_id)
-                  OR (p.include_responsible AND t.responsible_agent_id=b.agent_id)
+                     (COALESCE(p.include_owner,true) AND t.owner_agent_id=b.agent_id)
+                  OR (COALESCE(p.include_responsible,true) AND t.responsible_agent_id=b.agent_id)
                 )
                 AND (@new=false OR lower(t.state_type)='new'
                     OR lower(t.state)='new')

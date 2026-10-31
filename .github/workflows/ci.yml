@@ -44,6 +44,7 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/graph/status")" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/auth/entra/start")" = "404"
 
+          echo 'CI checkpoint: services healthy, starting initial setup'
           TOKEN=$(docker compose exec -T web dotnet Plenaro.Api.dll --setup-token | sed -n 's/^SETUP_TOKEN=//p' | tr -d '\r')
           test "${#TOKEN}" -eq 64
           COOKIE=$(mktemp)
@@ -62,12 +63,19 @@ jobs:
           # A CSRF token is tied to the authenticated principal, refresh after login.
           CSRF=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$API/api/v1/auth/csrf" \
             | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')
+          echo 'CI checkpoint: setup and admin login OK'
           # User management coverage in the existing Docker smoke test (no new job).
           ID=$(curl -fsS -c "$COOKIE" -b "$COOKIE" -X POST "$API/api/v1/admin/users/" -H "X-CSRF-TOKEN: $CSRF" \
             -H 'Content-Type: application/json' \
-            -d '{"email":"user@example.invalid","displayName":"Test User","role":"User","password":"CiUserPassword123!"}' \
+            -d '{"email":"user@example.invalid","displayName":"Test User","role":"User","password":"CiUserPassword123!","agentId":77}' \
             | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
           test -n "$ID"
+          # User creation and authoritative Znuny approval happen in one transaction.
+          curl -fsS -b "$COOKIE" "$API/api/v1/admin/users/" | python3 -c 'import json,sys;u=next(x for x in json.load(sys.stdin) if x["email"]=="user@example.invalid");assert u["agentId"]==77'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/admin/users/" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"email":"duplicate-agent@example.invalid","displayName":"Must Roll Back","role":"User","password":"CiUserPassword123!","agentId":77}')" = "409"
+          curl -fsS -b "$COOKIE" "$API/api/v1/admin/users/" | python3 -c 'import json,sys;assert not any(u["email"]=="duplicate-agent@example.invalid" for u in json.load(sys.stdin))'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/admin/users/" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"email":"invalid-agent@example.invalid","displayName":"Invalid Agent","role":"User","password":"CiUserPassword123!","agentId":0}')" = "400"
+          echo 'CI checkpoint: user created with approved Znuny ID; conflict rollback verified'
           USER_COOKIE=$(mktemp)
           trap 'rm -f "$COOKIE" "$USER_COOKIE"; docker compose down -v --remove-orphans || true' EXIT
           USER_CSRF=$(curl -fsS -c "$USER_COOKIE" -b "$USER_COOKIE" "$API/api/v1/auth/csrf" \
@@ -76,23 +84,26 @@ jobs:
             -X POST "$API/api/v1/auth/login" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' \
             -d '{"email":"user@example.invalid","password":"CiUserPassword123!"}')" = "204"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/admin/users/")" = "403"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/admin/users/$ID" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"displayName":"Hacked","role":"User","disabled":false,"agentId":42}')" = "403"
           USER_CSRF=$(curl -fsS -c "$USER_COOKIE" -b "$USER_COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+          echo 'CI checkpoint: standard user login and nonadmin guards verified'
           # Znuny Classic defaults: no secrets or connector traffic, server-admin isolation.
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/znuny/server")" = "401"
           curl -fsS -b "$COOKIE" "$API/api/v1/znuny/server" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["apiUrl"]=="https://SERVER/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST";assert (d["ticketSearchRoute"],d["ticketSearchMethod"],d["ticketSearchAuthMode"])==("/Ticket","GET","Session");assert (d["syncIntervalMinutes"],d["candidateSyncIntervalMinutes"],d["searchLimit"],d["articleLimit"])==(15,5,100,20);assert d["ticketUpdateRoute"]=="/Ticket/{TicketID}/Update" and d["agentListRoute"]=="/Ticket/Agent/List"'
-          curl -fsS -b "$COOKIE" "$API/api/v1/znuny/me" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["username"]=="" and d["agentId"]==0 and d["candidateUserId"]==1 and d["passwordConfigured"] is False'
+          curl -fsS -b "$COOKIE" "$API/api/v1/znuny/me" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["username"]=="" and d["agentId"] is None and d["candidateUserId"]==1 and d["passwordConfigured"] is False'
           SERVER_JSON=$(curl -fsS -b "$COOKIE" "$API/api/v1/znuny/server")
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/admin/znuny/server" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d "$SERVER_JSON")" = "403"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/znuny/server" -H 'Content-Type: application/json' -d "$SERVER_JSON")" = "400"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/znuny/server" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$(echo "$SERVER_JSON" | python3 -c 'import sys,json;d=json.load(sys.stdin);d["apiUrl"]="http://127.0.0.1/private";print(json.dumps(d))')")" = "400"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/znuny/server" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$(echo "$SERVER_JSON" | python3 -c 'import sys,json;d=json.load(sys.stdin);d["ticketSearchAuthMode"]="Direct";print(json.dumps(d))')")" = "400"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/znuny/server" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$SERVER_JSON")" = "204"
-          MY_ZNUNY='{"username":"ci-operator","agentId":42,"candidateUserId":1,"candidateKeywords":"Plenaro","candidateExcludeKeywords":"spam","includeOwner":true,"includeResponsible":true,"notifyOnNewAssignedTickets":true,"notifyOnTicketChanges":true,"showAllCandidatePoolTickets":false}'
+          MY_ZNUNY='{"username":"ci-operator","candidateUserId":1,"candidateKeywords":"Plenaro","candidateExcludeKeywords":"spam","includeOwner":true,"includeResponsible":true,"notifyOnNewAssignedTickets":true,"notifyOnTicketChanges":true,"showAllCandidatePoolTickets":false}'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/znuny/me" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$MY_ZNUNY")" = "204"
-          curl -fsS -b "$COOKIE" "$API/api/v1/znuny/me" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["username"]=="ci-operator" and d["agentId"]==42 and d["candidateKeywords"]=="Plenaro"'
-          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/me" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["username"]=="" and d["agentId"]==0'
+          curl -fsS -b "$COOKIE" "$API/api/v1/znuny/me" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["username"]=="ci-operator" and d["agentId"] is None and d["candidateKeywords"]=="Plenaro"'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/me" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["username"]=="" and d["agentId"]==77'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/znuny/password" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"password":"never-print"}')" = "503"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/znuny/connection-test" -H "X-CSRF-TOKEN: $CSRF")" = "503"
+          echo 'CI checkpoint: user cannot modify Znuny personal agent ID'
           # Central Znuny: one shared cache, disabled by default, 365d bootstrap config.
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/znuny/tickets/status")" = "401"
           curl -fsS -b "$COOKIE" "$API/api/v1/admin/znuny/sync" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["enabled"] is False and d["initialLookbackDays"]==365 and d["deltaIntervalMinutes"]==15 and d["cachedTickets"]==0'
@@ -102,25 +113,50 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/znuny/sync" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$CONFIG")" = "204"
           curl -fsS -b "$COOKIE" -X POST "$API/api/v1/admin/znuny/sync/run" -H "X-CSRF-TOKEN: $CSRF" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["status"]=="disabled" and d["requests"]==0'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/admin/znuny/sync/run" -H "X-CSRF-TOKEN: $USER_CSRF")" = "403"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/admin/znuny/bindings/$ID" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"agentId":77}')" = "403"
+          echo 'CI checkpoint: service sync and nonadmin guards passed'
+          LEGACY_AGENT_HTTP=$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/admin/znuny/bindings/$ID" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"agentId":77}')
+          echo "CI deprecated binding endpoint returned HTTP $LEGACY_AGENT_HTTP"
+          test "$LEGACY_AGENT_HTTP" = "404" -o "$LEGACY_AGENT_HTTP" = "405"
           AID=$(curl -fsS -b "$COOKIE" "$API/api/v1/auth/me" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/znuny/bindings/$AID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"agentId":42}')" = "204"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/znuny/bindings/$ID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"agentId":77}')" = "204"
-          USER_ZNUNY='{"username":"user-agent","agentId":77,"candidateUserId":1,"candidateKeywords":"","candidateExcludeKeywords":"","includeOwner":true,"includeResponsible":true,"notifyOnNewAssignedTickets":true,"notifyOnTicketChanges":true,"showAllCandidatePoolTickets":false}'
+          ADMIN_AGENT_HTTP=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/users/$AID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"displayName":"CI Admin","role":"Admin","disabled":false,"agentId":42}')
+          echo "CI admin agent update returned HTTP $ADMIN_AGENT_HTTP"
+          test "$ADMIN_AGENT_HTTP" = "204"
+          # Admin changes invalidate existing Identity cookies. Log back in
+          # before asserting the new administrative binding.
+          CSRF=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X POST "$API/api/v1/auth/login" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"email":"admin@example.invalid","password":"CiTestPassword123!"}')" = "204"
+          CSRF=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
+          curl -fsS -b "$COOKIE" "$API/api/v1/admin/users/" | python3 -c 'import json,sys;d={u["email"]:u["agentId"] for u in json.load(sys.stdin)};assert d["admin@example.invalid"]==42 and d["user@example.invalid"]==77'
+          echo 'CI checkpoint: admin user mapping and sync settings verified'
+          USER_ZNUNY='{"username":"user-agent","candidateUserId":1,"candidateKeywords":"","candidateExcludeKeywords":"","includeOwner":true,"includeResponsible":true,"notifyOnNewAssignedTickets":true,"notifyOnTicketChanges":true,"showAllCandidatePoolTickets":false}'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/znuny/me" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d "$USER_ZNUNY")" = "204"
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/status" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["approved"] and d["agentId"]==77'
           docker compose exec -T database psql -U plenaro -d plenaro -c "INSERT INTO znuny_cached_tickets(ticket_id,ticket_number,title,queue,state,state_type,owner_agent_id,responsible_agent_id,created_at,changed_at) VALUES ('42','2026#42','Nur Admin','Admin','open','open',42,NULL,'2026-01-01','2026-01-02'),('77','2016#77','Altes offenes User-Ticket','IT','open','open',77,NULL,'2016-01-01','2026-01-02'),('78','2026#78','Neuer User-Kandidat','IT','new','new',77,42,'2026-01-03','2026-01-04')"
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert set(x["ticketId"] for x in d)=={"77","78"}'
           curl -fsS -b "$COOKIE" "$API/api/v1/znuny/tickets" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert set(x["ticketId"] for x in d)=={"42","78"}'
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=new" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert [x["ticketId"] for x in d]==["78"]'
-          # Even if a user changes their *proposed* AgentId, approved authorization stays 77.
+          # A self-supplied AgentId must be rejected, not silently accepted.
           MALICIOUS_ZNUNY=$(printf '%s' "$USER_ZNUNY" | python3 -c 'import json,sys;d=json.load(sys.stdin);d["agentId"]=42;print(json.dumps(d))')
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/znuny/me" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d "$MALICIOUS_ZNUNY")" = "204"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/znuny/me" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d "$MALICIOUS_ZNUNY")" = "400"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/me" | python3 -c 'import json,sys;assert json.load(sys.stdin)["agentId"]==77'
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert set(x["ticketId"] for x in d)=={"77","78"}'
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/znuny/bindings/$ID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"agentId":42}')" = "409"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/users/$ID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"displayName":"Should Roll Back","role":"User","disabled":false,"agentId":42}')" = "409"
+          curl -fsS -b "$COOKIE" "$API/api/v1/admin/users/" | python3 -c 'import json,sys;u=next(x for x in json.load(sys.stdin) if x["email"]=="user@example.invalid");assert u["agentId"]==77 and u["displayName"]=="Test User"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/users/$ID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"displayName":"Test User","role":"User","disabled":false,"agentId":null}')" = "204"
+          # Revoking the binding invalidates the user's login cookie too.
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets")" = "401"
+          USER_CSRF=$(curl -fsS -c "$USER_COOKIE" -b "$USER_COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$USER_COOKIE" -b "$USER_COOKIE" -X POST "$API/api/v1/auth/login" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"email":"user@example.invalid","password":"CiUserPassword123!"}')" = "204"
+          USER_CSRF=$(curl -fsS -c "$USER_COOKIE" -b "$USER_COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets" | python3 -c 'import json,sys;assert json.load(sys.stdin)==[]'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/users/$ID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"displayName":"Test User","role":"User","disabled":false,"agentId":77}')" = "204"
+          USER_CSRF=$(curl -fsS -c "$USER_COOKIE" -b "$USER_COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
+          test "$(curl -s -o /dev/null -w '%{http_code}' -c "$USER_COOKIE" -b "$USER_COOKIE" -X POST "$API/api/v1/auth/login" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"email":"user@example.invalid","password":"CiUserPassword123!"}')" = "204"
+          USER_CSRF=$(curl -fsS -c "$USER_COOKIE" -b "$USER_COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/admin/znuny/sync/reset" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"confirmation":"ZNUNY CACHE ZURUECKSETZEN"}')" = "403"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/admin/znuny/sync/reset" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"confirmation":"ZNUNY CACHE ZURUECKSETZEN"}')" = "204"
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets" | python3 -c 'import json,sys;assert json.load(sys.stdin)==[]'
+          echo 'CI checkpoint: ticket cache isolation, revoked agent access, and reset verified'
           # Phase 2 functional core: task CRUD, status transition and per-user isolation.
           TASK_ID=$(curl -fsS -c "$COOKIE" -b "$COOKIE" -X POST "$API/api/v1/tasks/" \
             -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
