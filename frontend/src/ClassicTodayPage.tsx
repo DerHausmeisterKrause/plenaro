@@ -34,13 +34,13 @@ export function ClassicTodayPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [day, setDay] = useState(() => localDate());
+  const [day, setCurrentDate] = useState(() => localDate());
   const today = new Date(day + 'T12:00:00');
   // Remain correct when the browser stays open over midnight.
   useEffect(() => {
     const interval = window.setInterval(() => {
       const next = localDate();
-      setDay(previous => previous === next ? previous : next);
+      setCurrentDate(previous => previous === next ? previous : next);
     }, 60_000);
     return () => window.clearInterval(interval);
   }, []);
