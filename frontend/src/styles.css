@@ -758,3 +758,5 @@ h1,h2,h3,p { margin-top: 0; }
 .classic-ticket-detail dt { color: var(--muted-strong); font-weight: 600; }
 .classic-ticket-detail dd { margin: 0; overflow-wrap: anywhere; }
 @media(max-width:560px) { .znuny-central-status {grid-template-columns:1fr;} .classic-ticket-detail dl {grid-template-columns:1fr;} }
+
+.znuny-ticket-pagination { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 12px; font-size: 12px; }
