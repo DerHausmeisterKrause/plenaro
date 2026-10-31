@@ -101,3 +101,9 @@ export const readTaskArchive = (id: string) =>
   readArchive<ClassicTaskArchive>('/api/v1/classic-import/archive/tasks/' + encodeURIComponent(id));
 export const readImportedSettings = (batchId: string) =>
   readArchive<Record<string, unknown>>('/api/v1/classic-import/archive/settings/' + encodeURIComponent(batchId));
+
+export type ClassicMonthlyAdjustment = {
+  month: string; seconds: number; note: string; createdAt: string;
+};
+export const readClassicMonthly = () =>
+  readArchive<ClassicMonthlyAdjustment[]>('/api/v1/classic-import/archive/monthly');
