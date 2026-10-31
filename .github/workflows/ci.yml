@@ -137,6 +137,22 @@ jobs:
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=new" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert set(x["ticketId"] for x in d)=={"79","80"}'
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=completed" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert [x["ticketId"] for x in d]==["81"]'
           curl -fsS -b "$COOKIE" "$API/api/v1/znuny/tickets?view=completed" | python3 -c 'import json,sys;assert json.load(sys.stdin)==[]'
+          # WPF Classic ticket detail: private editable description and URL.
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/77/workspace" | python3 -c 'import sys,json;d=json.load(sys.stdin);assert d["description"]=="" and d["ticketUrl"]==""'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/42/workspace")" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" "$API/api/v1/znuny/tickets/77/workspace")" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/znuny/tickets/77/workspace" -H 'Content-Type: application/json' -d '{"description":"Illegal","ticketUrl":""}')" = "400"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/znuny/tickets/77/workspace" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"description":"Notizen","ticketUrl":"javascript:alert(1)"}')" = "400"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/znuny/tickets/77/workspace" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"description":"Persönliche Tasknotiz","ticketUrl":"https://example.org/77"}')" = "204"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/77/workspace" | python3 -c 'import sys,json;d=json.load(sys.stdin);assert d["description"]=="Persönliche Tasknotiz" and d["ticketUrl"]=="https://example.org/77"'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/77/time" | python3 -c 'import sys,json;d=json.load(sys.stdin);assert d["bookedSeconds"]==0 and d["runningSince"] is None'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/tickets/42/time/start" -H "X-CSRF-TOKEN: $USER_CSRF")" = "404"
+          curl -fsS -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/tickets/77/time/start" -H "X-CSRF-TOKEN: $USER_CSRF" | python3 -c 'import sys,json;assert json.load(sys.stdin)["runningSince"] is not None'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/tickets/79/time/start" -H "X-CSRF-TOKEN: $USER_CSRF")" = "409"
+          curl -fsS -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/tickets/77/time/stop" -H "X-CSRF-TOKEN: $USER_CSRF" | python3 -c 'import sys,json;d=json.load(sys.stdin);assert d["runningSince"] is None and d["sessionCount"]==1'
+          curl -fsS -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/tickets/77/time/adjust" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"deltaMinutes":15,"note":"Korrektur"}' | python3 -c 'import sys,json;d=json.load(sys.stdin);assert d["adjustedMinutes"]==15 and d["bookedSeconds"]>=900'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/tickets/77/time/adjust" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"deltaMinutes":1441,"note":""}')" = "400"
+          echo 'CI checkpoint: Classic task notes, URL and local ticket timer verified'
           # Ticket planning is LOCAL and per-user; no Znuny writes or leakage.
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/agenda?date=not-a-date")" = "400"
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/agenda?date=2026-10-31" | python3 -c 'import json,sys;assert json.load(sys.stdin)==[]'
@@ -147,6 +163,9 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/tickets/81/segments" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"startsAt":"2026-10-31T09:00:00Z","endsAt":"2026-10-31T10:00:00Z","note":"Closed"}')" = "404"
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/agenda?date=2026-10-31" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert len(d)==1 and d[0]["ticketId"]=="77" and d[0]["note"]=="Heute Test"'
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/77/segments" | python3 -c 'import json,sys;assert len(json.load(sys.stdin))==1'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/znuny/tickets/77/segments/$SEGMENT" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"startsAt":"2026-10-31T10:00:00Z","endsAt":"2026-10-31T10:30:00Z","note":"Fremde Bearbeitung","participants":[]}')" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/znuny/tickets/77/segments/$SEGMENT" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"startsAt":"2026-10-31T10:00:00Z","endsAt":"2026-10-31T10:30:00Z","note":"Bearbeitet","participants":["team@example.invalid"]}')" = "204"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/77/segments" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert len(d)==1 and d[0]["note"]=="Bearbeitet" and d[0]["participants"]==["team@example.invalid"]'
           curl -fsS -b "$COOKIE" "$API/api/v1/znuny/tickets/agenda?date=2026-10-31" | python3 -c 'import json,sys;assert json.load(sys.stdin)==[]'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X DELETE "$API/api/v1/znuny/tickets/77/segments/$SEGMENT" -H "X-CSRF-TOKEN: $CSRF")" = "404"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X DELETE "$API/api/v1/znuny/tickets/77/segments/$SEGMENT" -H "X-CSRF-TOKEN: $USER_CSRF")" = "204"
