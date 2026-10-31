@@ -26,6 +26,7 @@ CREATE TABLE znuny_sync_control (
   id boolean PRIMARY KEY DEFAULT true CHECK(id),
   enabled boolean NOT NULL DEFAULT false,
   service_username varchar(256) NOT NULL DEFAULT '',
+  source_api_url varchar(2048),
   initial_lookback_days integer NOT NULL DEFAULT 365 CHECK (initial_lookback_days BETWEEN 7 AND 3650),
   delta_interval_minutes integer NOT NULL DEFAULT 15 CHECK (delta_interval_minutes BETWEEN 3 AND 1440),
   open_interval_minutes integer NOT NULL DEFAULT 360 CHECK (open_interval_minutes BETWEEN 15 AND 10080),
