@@ -440,7 +440,7 @@ describe('Plenaro web shell', () => {
       id:'seg1',ticketId:'77',ticketNumber:'2026#77',
       title:'Kundenticket für heute',queue:'IT',state:'open',stateType:'open',
       ownerId:77,responsibleId:null,createdAt:null,changedAt:null,
-      startsAt:ten.toISOString(),endsAt:eleven.toISOString(),note:'Vorbereiten'
+      startsAt:ten.toISOString(),endsAt:eleven.toISOString(),note:'Vorbereiten',participants:[]
     }];
     const localTask:WorkTask={
       id:'task',title:'Lokale Aufgabe heute',plannedFor:day,
