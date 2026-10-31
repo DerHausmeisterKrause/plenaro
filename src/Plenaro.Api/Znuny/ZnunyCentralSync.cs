@@ -195,7 +195,23 @@ public sealed class ZnunyCentralSync(
                 var start=state.OpenCursor ?? new DateTimeOffset(2000,1,1,0,0,0,TimeSpan.Zero);
                 var cutoff=now.AddDays(-state.Lookback);
                 if(state.OpenCursor is null)
+                {
+                    // Usually there are fewer than SearchLimit older open tickets.
+                    // Fast path: ONE global request instead of scanning 26 years
+                    // in 90-day windows on every open-ticket interval.
+                    var fast=await reader.SearchAsync(server,session,"open",null,cutoff,counter,ct);
+                    if(fast.Count<server.SearchLimit)
+                    {
+                        imported+=await LoadTicketsAsync(db,server,session,fast,counter,ct);
+                        await ExecuteAsync(db, """
+                            UPDATE znuny_sync_control SET last_open_at=now(),
+                                open_cursor=NULL WHERE id=true
+                            """,ct);
+                        return new(true,"ok",counter.Calls,imported);
+                    }
+                    // Saturated global query: fall back to resumable windows.
                     await SaveCursorAsync(db,"open_cursor",start,ct);
+                }
                 var i=0;
                 while(start<cutoff && i++<8 && counter.Calls<state.Budget-15)
                 {
