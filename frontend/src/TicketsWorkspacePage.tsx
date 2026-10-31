@@ -13,20 +13,21 @@ export function TicketsWorkspacePage() {
   const [access,setAccess]=useState<TicketAccess|null>(null);
   const [view,setView]=useState<'mine'|'new'>('mine');
   const [search,setSearch]=useState('');
+  const [page,setPage]=useState(0);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
   const refresh=useCallback(async()=>{
     setLoading(true);setError('');
     try {
       const [nextAccess,nextTickets]=await Promise.all([
-        getTicketAccess(),getCachedTickets(view,search)]);
+        getTicketAccess(),getCachedTickets(view,search,page)]);
       setAccess(nextAccess);
       setTickets(nextTickets);
       setSelectedId(old=>nextTickets.some(ticket=>ticket.ticketId===old)?old:
         nextTickets[0]?.ticketId??null);
     } catch(e) {setError(e instanceof Error?e.message:'Ticketliste nicht verfügbar.');}
     finally{setLoading(false);}
-  },[view,search]);
+  },[view,search,page]);
   useEffect(()=>{
     void refresh();
     const interval=window.setInterval(()=>{if(!document.hidden)void refresh();},60_000);
@@ -52,14 +53,14 @@ export function TicketsWorkspacePage() {
         </div>
         <div className="classic-ticket-views" role="group" aria-label="Ticketansicht">
           <button type="button" className={view==='mine'?'active':''}
-            aria-pressed={view==='mine'} onClick={()=>setView('mine')}>Meine Tickets</button>
+            aria-pressed={view==='mine'} onClick={()=>{setPage(0);setView('mine');}}>Meine Tickets</button>
           <button type="button" className={view==='new'?'active':''}
-            aria-pressed={view==='new'} onClick={()=>setView('new')}>Neue Aufgaben</button>
+            aria-pressed={view==='new'} onClick={()=>{setPage(0);setView('new');}}>Neue Aufgaben</button>
         </div>
         <label className="classic-search">
           <Search size={16}/>
           <input aria-label="Tickets suchen" placeholder="Ticketnummer, Betreff …"
-            maxLength={100} value={search} onChange={e=>setSearch(e.target.value)}/>
+            maxLength={100} value={search} onChange={e=>{setPage(0);setSearch(e.target.value);}}/>
         </label>
         <div className="classic-list-scroll">
           {error&&<p role="alert" className="um-feedback failure">{error}</p>}
@@ -82,8 +83,13 @@ export function TicketsWorkspacePage() {
               <small>#{ticket.ticketNumber||ticket.ticketId} · {ticket.queue}</small>
               <span className="tasks-state">{ticket.state}</span>
             </button>)}
-          {tickets.length===100&&<p className="um-hint">Maximal 100 passende Tickets angezeigt.
-            Bitte die Suche eingrenzen.</p>}
+          {!loading&&(page>0||tickets.length===100)&&<nav className="znuny-ticket-pagination" aria-label="Ticketseiten">
+            <button type="button" className="button button-secondary" disabled={page===0}
+              onClick={()=>setPage(p=>Math.max(0,p-1))}>Vorherige Seite</button>
+            <span>Seite {page+1}</span>
+            <button type="button" className="button button-secondary" disabled={tickets.length<100||page>=1000}
+              onClick={()=>setPage(p=>p+1)}>Nächste Seite</button>
+          </nav>}
         </div>
       </section>
       <section className="classic-detail-pane" aria-label="Ticketdetails">
