@@ -284,7 +284,7 @@ describe('Plenaro web shell', () => {
     fireEvent.click(screen.getByRole('button',{name:'Benutzer anlegen'}));
     expect(screen.getByLabelText('Znuny-Agenten-ID (optional)')).toBeTruthy();
     fireEvent.click(screen.getByRole('button',{name:'Abbrechen'}));
-    fireEvent.click(screen.getByRole('listitem',{name:/Test User/}));
+    fireEvent.click(screen.getByText('Test User').closest('button')!);
     const agentInput = screen.getByLabelText('Znuny-Agenten-ID (nur Administration)') as HTMLInputElement;
     expect(agentInput.value).toBe('17');
     fireEvent.change(agentInput,{target:{value:'51'}});
