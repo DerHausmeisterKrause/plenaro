@@ -2,7 +2,7 @@ import { useEffect,useState } from 'react';
 import { ExternalLink, Save, Ticket, WifiOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { CachedTicket } from './znunySyncApi';
-import { readTicketWorkspace,saveTicketWorkspace,
+import { changeZnunyTicketState,readTicketWorkspace,saveTicketWorkspace,
   type TicketWorkspace } from './znunySyncApi';
 import { getZnunyServer } from './znunyApi';
 import { ZnunyTicketTimerPanel } from './ZnunyTicketTimerPanel';
@@ -39,6 +39,7 @@ export function ClassicTicketDetailPanel({ticket,onChanged}:{
   const [znunyUrl,setZnunyUrl]=useState<string|null>(null);
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
+  const [stateBusy,setStateBusy]=useState(false);
   const [dirty,setDirty]=useState(false);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
@@ -70,6 +71,21 @@ export function ClassicTicketDetailPanel({ticket,onChanged}:{
       onChanged?.();
     }catch(e){setError(e instanceof Error?e.message:'Speichern fehlgeschlagen.');}
     finally{setSaving(false);}
+  }
+
+  async function changeState(close:boolean){
+    if(stateBusy||saving)return;
+    if(!window.confirm(close?
+      'Dieses Ticket wird direkt in Znuny geschlossen. Fortfahren?':
+      'Dieses Ticket wird direkt in Znuny wieder geöffnet. Fortfahren?'))return;
+    setStateBusy(true);setError('');setNotice('');
+    try{
+      const result=await changeZnunyTicketState(ticket.ticketId,close);
+      if(!result.confirmed)throw new Error('Znuny hat die Statusänderung nicht bestätigt.');
+      setNotice(close?'Ticket in Znuny geschlossen.':'Ticket in Znuny wieder geöffnet.');
+      onChanged?.();
+    }catch(e){setError(e instanceof Error?e.message:'Statusänderung fehlgeschlagen.');}
+    finally{setStateBusy(false);}
   }
 
   const update=(key:keyof TicketWorkspace,value:string)=>{
@@ -115,12 +131,12 @@ export function ClassicTicketDetailPanel({ticket,onChanged}:{
         <button type="button" className="button button-primary"
           disabled={saving||loading} onClick={()=>void save()}>
           <Save size={14}/>{saving?'Speichere …':'Speichern'}{dirty?' *':''}</button>
-        <button type="button" className="button classic-wpf-success" disabled
-          title="Schließen wird erst mit der Znuny-Schreibschnittstelle möglich.">
-          Erledigt</button>
-        <button type="button" className="button button-secondary" disabled
-          title="Wiederöffnen wird erst mit der Znuny-Schreibschnittstelle möglich.">
-          Zurück zu Aktuell</button>
+        {!closed&&<button type="button" className="button classic-wpf-success"
+          disabled={stateBusy||saving} onClick={()=>void changeState(true)}>
+          {stateBusy?'Ändere Status …':'Erledigt'}</button>}
+        {closed&&<button type="button" className="button button-secondary"
+          disabled={stateBusy||saving} onClick={()=>void changeState(false)}>
+          {stateBusy?'Ändere Status …':'Zurück zu Aktuell'}</button>}
       </div>
       {error&&<p role="alert" className="um-feedback failure">{error}</p>}
       {notice&&<p role="status" className="um-feedback success">{notice}</p>}
