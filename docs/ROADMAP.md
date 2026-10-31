@@ -229,3 +229,15 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [x] Auf Benutzeraktion beschränkter SessionCreate-Verbindungstest mit TLS, ohne Weiterleitungen, ohne Rückgabe/Logging von SessionID oder Passwort. Sicherheit: kein HTTP-/Loopback-/Metadata-Ziel, begrenzte Antwortgröße und Zeitlimit.
 - [ ] Echter TicketSearch/TicketGet-Datenfluss und Anzeige in Neue Aufgaben; danach Delta-Synchronisation/Benachrichtigungen und Ticketaktionen.
 - [ ] Verbindungstest gegen eine echte Znuny-/OTRS-Instanz des Benutzers (Platzhalteradresse wird nicht verbunden).
+
+## Zentraler Znuny-Sync (Phase 6, PR #32)
+
+- [x] **Eine** technische Znuny-Verbindung pro Instanz, zentraler verschlüsselter Serviceaccount und PostgreSQL-Ticketcache. Benutzer führen **keinen eigenen** Remote-TicketSync aus.
+- [x] Wiederaufnehmbarer Erstimport der letzten 365 Tage (administrativ 7–3650 Tage einstellbar) in maximal acht Tagesschritten pro Hintergrundlauf. Der Cursor wird erst nach erfolgreich gelesenen Details aktualisiert.
+- [x] Danach Delta-Search mit `TicketLastChangeTimeNewerDate`, 24 Stunden Überschneidung, Upsert nach TicketID; ältere offene Tickets werden in einem gesonderten fortsetzbaren 90-Tage-Fenster-Sweep ab Jahr 2000 aufgenommen und regelmäßig neu geprüft.
+- [x] Zeitfenster bei vollständig erreichtem SearchLimit rekursiv unterteilen, niemals abgeschnittenen Suchlauf als vollständig markieren; API-Request-Budget, Status und Fehlercodes in Admin-Ansicht sichtbar.
+- [x] Admin aktiviert/deaktiviert Sync; konfiguriert 365-Tage-Import, Delta-/Open-Intervalle, Budget und Service-Credentials. Expliziter Reset bei Serverwechsel; zentraler DB-Advisory-Lock verhindert parallele Instanzläufe.
+- [x] Persönlicher Ticketcache-Zugriff ausschließlich über **administrativ genehmigte** Zuordnung Benutzer→Znuny-Agent, nicht über ein manipulierbares persönliches Agenten-ID-Feld. Owner/Responsible-Sicht und neuer-Ticket-Reiter im Ticketarbeitsplatz.
+- [ ] Integration mit realem Znuny-Server und breit abweichenden REST-Mappings; API-Endpunkte können je Webservice-Konfiguration variieren.
+- [ ] Kandidatenpool über Queue-/Rollenfreigaben und Ticketaktionen, Benachrichtigungen, Ticketartikeleinsicht.
+- [ ] Große Alt-Datenbestände und Laufzeiten auf echtem Server messen, Suchlimit/Sessionfehler verifizieren.
