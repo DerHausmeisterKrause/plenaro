@@ -22,6 +22,12 @@ export type CachedTicket = {
 export type TicketAccess = { approved: boolean; agentId:number|null; syncEnabled:boolean };
 export type TicketSegment = {
   id: string; startsAt: string; endsAt: string; note: string;
+  participants: string[];
+};
+export type TicketWorkspace = { description:string; ticketUrl:string };
+export type TicketTimeSummary = {
+  bookedSeconds:number;runningSeconds:number;runningSince:string|null;
+  adjustedMinutes:number;sessionCount:number;
 };
 export type TicketAgendaSegment = TicketSegment & CachedTicket;
 
@@ -69,7 +75,7 @@ export const getTicketAgenda=(day:string)=>
 export const getTicketSegments=(ticketId:string)=>
   request<TicketSegment[]>('/api/v1/znuny/tickets/'+encodeURIComponent(ticketId)+'/segments');
 export const planTicketSegment=async(ticketId:string,input:{
-  startsAt:string;endsAt:string;note:string;
+  startsAt:string;endsAt:string;note:string;participants:string[];
 })=>{
   await mutate('/api/v1/znuny/tickets/'+encodeURIComponent(ticketId)+'/segments','POST',input);
 };
@@ -77,3 +83,26 @@ export const deleteTicketSegment=async(ticketId:string,segmentId:string)=>{
   await mutate('/api/v1/znuny/tickets/'+encodeURIComponent(ticketId)+
     '/segments/'+encodeURIComponent(segmentId),'DELETE');
 };
+
+export const updateTicketSegment=async(ticketId:string,segmentId:string,input:{
+  startsAt:string;endsAt:string;note:string;participants:string[];
+})=>{
+  await mutate('/api/v1/znuny/tickets/'+encodeURIComponent(ticketId)+
+    '/segments/'+encodeURIComponent(segmentId),'PUT',input);
+};
+const workspaceBase=(ticketId:string)=>
+  '/api/v1/znuny/tickets/'+encodeURIComponent(ticketId);
+export const readTicketWorkspace=(ticketId:string)=>
+  request<TicketWorkspace>(workspaceBase(ticketId)+'/workspace');
+export const saveTicketWorkspace=async(ticketId:string,values:TicketWorkspace)=>{
+  await mutate(workspaceBase(ticketId)+'/workspace','PUT',values);
+};
+export const readTicketTime=(ticketId:string)=>
+  request<TicketTimeSummary>(workspaceBase(ticketId)+'/time');
+export const startTicketTime=async(ticketId:string)=>
+  await (await mutate(workspaceBase(ticketId)+'/time/start','POST')).json() as TicketTimeSummary;
+export const stopTicketTime=async(ticketId:string)=>
+  await (await mutate(workspaceBase(ticketId)+'/time/stop','POST')).json() as TicketTimeSummary;
+export const adjustTicketTime=async(ticketId:string,deltaMinutes:number,note='')=>
+  await (await mutate(workspaceBase(ticketId)+'/time/adjust','POST',
+    {deltaMinutes,note})).json() as TicketTimeSummary;
