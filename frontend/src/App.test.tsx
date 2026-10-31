@@ -475,7 +475,7 @@ describe('Plenaro web shell', () => {
       responsibleId:null,createdAt:null,changedAt:null,
     }];
     renderAt('/today');
-    fireEvent.click(screen.getByRole('tab',{name:'Aktuelle Aufgaben'}));
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
     expect(await screen.findByText('Aktuelles Znuny-Ticket')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab',{name:'Neue Aufgaben'}));
     expect(await screen.findByText('Unzugewiesener Znuny-Kandidat')).toBeTruthy();
