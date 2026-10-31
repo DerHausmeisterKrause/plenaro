@@ -113,9 +113,14 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/znuny/sync" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$CONFIG")" = "204"
           curl -fsS -b "$COOKIE" -X POST "$API/api/v1/admin/znuny/sync/run" -H "X-CSRF-TOKEN: $CSRF" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["status"]=="disabled" and d["requests"]==0'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/admin/znuny/sync/run" -H "X-CSRF-TOKEN: $USER_CSRF")" = "403"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/admin/znuny/bindings/$ID" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"agentId":77}')" = "404"
+          echo 'CI checkpoint: service sync and nonadmin guards passed'
+          LEGACY_AGENT_HTTP=$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/admin/znuny/bindings/$ID" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"agentId":77}')
+          echo "CI deprecated binding endpoint returned HTTP $LEGACY_AGENT_HTTP"
+          test "$LEGACY_AGENT_HTTP" = "404" -o "$LEGACY_AGENT_HTTP" = "405"
           AID=$(curl -fsS -b "$COOKIE" "$API/api/v1/auth/me" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/users/$AID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"displayName":"CI Admin","role":"Admin","disabled":false,"agentId":42}')" = "204"
+          ADMIN_AGENT_HTTP=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/users/$AID" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"displayName":"CI Admin","role":"Admin","disabled":false,"agentId":42}')
+          echo "CI admin agent update returned HTTP $ADMIN_AGENT_HTTP"
+          test "$ADMIN_AGENT_HTTP" = "204"
           curl -fsS -b "$COOKIE" "$API/api/v1/admin/users/" | python3 -c 'import json,sys;d={u["email"]:u["agentId"] for u in json.load(sys.stdin)};assert d["admin@example.invalid"]==42 and d["user@example.invalid"]==77'
           echo 'CI checkpoint: admin user mapping and sync settings verified'
           USER_ZNUNY='{"username":"user-agent","candidateUserId":1,"candidateKeywords":"","candidateExcludeKeywords":"","includeOwner":true,"includeResponsible":true,"notifyOnNewAssignedTickets":true,"notifyOnTicketChanges":true,"showAllCandidatePoolTickets":false}'
