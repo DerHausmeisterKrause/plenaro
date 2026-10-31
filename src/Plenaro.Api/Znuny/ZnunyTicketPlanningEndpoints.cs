@@ -15,7 +15,7 @@ namespace Plenaro.Api.Znuny;
 public static class ZnunyTicketPlanningEndpoints
 {
     public sealed record SegmentInput(DateTimeOffset StartsAt,DateTimeOffset EndsAt,
-        string Note="");
+        string Note="",string[]? Participants=null);
 
     private const string Visibility = """
         FROM znuny_cached_tickets t
@@ -85,7 +85,7 @@ public static class ZnunyTicketPlanningEndpoints
             if(user is null)return Results.Unauthorized();
             await using var db=await Open(config,ct);
             await using var cmd=new NpgsqlCommand("""
-                SELECT s.id,s.starts_at,s.ends_at,s.note
+                SELECT s.id,s.starts_at,s.ends_at,s.note,s.participants
                 FROM znuny_ticket_segments s
                 JOIN znuny_cached_tickets t ON t.ticket_id=s.ticket_id
                 JOIN znuny_approved_agent_bindings b ON b.user_id=s.user_id AND b.user_id=@user
@@ -107,7 +107,7 @@ public static class ZnunyTicketPlanningEndpoints
                 rows.Add(new {id=r.GetGuid(0),
                     startsAt=new DateTimeOffset(r.GetDateTime(1),TimeSpan.Zero),
                     endsAt=new DateTimeOffset(r.GetDateTime(2),TimeSpan.Zero),
-                    note=r.GetString(3)});
+                    note=r.GetString(3),participants=r.GetFieldValue<string[]>(4)});
             return Results.Ok(rows);
         });
 
@@ -120,12 +120,13 @@ public static class ZnunyTicketPlanningEndpoints
             if(user is null)return Results.Unauthorized();
             if(input.StartsAt>=input.EndsAt ||
                 input.EndsAt-input.StartsAt>TimeSpan.FromDays(7) ||
-                input.Note is null || input.Note.Length>2000)
+                input.Note is null || input.Note.Length>2000 ||
+                InvalidParticipants(input.Participants))
                 return Results.BadRequest(new {error="Zeitraum oder Notiz ungültig."});
             await using var db=await Open(config,ct);
             await using var cmd=new NpgsqlCommand($"""
-                INSERT INTO znuny_ticket_segments(id,user_id,ticket_id,starts_at,ends_at,note)
-                SELECT @id,@user,t.ticket_id,@start,@end,@note
+                INSERT INTO znuny_ticket_segments(id,user_id,ticket_id,starts_at,ends_at,note,participants)
+                SELECT @id,@user,t.ticket_id,@start,@end,@note,@participants
                 {Visibility}
                 AND t.ticket_id=@ticket AND lower(t.state_type)<>'closed'
                 """,db);
@@ -136,9 +137,45 @@ public static class ZnunyTicketPlanningEndpoints
             cmd.Parameters.Add("start",NpgsqlDbType.TimestampTz).Value=input.StartsAt.UtcDateTime;
             cmd.Parameters.Add("end",NpgsqlDbType.TimestampTz).Value=input.EndsAt.UtcDateTime;
             cmd.Parameters.AddWithValue("note",input.Note.Trim());
+            cmd.Parameters.Add("participants",NpgsqlDbType.Array|NpgsqlDbType.Text).Value=
+                input.Participants??Array.Empty<string>();
             return await cmd.ExecuteNonQueryAsync(ct)==1
                 ? Results.Created($"/api/v1/znuny/tickets/{Uri.EscapeDataString(ticketId)}/segments/{id}",new {id})
                 : Results.NotFound();
+        });
+
+        // Exact authorization matches create/delete; editing is also scoped
+        // by the segment's persisted owner and immutable ticket ID.
+        group.MapPut("/tickets/{ticketId}/segments/{id:guid}",async(string ticketId,Guid id,
+            SegmentInput input,HttpContext http,IAntiforgery anti,
+            UserManager<ApplicationUser> users,IConfiguration config,CancellationToken ct)=>
+        {
+            if(!await ValidCsrf(http,anti))
+                return Results.BadRequest(new {error="CSRF-Token ungültig."});
+            var user=await OwnUser(http,users);
+            if(user is null)return Results.Unauthorized();
+            if(input.StartsAt>=input.EndsAt || input.EndsAt-input.StartsAt>TimeSpan.FromDays(7) ||
+                input.Note is null || input.Note.Length>2000 ||
+                InvalidParticipants(input.Participants))
+                return Results.BadRequest(new {error="Zeitraum, Notiz oder Teilnehmer ungültig."});
+            await using var db=await Open(config,ct);
+            await using var cmd=new NpgsqlCommand($"""
+                UPDATE znuny_ticket_segments s SET starts_at=@start,ends_at=@end,
+                    note=@note,participants=@participants
+                WHERE s.id=@id AND s.ticket_id=@ticket AND s.user_id=@user
+                    AND EXISTS(SELECT 1 {Visibility} AND t.ticket_id=s.ticket_id
+                    AND lower(t.state_type)<>'closed')
+                RETURNING s.id
+                """,db);
+            cmd.Parameters.AddWithValue("id",id);
+            cmd.Parameters.AddWithValue("user",user.Value);
+            cmd.Parameters.AddWithValue("ticket",ticketId);
+            cmd.Parameters.Add("start",NpgsqlDbType.TimestampTz).Value=input.StartsAt.UtcDateTime;
+            cmd.Parameters.Add("end",NpgsqlDbType.TimestampTz).Value=input.EndsAt.UtcDateTime;
+            cmd.Parameters.AddWithValue("note",input.Note.Trim());
+            cmd.Parameters.Add("participants",NpgsqlDbType.Array|NpgsqlDbType.Text).Value=
+                input.Participants??Array.Empty<string>();
+            return await cmd.ExecuteScalarAsync(ct) is null?Results.NotFound():Results.NoContent();
         });
 
         group.MapDelete("/tickets/{ticketId}/segments/{id:guid}",async(string ticketId,Guid id,
@@ -163,6 +200,11 @@ public static class ZnunyTicketPlanningEndpoints
                 ? Results.NoContent():Results.NotFound();
         });
     }
+
+    private static bool InvalidParticipants(string[]? participants) =>
+        participants is {Length:>20} || participants is not null &&
+        participants.Any(p=>p is null || p.Length>254 || p.Any(char.IsControl) ||
+            !p.Contains('@') || p.Contains(' '));
 
     private static async Task<Guid?> OwnUser(HttpContext http,UserManager<ApplicationUser> users)
     {
