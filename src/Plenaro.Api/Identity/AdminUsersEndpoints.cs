@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -90,7 +91,7 @@ public static class AdminUsersEndpoints
         {
             if (!await ValidCsrf(http, antiforgery)) return CsrfError();
             if (!ValidName(request.DisplayName) || !ValidRole(request.Role) ||
-                !ValidAgentId(request.AgentId))
+                !TryParseAgentId(request.AgentId, out var agentId, out var agentIdProvided))
                 return Results.BadRequest(new { error = "Name, Rolle oder Znuny-Agenten-ID ungültig." });
 
             await using var tx = await db.Database.BeginTransactionAsync(ct);
@@ -128,7 +129,8 @@ public static class AdminUsersEndpoints
             // Changes to agent access and Identity account update are atomic.
             try
             {
-                await SaveAgentIdAsync(db,user.Id,request.AgentId,ct);
+                if (agentIdProvided)
+                    await SaveAgentIdAsync(db,user.Id,agentId,ct);
             }
             catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
             {
@@ -164,6 +166,17 @@ public static class AdminUsersEndpoints
         !string.IsNullOrWhiteSpace(email) && email.Trim().Length <= 256 && email.Contains('@');
     private static bool ValidRole(string? role) => role is "Admin" or "User";
     private static bool ValidAgentId(int? agentId) => agentId is null or > 0;
+
+    private static bool TryParseAgentId(JsonElement raw,out int? agentId,out bool provided)
+    {
+        agentId = null;
+        provided = raw.ValueKind != JsonValueKind.Undefined;
+        if (!provided || raw.ValueKind == JsonValueKind.Null) return true;
+        if (raw.ValueKind != JsonValueKind.Number || !raw.TryGetInt32(out var id) || id<=0)
+            return false;
+        agentId = id;
+        return true;
+    }
 
     private static async Task SaveAgentIdAsync(PlenaroIdentityDbContext db,Guid userId,
         int? agentId,CancellationToken ct)
@@ -206,7 +219,9 @@ public static class AdminUsersEndpoints
 
     public sealed record CreateUserRequest(string Email, string DisplayName, string Password,
         string Role, int? AgentId = null);
+    // Absence of agentId on legacy clients means "leave unchanged"; explicit
+    // null means "revoke". Never silently revoke on unrelated profile updates.
     public sealed record UpdateUserRequest(string DisplayName, string Role, bool Disabled,
-        int? AgentId = null);
+        JsonElement AgentId = default);
     public sealed record ResetPasswordRequest(string Password);
 }
