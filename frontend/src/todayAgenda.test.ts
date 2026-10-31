@@ -1,91 +1,71 @@
 import { describe, expect, it } from 'vitest';
 import { agendaTimeLabel, buildTodayAgenda, localDayBounds } from './todayAgenda';
-import type { WorkTask } from './tasksApi';
-import type { TaskSegment } from './taskWorkApi';
+import type { TicketAgendaSegment } from './znunySyncApi';
 import type { OutlookEvent } from './graphApi';
 
 const day = '2026-10-31';
-const task = (id: string, title: string, plannedFor: string | null, status: WorkTask['status']='planned'): WorkTask => ({
-  id,title,plannedFor,status,description:'',
-  priority:3,tags:[],createdAt:'2026-10-01T00:00:00Z',
-  updatedAt:'2026-10-15T00:00:00Z',completedAt:null,
+const segment=(id:string,ticketId:string,start:string,end:string,
+  stateType='open'):TicketAgendaSegment=>({
+  id,ticketId,ticketNumber:ticketId,title:'Ticket '+ticketId,queue:'IT',
+  ownerId:42,responsibleId:null,createdAt:null,changedAt:null,
+  state:'open',stateType,startsAt:start,endsAt:end,note:'Lokaler Termin'
 });
-const segment = (id:string,taskId:string,start:string,end:string):TaskSegment => ({
-  id,taskId,taskTitle:taskId,startsAt:start,endsAt:end,note:'',participants:[],
-});
-const event = (id:string,subject:string,start:string,end:string,isAllDay=false):OutlookEvent => ({
-  id,subject,start,end,isAllDay,showAs:'busy',location:'Büro',webLink:'https://outlook.office.com/calendar/item',
+const event=(id:string,subject:string,start:string,end:string,isAllDay=false):OutlookEvent=>({
+  id,subject,start,end,isAllDay,showAs:'busy',location:'Büro',
+  webLink:'https://outlook.office.com/calendar/item'
 });
 
-describe('Heute-Tagesagenda wie Plenaro Classic',()=>{
-  it('zeigt nur heute anstehende Aufgaben und Zeitsegmente, nicht alle aktiven/überfälligen',()=>{
-    const tasks=[
-      task('a','Heute ohne Uhrzeit',day),
-      task('b','Nur aktuell',null,'active'),
-      task('c','Überfällig','2026-10-20'),
-      task('d','Morgen','2026-11-01'),
-      task('e','Heute mit Termin','2026-10-20'),
-      task('f','Erledigt',day,'completed'),
-    ];
-    const segments=[
-      segment('s1','e','2026-10-31T08:00:00Z','2026-10-31T09:00:00Z'),
-      segment('s2','d','2026-11-01T08:00:00Z','2026-11-01T09:00:00Z'),
-      segment('s3','f','2026-10-31T08:00:00Z','2026-10-31T09:00:00Z'),
-    ];
-    const agenda=buildTodayAgenda(day,tasks,segments,[]);
-    expect(agenda.map(x=>x.title)).toEqual(['Heute ohne Uhrzeit','Heute mit Termin']);
-    expect(agenda[0].allDay).toBe(true);
-    expect(agenda[1].allDay).toBe(false);
+describe('Heute: ausschließlich Znuny-Ticketsegmente und Outlook-Termine',()=>{
+  it('ignoriert andere Tage, geschlossene Tickets und doppelte Segmentdatensätze',()=>{
+    const agenda=buildTodayAgenda(day,[
+      segment('one','100','2026-10-31T08:00:00Z','2026-10-31T09:00:00Z'),
+      segment('one','100','2026-10-31T08:00:00Z','2026-10-31T09:00:00Z'),
+      segment('tomorrow','101','2026-11-01T08:00:00Z','2026-11-01T09:00:00Z'),
+      segment('closed','102','2026-10-31T08:00:00Z','2026-10-31T09:00:00Z','closed'),
+    ],[]);
+    expect(agenda.map(a=>a.key)).toEqual(['ticket-segment:one']);
+    expect(agenda[0].ticketId).toBe('100');
   });
 
-  it('sortiert ganztägige Elemente zuerst, dann Zeitsegmente und Outlook-Termine chronologisch',()=>{
+  it('zeigt mehrere heute geplante Segmente des gleichen Tickets einzeln',()=>{
     const agenda=buildTodayAgenda(day,[
-      task('one','Lokale Aufgabe',day),
-      task('two','Team-Aufgabe',null),
-    ],[segment('s','two','2026-10-31T09:00:00Z','2026-10-31T09:30:00Z')],[
-      event('later','Spätere Besprechung','2026-10-31T14:00:00Z','2026-10-31T15:00:00Z'),
-      event('earlier','Frühe Besprechung','2026-10-31T07:00:00Z','2026-10-31T08:00:00Z'),
-      event('whole','Ganztägige Veranstaltung','2026-10-30T22:00:00Z','2026-10-31T22:00:00Z',true),
-      event('tomorrow','Erst morgen','2026-11-01T08:00:00Z','2026-11-01T09:00:00Z'),
+      segment('a','100','2026-10-31T07:00:00Z','2026-10-31T08:00:00Z'),
+      segment('b','100','2026-10-31T10:00:00Z','2026-10-31T10:30:00Z'),
+    ],[]);
+    expect(agenda.map(a=>a.key)).toEqual(['ticket-segment:a','ticket-segment:b']);
+  });
+
+  it('sortiert ganztägige Outlook-Termine zuerst, dann Ticketsegmente und Termine chronologisch',()=>{
+    const agenda=buildTodayAgenda(day,[
+      segment('ticket','201','2026-10-31T08:00:00Z','2026-10-31T09:00:00Z'),
+    ],[
+      event('later','Später Termin','2026-10-31T10:00:00Z','2026-10-31T11:00:00Z'),
+      event('early','Früher Termin','2026-10-31T06:00:00Z','2026-10-31T07:00:00Z'),
+      event('whole','Ganztägig','2026-10-30T22:00:00Z','2026-10-31T22:00:00Z',true),
     ]);
-    // On Oct 31, Europe/Berlin is UTC+1. 23:00Z belongs to Nov 1.
-    expect(agenda.map(x=>x.title)).toEqual([
-      'Ganztägige Veranstaltung','Lokale Aufgabe','Frühe Besprechung',
-      'Team-Aufgabe','Spätere Besprechung',
+    expect(agenda.map(a=>a.title)).toEqual([
+      'Ganztägig','Früher Termin','Ticket 201','Später Termin',
     ]);
     expect(agendaTimeLabel(agenda[0])).toBe('Ganztägig');
-    expect(agendaTimeLabel(agenda[1])).toBe('Heute geplant');
     expect(agendaTimeLabel(agenda[2])).toMatch(/\d\d:\d\d.*\d\d:\d\d/);
   });
 
-  it('zeigt mehrere Zeitfenster derselben Aufgabe einzeln statt Duplikaten der Aufgabenliste',()=>{
-    const agenda=buildTodayAgenda(day,[task('a','Kundenticket',day)],[
-      segment('1','a','2026-10-31T07:00:00Z','2026-10-31T07:30:00Z'),
-      segment('2','a','2026-10-31T10:00:00Z','2026-10-31T10:30:00Z'),
-    ],[]);
-    expect(agenda.map(x=>x.key)).toEqual(['segment:1','segment:2']);
-    expect(agenda.every(x=>x.taskId==='a')).toBe(true);
+  it('erfasst Zeitfenster über Mitternacht und verwirft unsichere Outlook-Links',()=>{
+    const entries=buildTodayAgenda(day,[
+      segment('late','999','2026-10-30T22:00:00Z','2026-10-31T01:00:00Z'),
+    ],[ {...event('unsafe','Termin','2026-10-31T08:00:00Z',
+      '2026-10-31T09:00:00Z'),webLink:'javascript:alert(1)'} ]);
+    expect(entries.length).toBe(2);
+    expect(entries.find(e=>e.kind==='outlook')?.webLink).toBeNull();
   });
 
-  it('erfasst über Mitternacht laufende Termine und blendet morgige aus',()=>{
-    const result=buildTodayAgenda(day,[],[],[
-      event('a','Von gestern','2026-10-30T22:45:00Z','2026-10-31T01:00:00Z'),
-      event('b','Morgen','2026-11-01T08:00:00Z','2026-11-01T09:00:00Z'),
-    ]);
-    expect(result.map(x=>x.title)).toEqual(['Von gestern']);
-  });
-
-  it('verwendet kalendarische Tagesgrenzen auch an der Zeitumstellung',()=>{
+  it('berechnet den lokalen Tageswechsel bei Sommer- und Winterzeit richtig',()=>{
     const spring=localDayBounds('2026-03-29');
     const autumn=localDayBounds('2026-10-25');
-    const springHours=(spring.end.getTime()-spring.start.getTime())/3600000;
-    const autumnHours=(autumn.end.getTime()-autumn.start.getTime())/3600000;
-    if (Intl.DateTimeFormat().resolvedOptions().timeZone === 'Europe/Berlin') {
-      expect(springHours).toBe(23);
-      expect(autumnHours).toBe(25);
-    } else {
-      expect(springHours).toBeGreaterThanOrEqual(23);
-      expect(autumnHours).toBeLessThanOrEqual(25);
+    const h=(s:Date,e:Date)=>(e.getTime()-s.getTime())/3600000;
+    if(Intl.DateTimeFormat().resolvedOptions().timeZone==='Europe/Berlin'){
+      expect(h(spring.start,spring.end)).toBe(23);
+      expect(h(autumn.start,autumn.end)).toBe(25);
     }
   });
 });
