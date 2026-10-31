@@ -305,4 +305,5 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [x] Besitzer und Verantwortlichen aus Znuny-Agentenliste auswählen, remote bestätigen und anschließend Cache aktualisieren; „Mir zuweisen“ separat
 - [x] CSRF, Einzel-Ticket-Zugriff, geschlossene Tickets, begrenzter Requestumfang, getrennte Read-/Write-Rate-Limits, keine automatischen Wiederholungen unbestätigter Schreibaktionen
 - [ ] Live-Znuny-Integration mit konkretem GenericTicketConnectorREST testen
-- [ ] Ticket-Schließen/Wiederöffnen, Wiki-Provider, Dynamic Fields und echte Znuny-Zeitbuchung ergänzen
+- [x] Ticket-Schließen und Wiederöffnen mit persönlicher Znuny-Session und bestätigter Remote-Statusänderung; Cache-Update nach Bestätigung
+- [ ] Wiki-Provider, Dynamic Fields und echte Znuny-Zeitbuchung ergänzen
