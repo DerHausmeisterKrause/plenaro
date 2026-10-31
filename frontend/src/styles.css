@@ -760,3 +760,17 @@ h1,h2,h3,p { margin-top: 0; }
 @media(max-width:560px) { .znuny-central-status {grid-template-columns:1fr;} .classic-ticket-detail dl {grid-template-columns:1fr;} }
 
 .znuny-ticket-pagination { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 12px; font-size: 12px; }
+
+/* Classic Today parity: a chronological agenda, not a duplicate task backlog. */
+.plenaro-agenda-row { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto; align-items: center; gap: 12px; text-align: left; }
+.plenaro-agenda-time { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.plenaro-agenda-content { min-width: 0; display: grid; gap: 3px; }
+.plenaro-agenda-content strong { overflow-wrap: anywhere; }
+.plenaro-agenda-content small { display: inline-flex; align-items: center; gap: 5px; white-space: normal; overflow-wrap: anywhere; }
+.plenaro-agenda-kind { color: var(--muted-strong); font-size: 11px; white-space: nowrap; }
+.plenaro-agenda-appointment { display: grid; justify-items: start; gap: 10px; }
+.plenaro-agenda-appointment p { display: flex; align-items: center; gap: 7px; margin: 0; }
+@media (max-width: 720px) {
+  .plenaro-agenda-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .plenaro-agenda-time { grid-column: 1 / -1; }
+}
