@@ -2,17 +2,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AppContent } from './App';
-import { localDate } from './tasksApi';
+import { localDate, type WorkTask } from './tasksApi';
 import type { TaskSegment } from './taskWorkApi';
 import type { TaskReminder } from './notificationApi';
+import type { OutlookEvent } from './graphApi';
 
 let calendarSegments: TaskSegment[] = [];
 let reminderItems: TaskReminder[] = [];
+let todayFixture: WorkTask[] = [];
+let allTasksFixture: WorkTask[] = [];
+let outlookFixture: OutlookEvent[] = [];
+let outlookEnabled = false;
 
 
 beforeEach(() => {
   calendarSegments = [];
   reminderItems = [];
+  todayFixture = [];
+  allTasksFixture = [];
+  outlookFixture = [];
+  outlookEnabled = false;
   vi.stubGlobal('fetch', vi.fn(async (path: string) => {
     if (path === '/api/v1/classic-import/batches') return {
       ok: true, status: 200, json: async () => [],
@@ -106,13 +115,23 @@ beforeEach(() => {
       ok: true, status: 200, json: async () => calendarSegments,
     };
     if (path.endsWith('/schedule')) return { ok: true, status: 204 };
+    if (path.startsWith('/api/v1/tasks/today?')) return {
+      ok: true, status: 200, json: async () => todayFixture,
+    };
+    if (path === '/api/v1/tasks/') return {
+      ok: true, status: 200, json: async () => allTasksFixture,
+    };
     if (path.startsWith('/api/v1/tasks/')) return {
       ok: true, status: 200, json: async () => ([]),
     };
     if (path === '/api/v1/graph/status') return {
       ok: true, status: 200, json: async () => ({
-        enabled: false, linked: false, vaultReady: false, connected: false,
+        enabled: outlookEnabled, linked: outlookEnabled, vaultReady: true, connected: outlookEnabled,
       }),
+    };
+    if (path.startsWith('/api/v1/graph/calendar?')) return {
+      ok: true, status: 200,
+      json: async () => ({ events: outlookFixture, hasMore: false }),
     };
     if (path === '/api/v1/auth/entra/status') return {
       ok: true, status: 200, json: async () => ({ enabled: false, linked: false }),
@@ -349,6 +368,48 @@ describe('Plenaro web shell', () => {
     expect(screen.getByLabelText('Neue Aufgabe')).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Aufgabenbezogener Timer' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Aufgabensegmente' })).toBeTruthy();
+  });
+
+  it('Heute zeigt nur heutige Aufgabensegmente und Termine, nicht den gesamten Bestand', async () => {
+    const day = localDate();
+    const morning = new Date(day + 'T09:00:00');
+    const ten = new Date(day + 'T10:00:00');
+    const eleven = new Date(day + 'T11:00:00');
+    const noon = new Date(day + 'T12:00:00');
+    const template = (id: string, title: string, plannedFor: string | null): WorkTask => ({
+      id, title, plannedFor, description: '', status: 'planned',
+      priority: 3, tags: [], createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(), completedAt: null,
+    });
+    const todayTask = template('today-task', 'Heutiges Kundengespräch', day);
+    const currentTask = template('other-task', 'Nur aktuelle Aufgabe', null);
+    const segmentTask = template('segment-task', 'Heute mit Segment', null);
+    allTasksFixture = [currentTask, todayTask, segmentTask];
+    todayFixture = [todayTask, segmentTask];
+    calendarSegments = [{
+      id: 'seg1', taskId: segmentTask.id, taskTitle: segmentTask.title,
+      startsAt: ten.toISOString(), endsAt: eleven.toISOString(), note: '', participants: [],
+    }];
+    outlookEnabled = true;
+    outlookFixture = [{
+      id:'event1',subject:'Outlook Projektbesprechung',
+      start:morning.toISOString(),end:ten.toISOString(),isAllDay:false,
+      showAs:'busy',location:'Besprechungsraum',webLink:'https://outlook.office.com/calendar',
+    }];
+    renderAt('/today');
+    const agenda = await screen.findByLabelText('Tagesagenda');
+    await waitFor(() => expect(within(agenda).getAllByRole('button')).toHaveLength(3));
+    const names = within(agenda).getAllByRole('button').map(button => button.textContent || '');
+    expect(names[0]).toContain('Heutiges Kundengespräch'); // all-day first
+    expect(names[1]).toContain('Outlook Projektbesprechung'); // 09:00
+    expect(names[2]).toContain('Heute mit Segment'); // 10:00
+    expect(agenda.textContent).not.toContain('Nur aktuelle Aufgabe');
+    fireEvent.click(within(agenda).getByRole('button', { name: /Outlook Projektbesprechung/ }));
+    expect(await screen.findByRole('heading', { name: 'Outlook Projektbesprechung' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /In Outlook öffnen/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Aktuelle Aufgaben' }));
+    expect(await screen.findByText('Nur aktuelle Aufgabe')).toBeTruthy();
+    expect(noon.getTime()).toBeGreaterThan(eleven.getTime());
   });
 
   it('zeigt Normal, UL, AM, HO und BR als Tagesmarker ohne Microsoft', async () => {
