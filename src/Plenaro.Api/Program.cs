@@ -21,6 +21,7 @@ using Plenaro.Api.Secrets;
 using Plenaro.Api.Graph;
 using Plenaro.Api.Tasks;
 using Plenaro.Api.DayMarkers;
+using Plenaro.Api.Znuny;
 
 if (args.Contains("--healthcheck", StringComparer.Ordinal))
 {
@@ -68,6 +69,11 @@ builder.Services.AddHttpClient("Plenaro.Graph", http =>
     http.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddScoped<GraphCalendarService>();
+builder.Services.AddHttpClient("Plenaro.Znuny", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+}).ConfigurePrimaryHttpMessageHandler(ZnunyConnectionTester.SecureHandler);
+builder.Services.AddScoped<ZnunyConnectionTester>();
 builder.Services.AddDbContext<PlenaroIdentityDbContext>(options => options.UseNpgsql(connectionString));
 
 builder.Services.AddDataProtection()
@@ -298,6 +304,12 @@ builder.Services.AddAntiforgery(options =>
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("znuny-test", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ??
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions {
+            PermitLimit=5, Window=TimeSpan.FromMinutes(5), QueueLimit=0, AutoReplenishment=true
+        }));
     options.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions
@@ -397,6 +409,7 @@ app.MapPlenaroTaskWork();
 app.MapPlenaroReports();
 app.MapPlenaroReminders();
 app.MapPlenaroClassicImport();
+app.MapPlenaroZnuny();
 app.MapPlenaroDayMarkers();
 app.MapFallbackToFile("index.html");
 app.Run();
