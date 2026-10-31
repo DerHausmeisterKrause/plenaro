@@ -1,5 +1,5 @@
 import { useEffect,useState } from 'react';
-import { ExternalLink, FileText, RefreshCw, Save, Ticket, WifiOff } from 'lucide-react';
+import { ExternalLink, FileText, Save, Ticket, WifiOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { CachedTicket } from './znunySyncApi';
 import { readTicketWorkspace,saveTicketWorkspace,
