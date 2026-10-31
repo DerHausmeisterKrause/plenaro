@@ -18,6 +18,11 @@ public sealed class ZnunyConnectionTester(IHttpClientFactory clients)
         string baseUrl, string username, string password, CancellationToken ct)
     {
         var url = baseUrl.TrimEnd('/') + "/Session";
+        // Time limit applies to the *entire* request including response stream,
+        // not only to the HTTP response headers.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        var requestCt = timeout.Token;
         using var req = new HttpRequestMessage(HttpMethod.Post,url);
         req.Content = new StringContent(JsonSerializer.Serialize(new
         {
@@ -27,25 +32,25 @@ public sealed class ZnunyConnectionTester(IHttpClientFactory clients)
         try
         {
             using var response = await clients.CreateClient("Plenaro.Znuny")
-                .SendAsync(req,HttpCompletionOption.ResponseHeadersRead,ct);
+                .SendAsync(req,HttpCompletionOption.ResponseHeadersRead,requestCt);
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                 return new(false,"auth-rejected");
             if (!response.IsSuccessStatusCode)
                 return new(false,"remote-error");
             if (response.Content.Headers.ContentLength is > 32768)
                 return new(false,"invalid-response");
-            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            await using var stream = await response.Content.ReadAsStreamAsync(requestCt);
             using var limited = new MemoryStream();
             var buffer = new byte[4096];
             while (true)
             {
-                var bytes = await stream.ReadAsync(buffer,ct);
+                var bytes = await stream.ReadAsync(buffer,requestCt);
                 if (bytes == 0) break;
                 if (limited.Length + bytes > 32768) return new(false,"invalid-response");
                 limited.Write(buffer,0,bytes);
             }
             limited.Position = 0;
-            using var document = await JsonDocument.ParseAsync(limited,cancellationToken:ct);
+            using var document = await JsonDocument.ParseAsync(limited,cancellationToken:requestCt);
             if (document.RootElement.ValueKind != JsonValueKind.Object)
                 return new(false,"invalid-response");
             if (document.RootElement.TryGetProperty("SessionID",out var id) &&
