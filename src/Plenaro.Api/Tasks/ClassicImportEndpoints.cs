@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
 using Npgsql;
@@ -118,7 +119,10 @@ public static partial class ClassicImportEndpoints
                     doc.Settings?.ReminderLeadMinutes is not int lead ? DBNull.Value : (object)(short)lead;
                 batch.Parameters.AddWithValue("had", hadSettings);
                 batch.Parameters.Add("legacy", NpgsqlDbType.Jsonb).Value =
-                    JsonSerializer.Serialize(doc.LegacySettings ?? new ImportLegacySettings());
+                    JsonSerializer.Serialize(doc.LegacySettings ?? new ImportLegacySettings(),
+                        new JsonSerializerOptions(ArchiveJson) {
+                            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                        });
                 await batch.ExecuteNonQueryAsync(ct);
             }
 
