@@ -155,13 +155,21 @@ jobs:
           echo 'CI checkpoint: Classic task notes, URL and local ticket timer verified'
           # Interactive remote calls are never allowed before an approved
           # local binding, valid session, route configuration and CSRF token.
+          echo 'CI remote test 1: status check'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" "$API/api/v1/znuny/tickets/77/articles")" = "404"
+          echo 'CI remote test 2: status check'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/42/articles")" = "404"
+          echo 'CI remote test 3: status check'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/znuny/tickets/77/assignment" -H 'Content-Type: application/json' -d '{"ownerId":77,"responsibleId":77}')" = "400"
+          echo 'CI remote test 4: status check'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/tickets/77/reply" -H 'Content-Type: application/json' -d '{"body":"Do not send"}')" = "400"
+          echo 'CI remote test 5: status check'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/tickets/42/reply" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"body":"Do not send"}')" = "404"
+          echo 'CI remote test 6: status check'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/tickets/81/reply" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"body":"Do not send"}')" = "409"
+          echo 'CI remote test 7: status check'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/tickets/77/reply" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"body":""}')" = "400"
+          echo 'CI remote test 8: status check'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/znuny/tickets/77/assignment" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"ownerId":-1,"responsibleId":null}')" = "400"
           echo 'CI checkpoint: remote read/write authorization, CSRF and input guards verified'
           # Ticket planning is LOCAL and per-user; no Znuny writes or leakage.
