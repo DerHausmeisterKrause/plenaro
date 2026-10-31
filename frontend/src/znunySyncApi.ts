@@ -10,9 +10,6 @@ export type SyncStatus = {
 };
 export type SyncConfig = Pick<SyncStatus,'enabled'|'serviceUsername'|'initialLookbackDays'|
   'deltaIntervalMinutes'|'openIntervalMinutes'|'maxRequestsPerCycle'>;
-export type AgentBinding = {
-  userId: string; email: string; approvedAgentId: number|null; requestedAgentId: number;
-};
 export type SyncRunResult = {
   started: boolean; status: string; requests: number; tickets: number;
 };
@@ -56,13 +53,6 @@ export const runCentralSync=async()=>{
 };
 export const resetCentralCache=async()=>{
   await mutate('/api/v1/admin/znuny/sync/reset','POST',{confirmation:'ZNUNY CACHE ZURUECKSETZEN'});
-};
-export const getAgentBindings=()=>request<AgentBinding[]>('/api/v1/admin/znuny/bindings');
-export const approveAgent=async(userId:string,agentId:number)=>{
-  await mutate('/api/v1/admin/znuny/bindings/'+encodeURIComponent(userId),'PUT',{agentId});
-};
-export const revokeAgent=async(userId:string)=>{
-  await mutate('/api/v1/admin/znuny/bindings/'+encodeURIComponent(userId),'DELETE');
 };
 export const getTicketAccess=()=>request<TicketAccess>('/api/v1/znuny/tickets/status');
 export const getCachedTickets=(view:'mine'|'new'='mine',search='',page=0)=>
