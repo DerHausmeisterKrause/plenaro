@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { CalendarDays, Pencil, Save, Trash2, X } from 'lucide-react';
+import { Pencil, Save, Trash2, X } from 'lucide-react';
 import { localDate } from './tasksApi';
 import {
   deleteTicketSegment,getTicketSegments,planTicketSegment,updateTicketSegment,
