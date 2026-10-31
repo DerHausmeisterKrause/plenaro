@@ -175,8 +175,8 @@ export function ClassicTicketDetailPanel({ticket,onChanged}:{
         </div>
       </details>
     </section>
-    <ZnunyTicketTimerPanel key={ticket.ticketId} ticketId={ticket.ticketId}/>
-    {!closed&&<ZnunyTicketPlanPanel key={ticket.ticketId} ticketId={ticket.ticketId}
+    <ZnunyTicketTimerPanel key={'timer:'+ticket.ticketId} ticketId={ticket.ticketId}/>
+    {!closed&&<ZnunyTicketPlanPanel key={'segments:'+ticket.ticketId} ticketId={ticket.ticketId}
       onChanged={onChanged}/>}
   </div>;
 }
