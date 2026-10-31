@@ -218,8 +218,8 @@ export function ZnunySettingsPanel({ admin }: { admin: boolean }) {
                 onChange={e => editServer(key,e.target.value)}/>
             </label>)}
             {([
-              ['syncIntervalMinutes','Synchronisation (Minuten)',5,1440],
-              ['candidateSyncIntervalMinutes','Kandidaten-Abfrage (Minuten)',3,60],
+              ['syncIntervalMinutes','Classic-Intervall (Legacy, nicht aktiv)',5,1440],
+              ['candidateSyncIntervalMinutes','Classic-Kandidatenintervall (Legacy, nicht aktiv)',3,60],
               ['searchLimit','Maximaler TicketSearch-Umfang',10,500],
               ['articleLimit','Maximale Artikel je Ticket',1,100],
             ] as const).map(([key,title,min,max]) =>
