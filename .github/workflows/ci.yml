@@ -26,7 +26,7 @@ jobs:
           dotnet build src/Plenaro.Api/Plenaro.Api.csproj -c Release
           cd frontend
           npm install --no-audit --no-fund
-          npm test
+          TZ=Europe/Berlin npm test
           npm run build
       - name: Docker smoke test (health, setup, login)
         env:
@@ -150,6 +150,31 @@ jobs:
             -d '{"title":"Zeittest","description":"","status":"planned","priority":3,"tags":[],"plannedFor":"2026-10-29"}' \
             | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
           test -n "$WORK_ID"
+          # Today's view is an agenda: exclude generic active/overdue/future
+          # tasks unless they have a segment actually overlapping this day.
+          LOOSE_ID=$(curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/" \
+            -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
+            -d '{"title":"Nur aktiv ohne Termin","status":"active","priority":2,"tags":[],"plannedFor":null}' \
+            | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
+          OVERDUE_ID=$(curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/" \
+            -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
+            -d '{"title":"Überfällige Aufgabe ohne Termin","status":"planned","priority":2,"tags":[],"plannedFor":"2026-10-20"}' \
+            | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
+          SEGMENTED_ID=$(curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/" \
+            -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
+            -d '{"title":"Nur mit heutigem Segment","status":"planned","priority":2,"tags":[],"plannedFor":"2026-11-02"}' \
+            | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
+          curl -fsS -b "$COOKIE" "$API/api/v1/tasks/today?date=2026-10-28" \
+            | python3 -c 'import sys,json;titles={t["title"] for t in json.load(sys.stdin)};assert "Bearbeitet" in titles and "Nur aktiv ohne Termin" not in titles and "Überfällige Aufgabe ohne Termin" not in titles and "Nur mit heutigem Segment" not in titles'
+          curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/$SEGMENTED_ID/segments" \
+            -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' \
+            -d '{"startsAt":"2026-10-28T08:00:00Z","endsAt":"2026-10-28T08:30:00Z","note":"Heute geplant","participants":[]}' > /dev/null
+          curl -fsS -b "$COOKIE" "$API/api/v1/tasks/today?date=2026-10-28" \
+            | python3 -c 'import sys,json;titles={t["title"] for t in json.load(sys.stdin)};assert "Bearbeitet" in titles and "Nur mit heutigem Segment" in titles and "Nur aktiv ohne Termin" not in titles and "Überfällige Aufgabe ohne Termin" not in titles'
+          curl -fsS -b "$COOKIE" "$API/api/v1/tasks/today?date=2026-10-29" \
+            | python3 -c 'import sys,json;titles={t["title"] for t in json.load(sys.stdin)};assert "Nur mit heutigem Segment" not in titles and "Nur aktiv ohne Termin" not in titles'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/tasks/today?date=2026-10-28" \
+            | python3 -c 'import json,sys;assert json.load(sys.stdin)==[]'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/tasks/$WORK_ID/time/start")" = "400"
           curl -fsS -b "$COOKIE" -X POST "$API/api/v1/tasks/$WORK_ID/time/start" \
             -H "X-CSRF-TOKEN: $CSRF" | python3 -c 'import json,sys; assert json.load(sys.stdin)["runningSince"]'
