@@ -160,7 +160,7 @@ public sealed class ZnunyCentralSync(
                     await using var finish=new NpgsqlCommand("""
                         UPDATE znuny_sync_control SET bootstrap_finished_at=now(),
                             delta_watermark=@end,last_delta_at=now(),
-                            open_cursor=TIMESTAMPTZ '2000-01-01 00:00:00+00'
+                            open_cursor=NULL
                         WHERE id=true
                         """,db);
                     finish.Parameters.Add("end",NpgsqlDbType.TimestampTz).Value=end.UtcDateTime;
