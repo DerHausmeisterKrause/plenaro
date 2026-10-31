@@ -197,6 +197,21 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X DELETE "$API/api/v1/classic-import/batches/$BATCH_ID")" = "400"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X DELETE "$API/api/v1/classic-import/batches/$BATCH_ID" -H "X-CSRF-TOKEN: $CSRF")" = "204"
           curl -fsS -b "$COOKIE" "$API/api/v1/tasks/" | python3 -c 'import json,sys;assert not any(x["title"]=="Importierte Altaufgabe" for x in json.load(sys.stdin))'
+          # Classic archive v2: no replay, per-owner archive, idempotence, safe undo.
+          IMPORT_V2=$(printf '%s' "$IMPORT_JSON" | python3 tools/ci_classic_archive_fixture.py)
+          curl -fsS -b "$COOKIE" -X POST "$API/api/v1/classic-import/preview" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$IMPORT_V2" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert (d["newMetadata"],d["newBookings"],d["newMonthly"])==(1,1,1)'
+          V2_BATCH=$(curl -fsS -b "$COOKIE" -X POST "$API/api/v1/classic-import/commit" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$IMPORT_V2" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["inserted"]==7;print(d["batchId"])')
+          test -n "$V2_BATCH"
+          ARCHIVE_TASK_ID=$(curl -fsS -b "$COOKIE" "$API/api/v1/tasks/" | python3 -c 'import json,sys;print(next(t["id"] for t in json.load(sys.stdin) if t["title"]=="Importierte Altaufgabe"))')
+          curl -fsS -b "$COOKIE" "$API/api/v1/classic-import/archive/overview" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert (d["metadataCount"],d["bookingCount"],d["monthlyCount"],d["settingsBatches"])==(1,1,1,1)'
+          curl -fsS -b "$COOKIE" "$API/api/v1/classic-import/archive/tasks/$ARCHIVE_TASK_ID" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["metadata"]["isPinned"] and len(d["ticketBookings"])==1 and d["ticketBookings"][0]["status"]=="Succeeded"'
+          curl -fsS -b "$COOKIE" "$API/api/v1/classic-import/archive/settings/$V2_BATCH" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["showWeekendInWeekView"] and d["defaultSegmentDurationMinutes"]==45 and "clientSecret" not in d'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/classic-import/archive/tasks/$ARCHIVE_TASK_ID")" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/classic-import/archive/settings/$V2_BATCH")" = "404"
+          curl -fsS -b "$COOKIE" -X POST "$API/api/v1/classic-import/preview" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$IMPORT_V2" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["newMetadata"]==d["newBookings"]==d["newMonthly"]==d["newTasks"]==0'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X DELETE "$API/api/v1/classic-import/batches/$V2_BATCH" -H "X-CSRF-TOKEN: $CSRF")" = "204"
+          curl -fsS -b "$COOKIE" "$API/api/v1/classic-import/archive/overview" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert (d["metadataCount"],d["bookingCount"],d["monthlyCount"],d["settingsBatches"])==(0,0,0,0)'
+          curl -fsS -b "$COOKIE" "$API/api/v1/tasks/" | python3 -c 'import json,sys;assert not any(x["title"]=="Importierte Altaufgabe" for x in json.load(sys.stdin))'
           # Task activity reports: own data only, invalid month and CSV injection protection.
           MONTH=$(TZ=Europe/Berlin date +%Y-%m)
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/reports/month?month=$MONTH")" = "401"
