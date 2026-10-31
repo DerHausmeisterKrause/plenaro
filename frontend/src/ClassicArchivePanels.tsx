@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Archive } from 'lucide-react';
 import {
-  readTaskArchive, readArchiveOverview, readImportedSettings,
-  type ClassicArchiveOverview, type ClassicTaskArchive,
+  readTaskArchive, readArchiveOverview, readImportedSettings, readClassicMonthly,
+  type ClassicArchiveOverview, type ClassicTaskArchive, type ClassicMonthlyAdjustment,
 } from './classicImportApi';
 
 export function ClassicTaskArchivePanel({ taskId }: { taskId: string }) {
@@ -44,10 +44,13 @@ export function ClassicTaskArchivePanel({ taskId }: { taskId: string }) {
 
 export function ClassicArchiveOverviewPanel({ refreshVersion }: { refreshVersion: number }) {
   const [overview, setOverview] = useState<ClassicArchiveOverview | null>(null);
+  const [monthly, setMonthly] = useState<ClassicMonthlyAdjustment[]>([]);
   useEffect(() => {
     let active = true;
-    void readArchiveOverview().then(data => { if (active) setOverview(data); })
-      .catch(() => { if (active) setOverview(null); });
+    void Promise.all([readArchiveOverview(), readClassicMonthly()])
+      .then(([data, months]) => {
+        if (active) { setOverview(data); setMonthly(months); }
+      }).catch(() => { if (active) setOverview(null); });
     return () => { active = false; };
   }, [refreshVersion]);
   if (!overview) return null;
@@ -59,6 +62,16 @@ export function ClassicArchiveOverviewPanel({ refreshVersion }: { refreshVersion
       <span>Monatskorrekturen <strong>{overview.monthlyCount}</strong></span>
       <span>Einstellungssätze <strong>{overview.settingsBatches}</strong></span>
     </div>
+    {monthly.length > 0 && <details>
+      <summary>Historische Monatskorrekturen anzeigen ({monthly.length}{overview.monthlyCount > monthly.length ? '+' : ''})</summary>
+      <ul className="classic-archive-bookings">{monthly.map((item, i) =>
+        <li key={item.month + '-' + item.createdAt + '-' + i}>
+          <strong>{item.month}</strong>
+          <span>{(item.seconds / 3600).toLocaleString('de-DE', { maximumFractionDigits: 2 })} Stunden (Archiv)</span>
+          <small>{item.note || 'Ohne Notiz'}</small>
+        </li>)}</ul>
+    </details>}
+    <p className="um-hint">Archivwerte werden nicht als neue Ticketbuchungen oder zusätzliche Arbeitszeit verrechnet.</p>
   </div>;
 }
 
