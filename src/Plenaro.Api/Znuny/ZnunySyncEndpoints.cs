@@ -181,7 +181,7 @@ public static class ZnunySyncEndpoints
 
         reader.MapGet("/tickets",async(HttpContext http,
             UserManager<ApplicationUser> users,IConfiguration config,
-            string? view,string? search,int? limit,CancellationToken ct) =>
+            string? view,string? search,int? limit,int? page,CancellationToken ct) =>
         {
             var account=await users.GetUserAsync(http.User);
             if(account is null || account.IsDisabled)return Results.Unauthorized();
@@ -190,6 +190,8 @@ public static class ZnunySyncEndpoints
             if(search is {Length:>100})
                 return Results.BadRequest(new{error="Suchbegriff zu lang."});
             var pageSize=Math.Clamp(limit??100,1,100);
+            if(page is < 0 or > 1000)return Results.BadRequest(new {error="Ungültige Seite."});
+            var skip=(page??0)*pageSize;
             await using var db=await Open(config,ct);
             await using var cmd=new NpgsqlCommand("""
                 SELECT t.ticket_id,t.ticket_number,t.title,t.queue,t.state,
@@ -208,13 +210,14 @@ public static class ZnunySyncEndpoints
                 AND (@query='' OR t.ticket_number ILIKE '%'||@query||'%'
                     OR t.title ILIKE '%'||@query||'%')
                 ORDER BY t.changed_at DESC NULLS LAST,t.ticket_id DESC
-                LIMIT @max
+                LIMIT @max OFFSET @skip
                 """,db);
             cmd.Parameters.AddWithValue("user",account.Id);
             cmd.Parameters.AddWithValue("new",view=="new");
-            // Treat %/_ as literal characters, never as wildcard authorization.
+            // This search is applied only *after* agent authorization in SQL.
             cmd.Parameters.AddWithValue("query",search?.Trim()??"");
             cmd.Parameters.AddWithValue("max",pageSize);
+            cmd.Parameters.AddWithValue("skip",skip);
             var tickets=new List<object>();
             await using var r=await cmd.ExecuteReaderAsync(ct);
             while(await r.ReadAsync(ct))
