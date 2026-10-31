@@ -297,3 +297,12 @@ Siehe [Classic UI](CLASSIC_UI.md).
   Termineinladungen für Segmente (Anzeige derzeit nur für dieses Ticket)
 - [ ] Real-Znuny-Live-Abnahme der Detailfelder, WPF-Feldparität und
   Legacy-Import bisheriger Ticketzeitdaten
+
+## Znuny live: Artikel, Antworten, Zuweisungen (Phase 4 / PR #37)
+
+- [x] Gezielt einzelne Ticketartikel über Znuny GenericInterface lesen, nur mit administrativ freigegebener Agentenbindung; reine Textanzeige, kein fremdes HTML
+- [x] Ticketantwort per Mail: Empfänger ausschließlich aus Kundenartikeln auf dem Server ermitteln, Nutzereingabe HTML-escaped, eigene Znuny-Zugangsdaten und Benutzerbestätigung
+- [x] Besitzer und Verantwortlichen aus Znuny-Agentenliste auswählen, remote bestätigen und anschließend Cache aktualisieren; „Mir zuweisen“ separat
+- [x] CSRF, Einzel-Ticket-Zugriff, geschlossene Tickets, begrenzter Requestumfang, getrennte Read-/Write-Rate-Limits, keine automatischen Wiederholungen unbestätigter Schreibaktionen
+- [ ] Live-Znuny-Integration mit konkretem GenericTicketConnectorREST testen
+- [ ] Ticket-Schließen/Wiederöffnen, Wiki-Provider, Dynamic Fields und echte Znuny-Zeitbuchung ergänzen
