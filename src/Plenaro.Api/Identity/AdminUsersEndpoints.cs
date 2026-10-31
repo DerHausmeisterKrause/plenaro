@@ -41,7 +41,7 @@ public static class AdminUsersEndpoints
                     displayName = user.DisplayName,
                     role = (await users.GetRolesAsync(user)).Contains("Admin") ? "Admin" : "User",
                     disabled = user.IsDisabled,
-                    agentId = approvedAgents.GetValueOrDefault(user.Id) is var agentId && agentId > 0
+                    agentId = approvedAgents.TryGetValue(user.Id,out var agentId)
                         ? (int?)agentId : null
                 });
             return Results.Ok(result);
