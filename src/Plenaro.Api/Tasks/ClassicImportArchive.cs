@@ -259,6 +259,31 @@ public static partial class ClassicImportEndpoints
             });
         });
 
+        group.MapGet("/archive/monthly",async (HttpContext http,
+            UserManager<ApplicationUser> users,IConfiguration config,CancellationToken ct) =>
+        {
+            var owner=await OwnerAsync(http,users);
+            if(owner is null)return Results.Unauthorized();
+            await using var db=await OpenAsync(config,ct);
+            await using var cmd=new NpgsqlCommand("""
+                SELECT month,seconds,note,created_at
+                FROM classic_monthly_adjustments
+                WHERE owner_user_id=@owner
+                ORDER BY month DESC,created_at DESC LIMIT 100
+                """,db);
+            cmd.Parameters.AddWithValue("owner",owner.Value);
+            var result=new List<object>();
+            await using var reader=await cmd.ExecuteReaderAsync(ct);
+            while(await reader.ReadAsync(ct))
+                result.Add(new {
+                    month=reader.GetFieldValue<DateOnly>(0),
+                    seconds=reader.GetInt64(1),
+                    note=reader.GetString(2),
+                    createdAt=new DateTimeOffset(reader.GetDateTime(3),TimeSpan.Zero)
+                });
+            return Results.Ok(result);
+        });
+
         group.MapGet("/archive/settings/{batchId:guid}",async (Guid batchId,HttpContext http,
             UserManager<ApplicationUser> users,IConfiguration config,CancellationToken ct) =>
         {
