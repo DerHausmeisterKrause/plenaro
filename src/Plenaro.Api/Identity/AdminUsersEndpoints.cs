@@ -17,10 +17,21 @@ public static class AdminUsersEndpoints
         var group = app.MapGroup("/api/v1/admin/users")
             .RequireAuthorization("AdminOnly");
 
-        group.MapGet("/", async (UserManager<ApplicationUser> users, CancellationToken ct) =>
+        group.MapGet("/", async (UserManager<ApplicationUser> users,
+            IConfiguration config, CancellationToken ct) =>
         {
             var accounts = await users.Users.AsNoTracking()
                 .OrderBy(u => u.DisplayName).ThenBy(u => u.Email).Take(500).ToListAsync(ct);
+            var approvedAgents = new Dictionary<Guid, int>();
+            await using (var connection = new NpgsqlConnection(config.GetConnectionString("Plenaro")))
+            {
+                await connection.OpenAsync(ct);
+                await using var command = new NpgsqlCommand(
+                    "SELECT user_id,agent_id FROM znuny_approved_agent_bindings",connection);
+                await using var rows = await command.ExecuteReaderAsync(ct);
+                while (await rows.ReadAsync(ct))
+                    approvedAgents.Add(rows.GetGuid(0),rows.GetInt32(1));
+            }
             var result = new List<object>();
             foreach (var user in accounts)
                 result.Add(new
@@ -29,7 +40,9 @@ public static class AdminUsersEndpoints
                     email = user.Email,
                     displayName = user.DisplayName,
                     role = (await users.GetRolesAsync(user)).Contains("Admin") ? "Admin" : "User",
-                    disabled = user.IsDisabled
+                    disabled = user.IsDisabled,
+                    agentId = approvedAgents.GetValueOrDefault(user.Id) is var agentId && agentId > 0
+                        ? (int?)agentId : null
                 });
             return Results.Ok(result);
         });
@@ -40,10 +53,12 @@ public static class AdminUsersEndpoints
         {
             if (!await ValidCsrf(http, antiforgery)) return CsrfError();
             if (!ValidName(request.DisplayName) || !ValidEmail(request.Email) ||
-                !ValidRole(request.Role) || request.Password is not { Length: >= 12 and <= 1024 })
+                !ValidRole(request.Role) || !ValidAgentId(request.AgentId) ||
+                request.Password is not { Length: >= 12 and <= 1024 })
                 return Results.BadRequest(new { error = "Name, E-Mail, Rolle oder Passwort ungültig." });
 
             await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await LockAsync(db,ct);
             var email = request.Email.Trim();
             var user = new ApplicationUser
             {
@@ -57,6 +72,14 @@ public static class AdminUsersEndpoints
             if (!result.Succeeded) return IdentityError(result);
             result = await users.AddToRoleAsync(user, request.Role);
             if (!result.Succeeded) return IdentityError(result);
+            try
+            {
+                await SaveAgentIdAsync(db,user.Id,request.AgentId,ct);
+            }
+            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                return Results.Conflict(new { error = "Diese Znuny-Agenten-ID ist bereits einem anderen Plenaro-Benutzer zugewiesen." });
+            }
             await tx.CommitAsync(ct);
             return Results.Created($"/api/v1/admin/users/{user.Id}", new { id = user.Id });
         });
@@ -66,8 +89,9 @@ public static class AdminUsersEndpoints
             UserManager<ApplicationUser> users, PlenaroIdentityDbContext db, CancellationToken ct) =>
         {
             if (!await ValidCsrf(http, antiforgery)) return CsrfError();
-            if (!ValidName(request.DisplayName) || !ValidRole(request.Role))
-                return Results.BadRequest(new { error = "Name oder Rolle ungültig." });
+            if (!ValidName(request.DisplayName) || !ValidRole(request.Role) ||
+                !ValidAgentId(request.AgentId))
+                return Results.BadRequest(new { error = "Name, Rolle oder Znuny-Agenten-ID ungültig." });
 
             await using var tx = await db.Database.BeginTransactionAsync(ct);
             await LockAsync(db, ct);
@@ -101,7 +125,17 @@ public static class AdminUsersEndpoints
                 if (!add.Succeeded) return IdentityError(add);
             }
 
-            // Revoke all previously issued cookies if a role, name or disabled status changes.
+            // Changes to agent access and Identity account update are atomic.
+            try
+            {
+                await SaveAgentIdAsync(db,user.Id,request.AgentId,ct);
+            }
+            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                return Results.Conflict(new { error = "Diese Znuny-Agenten-ID ist bereits einem anderen Plenaro-Benutzer zugewiesen." });
+            }
+
+            // Revoke all previously issued cookies when account privileges change.
             var stamp = await users.UpdateSecurityStampAsync(user);
             if (!stamp.Succeeded) return IdentityError(stamp);
             await tx.CommitAsync(ct);
@@ -129,6 +163,27 @@ public static class AdminUsersEndpoints
     private static bool ValidEmail(string? email) =>
         !string.IsNullOrWhiteSpace(email) && email.Trim().Length <= 256 && email.Contains('@');
     private static bool ValidRole(string? role) => role is "Admin" or "User";
+    private static bool ValidAgentId(int? agentId) => agentId is null or > 0;
+
+    private static async Task SaveAgentIdAsync(PlenaroIdentityDbContext db,Guid userId,
+        int? agentId,CancellationToken ct)
+    {
+        var connection = (NpgsqlConnection)db.Database.GetDbConnection();
+        var transaction = (NpgsqlTransaction)db.Database.CurrentTransaction!.GetDbTransaction();
+        await using var command = agentId is { } assigned
+            ? new NpgsqlCommand("""
+                INSERT INTO znuny_approved_agent_bindings(user_id,agent_id)
+                VALUES(@user,@agent)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    agent_id=EXCLUDED.agent_id,approved_at=now()
+                """,connection,transaction)
+            : new NpgsqlCommand(
+                "DELETE FROM znuny_approved_agent_bindings WHERE user_id=@user",
+                connection,transaction);
+        command.Parameters.AddWithValue("user",userId);
+        if (agentId is { } value) command.Parameters.AddWithValue("agent",value);
+        await command.ExecuteNonQueryAsync(ct);
+    }
 
     private static async Task LockAsync(PlenaroIdentityDbContext db, CancellationToken ct)
     {
@@ -149,7 +204,9 @@ public static class AdminUsersEndpoints
     private static IResult IdentityError(IdentityResult result) =>
         Results.BadRequest(new { error = string.Join(" ", result.Errors.Select(e => e.Description)) });
 
-    public sealed record CreateUserRequest(string Email, string DisplayName, string Password, string Role);
-    public sealed record UpdateUserRequest(string DisplayName, string Role, bool Disabled);
+    public sealed record CreateUserRequest(string Email, string DisplayName, string Password,
+        string Role, int? AgentId = null);
+    public sealed record UpdateUserRequest(string DisplayName, string Role, bool Disabled,
+        int? AgentId = null);
     public sealed record ResetPasswordRequest(string Password);
 }
