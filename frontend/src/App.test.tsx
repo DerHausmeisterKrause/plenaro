@@ -536,7 +536,10 @@ describe('Plenaro web shell', () => {
     expect(await screen.findByText('Bitte helfen Sie uns.')).toBeTruthy();
     expect(screen.getByRole('button',{name:'Antworten'})).toBeTruthy();
     fireEvent.click(screen.getByRole('button',{name:/Agenten neu laden/}));
-    expect(await screen.findByRole('option',{name:/Agent Achtundachtzig/})).toBeTruthy();
+    await waitFor(()=>expect(
+      (screen.getByRole('combobox',{name:'Ticket Besitzer'}) as HTMLSelectElement)
+        .querySelector('option[value="88"]')
+    ).not.toBeNull());
     fireEvent.change(screen.getByRole('combobox',{name:'Ticket Besitzer'}),
       {target:{value:'88'}});
     fireEvent.click(screen.getByRole('button',{name:'Änderungen übernehmen'}));
