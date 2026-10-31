@@ -69,8 +69,10 @@ function AdminUsers({ currentId }: { currentId: string }) {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<Role>('User');
+  const [createAgentId, setCreateAgentId] = useState('');
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState<Role>('User');
+  const [editAgentId, setEditAgentId] = useState('');
   const [editDisabled, setEditDisabled] = useState(false);
   const [resetPassword, setResetPassword] = useState('');
   const [loading, setLoading] = useState(true);
@@ -94,17 +96,27 @@ function AdminUsers({ currentId }: { currentId: string }) {
   const selectedUser = users.find(u => u.id === selected);
   function selectUser(user: ManagedUser) {
     setSelected(user.id); setEditName(user.displayName); setEditRole(user.role);
-    setEditDisabled(user.disabled); setResetPassword(''); setCreateOpen(false);
+    setEditDisabled(user.disabled); setEditAgentId(user.agentId?.toString() ?? '');
+    setResetPassword(''); setCreateOpen(false);
     setError(''); setSuccess('');
+  }
+
+  function parseAgent(value: string): number | null {
+    if (!value.trim()) return null;
+    const id = Number(value.trim());
+    if (!Number.isSafeInteger(id) || id < 1 || id > 2147483647)
+      throw new Error('Die Znuny-Agenten-ID muss eine positive Ganzzahl sein.');
+    return id;
   }
 
   async function create(e: FormEvent) {
     e.preventDefault(); if (busy) return;
     setBusy(true); setError(''); setSuccess('');
     try {
-      await addUser(email.trim(), name.trim(), password, role);
+      await addUser(email.trim(), name.trim(), password, role, parseAgent(createAgentId));
       await reload();
-      setEmail(''); setName(''); setPassword(''); setRole('User'); setCreateOpen(false);
+      setEmail(''); setName(''); setPassword(''); setRole('User');
+      setCreateAgentId(''); setCreateOpen(false);
       setSuccess('Benutzer wurde angelegt.');
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Anlegen fehlgeschlagen.'); }
     finally { setBusy(false); }
@@ -114,7 +126,7 @@ function AdminUsers({ currentId }: { currentId: string }) {
     e.preventDefault(); if (!selected || busy) return;
     setBusy(true); setError(''); setSuccess('');
     try {
-      await saveUser(selected, editName.trim(), editRole, editDisabled);
+      await saveUser(selected, editName.trim(), editRole, editDisabled, parseAgent(editAgentId));
       const changed = await reload();
       setSelected(changed.find(u => u.id === selected)?.id ?? null);
       setSuccess('Benutzer aktualisiert. Vorhandene Sitzungen wurden widerrufen.');
@@ -140,12 +152,14 @@ function AdminUsers({ currentId }: { currentId: string }) {
         setCreateOpen(!createOpen); setSelected(null); setError(''); setSuccess('');
       }}><Plus size={16}/>{createOpen ? 'Abbrechen' : 'Benutzer anlegen'}</button>
     </div>
-    <p>Verwalte lokale Konten, Rollen und den Zugriff auf Plenaro.</p>
+    <p>Verwalte lokale Konten, Rollen, Znuny-Agenten-IDs und den Zugriff auf Plenaro.
+      Agenten-IDs vergibt ausschließlich die Administration.</p>
     {loading ? <p role="status">Lade Benutzer …</p> : <>
       <div className="um-users" role="list">
         {users.map(user => <button type="button" role="listitem" className={`um-user ${selected===user.id?'chosen':''}`} key={user.id} onClick={() => selectUser(user)}>
           <span className="um-avatar">{(user.displayName || user.email).slice(0, 1).toUpperCase()}</span>
           <span className="um-user-main"><strong>{user.displayName}</strong><small>{user.email}</small></span>
+          {user.agentId !== null && <span className="um-agent-id">Znuny #{user.agentId}</span>}
           <span className={`um-role ${user.role==='Admin'?'admin':''}`}>{user.role}</span>
           <span className={`um-active ${user.disabled?'blocked':''}`}>{user.disabled ? 'Gesperrt' : 'Aktiv'}</span>
         </button>)}
@@ -164,6 +178,13 @@ function AdminUsers({ currentId }: { currentId: string }) {
       <p className="um-hint">Mindestens 12 Zeichen, Groß-/Kleinbuchstaben, Ziffer und Sonderzeichen. Passwort sicher übergeben.</p>
       <label htmlFor="um-create-role">Rolle</label>
       <select id="um-create-role" value={role} onChange={e => setRole(e.target.value as Role)}><option value="User">User</option><option value="Admin">Admin</option></select>
+      <label htmlFor="um-create-agent-id">Znuny-Agenten-ID (optional)</label>
+      <input id="um-create-agent-id" type="number" min={1} max={2147483647} step={1}
+        placeholder="z. B. 42" value={createAgentId}
+        onChange={e => setCreateAgentId(e.target.value)}/>
+      <p className="um-hint">Nur Administratoren können die Agenten-ID hinterlegen.
+        Die Zuordnung ist sofort aktiv und darf systemweit nur einmal vergeben werden.
+        Für Benutzer ohne Znuny-Zugriff das Feld leer lassen.</p>
       <button disabled={busy} className="button button-primary" type="submit"><Plus size={16}/>Benutzer erstellen</button>
     </form>}
 
@@ -174,6 +195,12 @@ function AdminUsers({ currentId }: { currentId: string }) {
         <input id="um-edit-name" value={editName} maxLength={128} required onChange={e => setEditName(e.target.value)}/>
         <label htmlFor="um-edit-role">Rolle</label>
         <select id="um-edit-role" value={editRole} disabled={selectedUser.id === currentId} onChange={e => setEditRole(e.target.value as Role)}><option value="User">User</option><option value="Admin">Admin</option></select>
+        <label htmlFor="um-edit-agent-id">Znuny-Agenten-ID (nur Administration)</label>
+        <input id="um-edit-agent-id" type="number" min={1} max={2147483647} step={1}
+          placeholder="Keine Zuordnung" value={editAgentId}
+          onChange={e => setEditAgentId(e.target.value)}/>
+        <p className="um-hint">Eine leere Agenten-ID entzieht den Znuny-Ticketzugriff.
+          Eine Änderung wird zusammen mit den Benutzerrechten gespeichert.</p>
         <label className="um-check"><input type="checkbox" checked={editDisabled} disabled={selectedUser.id === currentId} onChange={e => setEditDisabled(e.target.checked)}/> Konto sperren</label>
         {selectedUser.id === currentId && <p className="um-hint">Dein eigenes Administratorkonto kann nicht gesperrt oder herabgestuft werden.</p>}
         <button className="button button-primary" type="submit" disabled={busy}><Save size={16}/>Änderungen speichern</button>
