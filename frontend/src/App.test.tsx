@@ -23,6 +23,36 @@ beforeEach(() => {
     if (path === '/api/v1/notifications/settings') return {
       ok: true, status: 200, json: async () => ({ enabled: true, leadMinutes: 2 }),
     };
+    if (path === '/api/v1/znuny/server') return {
+      ok: true, status: 200, json: async () => ({
+        webUrl: 'https://SERVER/index.pl',
+        apiUrl: 'https://SERVER/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST',
+        ticketSearchRoute: '/Ticket', ticketSearchMethod: 'GET',
+        ticketSearchAuthMode: 'Session', ticketGetRouteTemplate: '/Ticket/{TicketID}',
+        ticketGetMethod: 'GET', ticketGetAuthMode: 'Session',
+        ticketUpdateRoute: '/Ticket/{TicketID}/Update',
+        agentListRoute: '/Ticket/Agent/List',
+        ticketCreateRoute: '/TicketCreate', ticketCreateMethod: 'POST',
+        ticketCreateQueue: '', ticketCreateState: 'open', ticketCreatePriority: '3 normal',
+        ticketCreateType: '', ticketCreateCustomerUser: '', ticketReplyTemplate: '',
+        dynamicFieldOptionsRoute: '/Ticket/DynamicField/{FieldName}/Options',
+        costCenterFieldName: 'KostenstelleID', orderFieldName: 'AuftragsID',
+        costCenterOptions: '', orderOptions: '',
+        syncIntervalMinutes: 15, candidateSyncIntervalMinutes: 5,
+        searchLimit: 100, articleLimit: 20,
+        onlyOpenTickets: true, showClosedTickets: false,
+      }),
+    };
+    if (path === '/api/v1/znuny/me') return {
+      ok: true, status: 200, json: async () => ({
+        username: '', agentId: 0, candidateUserId: 1,
+        candidateKeywords: '', candidateExcludeKeywords: '',
+        includeOwner: true, includeResponsible: true,
+        notifyOnNewAssignedTickets: true, notifyOnTicketChanges: true,
+        showAllCandidatePoolTickets: false,
+        passwordConfigured: false, vaultReady: true,
+      }),
+    };
     if (path === '/api/v1/settings/me') return {
       ok: true, status: 200, json: async () => ({ theme: 'light', weekStart: 'inherit' }),
     };
@@ -154,6 +184,21 @@ describe('Plenaro web shell', () => {
     expect(await screen.findByRole('heading', { name: 'Desktop-Daten importieren' })).toBeTruthy();
     expect(screen.getAllByText(/tools\/export_classic.py/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Noch kein Import ausgeführt/)).toBeTruthy();
+  });
+
+  it('zeigt die echten Classic-API-Standardwerte unter Ticketsystem', async () => {
+    renderAt('/settings');
+    fireEvent.click(await screen.findByRole('button', { name: 'Ticketsystem' }));
+    expect(await screen.findByRole('heading', { name: 'GenericTicketConnectorREST' })).toBeTruthy();
+    expect((screen.getByLabelText('API-Basisadresse') as HTMLInputElement).value)
+      .toBe('https://SERVER/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST');
+    expect((screen.getByLabelText('Znuny-Benutzername') as HTMLInputElement).value).toBe('');
+    expect((screen.getByLabelText('Eigene Agenten-ID') as HTMLInputElement).value).toBe('0');
+    expect(screen.getByRole('button', { name: 'Verbindung prüfen' })).toHaveProperty('disabled', true);
+    fireEvent.click(screen.getByText('Classic-Routen, Sync-Zeiten und weitere API-Standardwerte'));
+    expect((screen.getByLabelText('TicketSearch-Route') as HTMLInputElement).value).toBe('/Ticket');
+    expect((screen.getByLabelText('Maximaler TicketSearch-Umfang') as HTMLInputElement).value).toBe('100');
+    expect((screen.getByLabelText('Kandidaten-Abfrage (Minuten)') as HTMLInputElement).value).toBe('5');
   });
 
   it('zeigt getrennte Formulare für persönliche und globale Einstellungen', async () => {

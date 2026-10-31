@@ -7,6 +7,7 @@ import { EntraAccountPanel } from './EntraAccountPanel';
 import { EntraAdminSettings } from './EntraAdminSettings';
 import { DayMarkerBudgetSettings } from './DayMarkersPanel';
 import { ReminderSettingsPanel } from './ReminderSettingsPanel';
+import { ZnunySettingsPanel } from './ZnunySettingsPanel';
 import { ClassicImportPanel } from './ClassicImportPanel';
 import { type PersonalPreferences, type WorkspacePreferences } from './settingsApi';
 import { addUser, changePassword, listUsers, resetUserPassword, saveUser, type ManagedUser } from './userApi';
@@ -235,12 +236,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved }: {
         <a href="/week" className="button button-secondary">Wochenplanung öffnen</a>
       </section>
     </>}
-    {section === 'ticket' && <section className="content-card um-panel">
-      <h2>Ticketsysteme</h2>
-      <p>Die Znuny/OTRS-Verbindung und weitere Adapter folgen in der Ticketsystem-Phase.
-        Die Oberfläche ist bereits nach der klassischen Liste-links/Details-rechts-Struktur vorbereitet.</p>
-      <a className="button button-secondary" href="/tickets">Ticketansicht öffnen</a>
-    </section>}
+    {section === 'ticket' && <ZnunySettingsPanel admin={admin}/>}
     {section === 'security' && <>
       <section className="content-card um-account">
         <div className="um-section-title"><ShieldCheck size={20}/><h2>Mein Konto</h2></div>

@@ -220,3 +220,12 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [ ] Historische Ticketbuchungen erst nach fachlicher Zuordnung zu Znuny/OTRS in eine echte Buchungsintegration übernehmen; keine automatische Wiederholung alter Buchungen.
 - [ ] Monatskorrekturen als eigene historische Berichtsdaten anzeigen bzw. mit verifizierter, nicht doppelter Zählung in Berichte integrieren.
 - [ ] Migration mit echter Classic-Datenbankkopie/Host prüfen und weitere individuelle/SSO/Outlook-Konfiguration manuell einrichten.
+
+## Znuny-/OTRS-Konfiguration aus Classic (Phase 6)
+
+- [x] Die serverweiten GenericTicketConnectorREST-Standardwerte aus `project_tool/Models/AppSettings.cs` und `ZnunySyncPolicy.cs` übernommen: `https://SERVER/index.pl` und `https://SERVER/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST` als Platzhalter; SessionCreate `POST /Session`, TicketSearch `GET /Ticket`, TicketGet `GET /Ticket/{TicketID}`; zusätzliche TicketUpdate/Create-/Agentenlisten-/Dynamikfeld-Routenvorlagen dokumentiert und konfigurierbar.
+- [x] Default: Session-Authentifizierung; Intervall 15 Min., Kandidatenintervall 5 Min., SearchLimit 100 und ArticleLimit 20; nur offene Tickets, Owner/Responsible aktiv. Erstellen, Update und Zeitbuchung werden **nicht** durch Hinterlegen der Einstellungen aktiviert.
+- [x] Systemweite Serverkonfiguration ausschließlich durch Administrator; persönliche Agenten-ID, Kandidaten-ID und Suchfilter individuell. Znuny-Passwort AES-GCM-verschlüsselt im bestehenden Secret-Vault, nie auslesbar über Browser.
+- [x] Auf Benutzeraktion beschränkter SessionCreate-Verbindungstest mit TLS, ohne Weiterleitungen, ohne Rückgabe/Logging von SessionID oder Passwort. Sicherheit: kein HTTP-/Loopback-/Metadata-Ziel, begrenzte Antwortgröße und Zeitlimit.
+- [ ] Echter TicketSearch/TicketGet-Datenfluss und Anzeige in Neue Aufgaben; danach Delta-Synchronisation/Benachrichtigungen und Ticketaktionen.
+- [ ] Verbindungstest gegen eine echte Znuny-/OTRS-Instanz des Benutzers (Platzhalteradresse wird nicht verbunden).

@@ -375,3 +375,48 @@ eine verständliche Fehlermeldung und korrigiert keine Zeitpunkte auf Verdacht.
 Der Exporter erzwingt passend zu den Web-API-Grenzen maximal 2.000 Aufgaben
 und je 4.000 Einträge der zentralen Zeit-/Archivtabellen pro Export. Größere
 Bestände benötigen einen separaten, transaktionssicheren Bulk-Import.
+
+## Znuny/OTRS: Classic-API-Standardeinstellungen
+
+Unter **Einstellungen → Ticketsystem** übernimmt Plenaro ab dieser Version die
+Standardrouten und Werte der bisherigen Desktop-Anwendung. Bei nicht
+konfiguriertem System erscheinen als Platzhalter:
+
+| Einstellung | Classic-Standard |
+| --- | --- |
+| Web-URL | `https://SERVER/index.pl` |
+| GenericInterface API | `https://SERVER/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST` |
+| SessionCreate | `POST /Session` mit UserLogin/Password (JSON) |
+| TicketSearch | `GET /Ticket`, Session |
+| TicketGet | `GET /Ticket/{TicketID}`, Session |
+| TicketUpdate | `/Ticket/{TicketID}/Update` (noch inaktiv) |
+| TicketCreate | `POST /TicketCreate` (noch inaktiv) |
+| AgentList | `/Ticket/Agent/List` |
+| DynamicFieldOptions | `/Ticket/DynamicField/{FieldName}/Options` |
+| Vollsynchronisierung/Kandidaten | 15 / 5 Minuten (noch nicht automatisch aktiv) |
+| Suchlimit/Artikellimit | 100 / 20 |
+| Owner/Responsible, nur offen | eingeschaltet |
+| Kostenstellen-/Auftragsfeld | `KostenstelleID` / `AuftragsID` |
+
+**Rechte:** Ein Administrator konfiguriert zentral die serverseitige HTTPS-URL
+und Routen. Jeder Benutzer trägt separat seinen Znuny-Benutzernamen, seine
+Agenten-ID, Such-/Ausschlussbegriffe und sein Passwort ein.
+Das Passwort ist ausschließlich im vorhandenen AES-GCM-Secret-Vault unter
+`znuny.password` pro Benutzer gespeichert. Alle persönlichen Daten sind
+kontoisoliert. Ein fehlender Vault-Masterkey verhindert Passwortspeicherung
+und Testanmeldung (503 statt unverschlüsselte Ablage).
+
+Der Button **Verbindung prüfen** führt auf ausdrückliche Anforderung exakt
+eine `POST /Session`-Anmeldung beim **vom Administrator konfigurierten**
+Server durch. Die Antwort wird auf das Vorhandensein einer SessionID geprüft,
+der Inhalt der SessionID wird jedoch weder geloggt noch an den Browser
+übertragen. Kein automatisches Polling, keine Weiterleitung, TLS ist Pflicht,
+ein Zeitlimit und ein Limit für die Antwortgröße sind aktiv. Loopback- und
+Link-Local-Ziele werden auch nach DNS-Auflösung blockiert; private LAN-Server
+bleiben bei expliziter Admin-Konfiguration möglich.
+
+**Noch nicht implementiert:** TicketSearch-/TicketGet-Datenübernahme in
+Neue Aufgaben, Ticketaktionen, automatische Synchronisierung und
+Benachrichtigungen über Ticketänderungen. Die Standard-Routenkonfiguration
+ist keine Zusage, dass der konkret eingerichtete Znuny-Webservice alle
+Operationen anbietet; dies muss später bei der Live-Abnahme geprüft werden.

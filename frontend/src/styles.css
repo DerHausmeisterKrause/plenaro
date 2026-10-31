@@ -717,3 +717,25 @@ h1,h2,h3,p { margin-top: 0; }
 .classic-import-batch { flex-wrap: wrap; }
 .classic-archive-settings { flex-basis: 100%; border-top: 1px solid var(--border); padding-top: 8px; }
 @media(max-width:480px){.classic-archive-detail dl,.classic-archive-settings{grid-template-columns:1fr}}
+
+/* Znuny/OTRS configuration: clear difference between user credentials and admin routes. */
+.znuny-settings { display: grid; gap: 16px; }
+.znuny-settings .page-heading { padding: 4px 0; }
+.znuny-settings .page-heading h2 { margin: 2px 0 6px; }
+.znuny-settings-form { max-width: 760px; gap: 10px; }
+.znuny-settings-form > label { display: grid; gap: 5px; }
+.znuny-settings-form > input, .znuny-settings-form > textarea,
+.znuny-settings-form label > input:not([type=checkbox]),
+.znuny-settings-form label > select { width: 100%; max-width: 100%; min-width: 0;
+  border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px;
+  color: var(--text); background: var(--surface); font: inherit; }
+.znuny-settings-form input:disabled, .znuny-settings-form select:disabled { opacity: .65; }
+.znuny-settings-form .um-check { display: flex; flex-direction: row; align-items: center; }
+.znuny-settings-actions { display: flex; flex-wrap: wrap; gap: 9px; margin: 8px 0; }
+.znuny-settings-advanced { margin: 14px 0; border: 1px solid var(--border); border-radius: 9px; padding: 13px; }
+.znuny-settings-advanced summary { cursor: pointer; font-weight: 700; font-size: 13px; }
+.znuny-settings-advanced > .um-form { padding-top: 15px; }
+.znuny-settings-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin: 12px 0; }
+.znuny-settings-grid label { display: grid; gap: 6px; }
+.znuny-settings-form .um-hint { display: flex; align-items: center; gap: 8px; }
+@media(max-width: 620px){ .znuny-settings-grid {grid-template-columns: 1fr;} }
