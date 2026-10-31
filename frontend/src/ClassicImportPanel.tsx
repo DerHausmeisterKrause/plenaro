@@ -66,7 +66,8 @@ export function ClassicImportPanel() {
   return <section className="content-card um-panel classic-import-panel" aria-label="Classic-Import">
     <div className="um-section-title"><DatabaseBackup size={20}/><h2>Desktop-Daten importieren</h2></div>
     <p>Übernimm Aufgaben, Zeitsegmente, abgeschlossene Aufgaben-Zeitbuchungen und Tagesmarker
-      aus der SQLite-Datenbank von Plenaro Classic. Nur für dein Benutzerkonto.</p>
+      aus der SQLite-Datenbank von Plenaro Classic. Alte Ticketbuchungen, Monatskorrekturen und
+      Zusatzfelder landen getrennt in einem nur lesbaren Archiv. Nur für dein Benutzerkonto.</p>
     <p className="um-hint">Der Konverter liegt im GitHub-Repository unter <code>tools/export_classic.py</code>.
       Er liest eine Kopie von <code>TaskTool.db</code> lokal und bereinigt die
       <code> settings.json</code>. Die rohe SQLite-Datei und Passwörter werden nicht hochgeladen.</p>
@@ -121,8 +122,9 @@ export function ClassicImportPanel() {
         </div>)}</div>}
     <p className="um-hint">Rücknahme ist nur möglich, wenn die importierten Datensätze unverändert sind und keine
       weiteren Zeitdaten an diesen Aufgaben hängen. Vor dem Import zusätzlich eine Datenbanksicherung erstellen.</p>
-    <p className="um-hint">Noch nicht migriert: Ticketbuchungen, Outlook-Verknüpfungen, Wiki-Caches,
-      Zugangsdaten, offene Timer und Anwesenheits-/Pausenzeiten. Historische Ticketbuchungen,
-      Classic-Feldinformationen und Monatskorrekturen stehen im Archiv, sind aber nicht aktiv.</p>
+    <p className="um-hint">Nicht aktiv übertragen werden: Ticketaktionen/-synchronisation,
+      Outlook-Verknüpfungen, Wiki-Caches, Zugangsdaten, offene Timer und
+      Anwesenheits-/Pausenzeiten. Alte Ticketbuchungen, Aufgabenfelder und Monatskorrekturen
+      bleiben ausdrücklich im nur lesbaren Archiv und werden nicht erneut abgerechnet.</p>
   </section>;
 }
