@@ -184,6 +184,7 @@ public static class ZnunySyncEndpoints
         });
 
         ZnunyTicketPlanningEndpoints.Map(reader);
+        ZnunyTicketDetailEndpoints.Map(reader);
 
         reader.MapGet("/tickets/status",async(HttpContext http,
             UserManager<ApplicationUser> users,IConfiguration config,
