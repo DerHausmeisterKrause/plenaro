@@ -20,6 +20,7 @@ public static class ZnunyTicketRemoteEndpoints
 {
     private const string UserPasswordKey="znuny.password";
     public sealed record ReplyRequest(string Body);
+    public sealed record StateRequest(bool Close);
     public sealed record AssignmentRequest(int? OwnerId,int? ResponsibleId);
 
     public static void Map(RouteGroupBuilder group)
@@ -132,6 +133,50 @@ public static class ZnunyTicketRemoteEndpoints
                 cmd.Parameters.AddWithValue("agent",context.AgentId.Value);
                 cmd.Parameters.AddWithValue("ticket",ticketId);
                 await cmd.ExecuteNonQueryAsync(ct);
+                return Results.Ok(new{confirmed=true,cacheUpdated=true});
+            }catch(PostgresException){
+                return Results.Ok(new{confirmed=true,cacheUpdated=false});
+            }
+        }).RequireRateLimiting("znuny-ticket-write");
+
+        group.MapPut("/tickets/{ticketId}/state",async(string ticketId,
+            StateRequest input,HttpContext http,IAntiforgery anti,
+            UserManager<ApplicationUser> users,IConfiguration config,SecretVault vault,
+            ZnunyReader reader,CancellationToken ct)=>{
+            if(!await Csrf(http,anti))return BadCsrf();
+            var context=await Context(http,users,config,vault,ticketId,false,ct);
+            if(context.Error is {} failure)return failure;
+            if(!context.Assigned)return Results.Forbid();
+            var credentials=await WriteCredentials(context,vault,ct);
+            if(credentials is null)return MissingUserCredentials();
+            await using var db=await Open(config,ct);
+            await using var stateCmd=new NpgsqlCommand(
+                "SELECT lower(state_type)='closed' FROM znuny_cached_tickets WHERE ticket_id=@ticket",db);
+            stateCmd.Parameters.AddWithValue("ticket",ticketId);
+            var wasClosed=await stateCmd.ExecuteScalarAsync(ct) is true;
+            if(input.Close==wasClosed)
+                return Results.Conflict(new{error=input.Close?
+                    "Ticket ist bereits geschlossen.":"Ticket ist bereits offen."});
+            var nextState=input.Close?"closed successful":"open";
+            try{
+                var counter=new ZnunyReader.Counter(3);
+                var session=await reader.SessionAsync(context.Server!,credentials.Value.Username,
+                    credentials.Value.Password,counter,ct);
+                var confirmed=await reader.UpdateAsync(context.Server!,session,ticketId,
+                    new Dictionary<string,object>{["Ticket"]=new Dictionary<string,object>{
+                        ["State"]=nextState
+                    }},counter,ct);
+                if(!confirmed)return UncertainWrite();
+            }catch(ZnunyReader.RemoteFailure){return UncertainWrite();}
+            try{
+                await using var update=new NpgsqlCommand("""
+                    UPDATE znuny_cached_tickets SET state=@state,state_type=@type,
+                        changed_at=now(),synced_at=now() WHERE ticket_id=@ticket
+                    """,db);
+                update.Parameters.AddWithValue("state",nextState);
+                update.Parameters.AddWithValue("type",input.Close?"closed":"open");
+                update.Parameters.AddWithValue("ticket",ticketId);
+                await update.ExecuteNonQueryAsync(ct);
                 return Results.Ok(new{confirmed=true,cacheUpdated=true});
             }catch(PostgresException){
                 return Results.Ok(new{confirmed=true,cacheUpdated=false});
