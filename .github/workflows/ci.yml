@@ -328,7 +328,9 @@ jobs:
           secure -b "$JAR" "$HTTPS/api/v1/znuny/me" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["passwordConfigured"] and "password" not in d and d["username"]=="ci-operator"'
           docker compose exec -T database psql -U plenaro -d plenaro -Atc "SELECT ciphertext <> convert_to('CI_ZNUNY_ONLY_DO_NOT_LOG','UTF8') FROM encrypted_secrets WHERE secret_name='znuny.password'" | grep -qx 't'
           test "$(secure -b "$JAR" -o /dev/null -w '%{http_code}' -X POST "$HTTPS/api/v1/znuny/connection-test")" = "400"
-          secure -b "$JAR" -X POST "$HTTPS/api/v1/znuny/connection-test" -H "X-CSRF-TOKEN: $T" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert "SERVER" in d["error"]'
+          curl -sS --cacert ./ci-tls.crt --resolve plenaro.test:443:127.0.0.1 \
+            -b "$JAR" -X POST "$HTTPS/api/v1/znuny/connection-test" -H "X-CSRF-TOKEN: $T" \
+            | python3 -c 'import json,sys;d=json.load(sys.stdin);assert "SERVER" in d["error"]'
           secure -c "$JAR" -b "$JAR" -X DELETE "$HTTPS/api/v1/znuny/password" -H "X-CSRF-TOKEN: $T" > /dev/null
           secure -b "$JAR" "$HTTPS/api/v1/znuny/me" | python3 -c 'import json,sys;assert not json.load(sys.stdin)["passwordConfigured"]'
           # Entra admin configuration is encrypted in Vault, never sourced from .env.
