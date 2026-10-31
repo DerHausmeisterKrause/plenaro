@@ -61,26 +61,36 @@ public static class TaskEndpoints
             if (owner is null) return Results.Unauthorized();
             if (date is null) return Results.BadRequest(new { error = "Lokales Datum erforderlich." });
 
-            // Today: outstanding tasks scheduled on/before this date, in-progress
-            // tasks, and tasks completed on this exact planning date. Completed
-            // unscheduled tasks are shown in the full task list.
+            // Classic Today is an AGENDA, not a second copy of Current Tasks.
+            // Only unfinished tasks planned specifically for this local day, or
+            // owning a segment overlapping this day, belong here. A running task
+            // without a today's plan is not automatically a today's appointment.
+            // Europe/Berlin midnight boundaries also work across DST transitions.
+            var zone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Berlin");
+            var midnight = DateTime.SpecifyKind(date.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Unspecified);
+            var tomorrow = midnight.AddDays(1);
+            var from = TimeZoneInfo.ConvertTimeToUtc(midnight, zone);
+            var to = TimeZoneInfo.ConvertTimeToUtc(tomorrow, zone);
+
             await using var db = await OpenAsync(config, ct);
             await using var command = new NpgsqlCommand("""
-                SELECT id,title,description,status,priority,tags,planned_for,
-                       created_at,updated_at,completed_at
-                FROM tasks WHERE owner_user_id=@owner
-                  AND (
-                    (status IN ('planned','active') AND
-                       (planned_for <= @date OR status='active'))
-                    OR (status='completed' AND planned_for=@date)
-                  )
-                ORDER BY CASE status WHEN 'active' THEN 0
-                     WHEN 'planned' THEN 1 ELSE 2 END,
-                     priority ASC NULLS LAST, updated_at DESC
-                LIMIT 200
+                SELECT t.id,t.title,t.description,t.status,t.priority,t.tags,t.planned_for,
+                       t.created_at,t.updated_at,t.completed_at
+                FROM tasks t WHERE t.owner_user_id=@owner
+                  AND t.status IN ('planned','active')
+                  AND (t.planned_for=@date OR EXISTS (
+                    SELECT 1 FROM task_segments s
+                    WHERE s.owner_user_id=t.owner_user_id AND s.task_id=t.id
+                      AND s.starts_at<@end AND s.ends_at>@start
+                  ))
+                ORDER BY CASE WHEN t.planned_for=@date THEN 0 ELSE 1 END,
+                         t.priority ASC NULLS LAST,t.title,t.id
+                LIMIT 500
                 """, db);
             command.Parameters.AddWithValue("owner", owner.Value);
             command.Parameters.Add("date", NpgsqlDbType.Date).Value = date.Value;
+            command.Parameters.Add("start", NpgsqlDbType.TimestampTz).Value = from;
+            command.Parameters.Add("end", NpgsqlDbType.TimestampTz).Value = to;
             return Results.Ok(await ReadTasksAsync(command, ct));
         });
 
