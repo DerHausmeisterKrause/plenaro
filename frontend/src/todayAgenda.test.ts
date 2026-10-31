@@ -8,7 +8,7 @@ const segment=(id:string,ticketId:string,start:string,end:string,
   stateType='open'):TicketAgendaSegment=>({
   id,ticketId,ticketNumber:ticketId,title:'Ticket '+ticketId,queue:'IT',
   ownerId:42,responsibleId:null,createdAt:null,changedAt:null,
-  state:'open',stateType,startsAt:start,endsAt:end,note:'Lokaler Termin'
+  state:'open',stateType,startsAt:start,endsAt:end,note:'Lokaler Termin',participants:[]
 });
 const event=(id:string,subject:string,start:string,end:string,isAllDay=false):OutlookEvent=>({
   id,subject,start,end,isAllDay,showAs:'busy',location:'Büro',

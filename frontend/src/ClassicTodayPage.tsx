@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { localDate } from './tasksApi';
 import { getMonthMarkers, saveDayMarker, type DayMarker, type DayType } from './dayMarkersApi';
 import { graphStatus, readOutlookWeek, type OutlookEvent } from './graphApi';
-import { ZnunyTicketPlanPanel } from './ZnunyTicketPlanPanel';
+import { ClassicTicketDetailPanel } from './ClassicTicketDetailPanel';
 import {
   getCachedTickets, getTicketAccess, getTicketAgenda,
   type CachedTicket, type TicketAccess, type TicketAgendaSegment,
@@ -215,9 +215,10 @@ export function ClassicTodayPage() {
         </div>
       </section>
       <aside className="plenaro-today-right" aria-label="Ticketdetails und Planung">
-        <section className="content-card plenaro-today-detail" aria-label="Task Details">
-          <span className="eyebrow">TICKET / TERMIN DETAILS</span>
-          {selectedAppointment?<div className="plenaro-agenda-appointment">
+        {selectedAppointment?<section className="content-card plenaro-today-detail"
+          aria-label="Outlook-Termindetails">
+          <span className="eyebrow">TASK DETAILS / OUTLOOK</span>
+          <div className="plenaro-agenda-appointment">
             <h2>{selectedAppointment.title}</h2>
             <p><Clock3 size={15}/>{agendaTimeLabel(selectedAppointment)}</p>
             {selectedAppointment.location&&<p><MapPin size={15}/>{selectedAppointment.location}</p>}
@@ -225,24 +226,17 @@ export function ClassicTodayPage() {
               href={selectedAppointment.webLink} target="_blank" rel="noopener noreferrer">
               <ExternalLink size={14}/>In Outlook öffnen</a>}
             <p className="um-hint">Outlook-Termin, nur lesbar.</p>
-          </div>:selectedTicket?<div className="plenaro-agenda-ticket">
-            <h2>{selectedTicket.title}</h2>
-            <dl>
-              <dt>Ticketnummer</dt><dd>{selectedTicket.ticketNumber||selectedTicket.ticketId}</dd>
-              <dt>Status</dt><dd>{selectedTicket.state}</dd>
-              <dt>Queue</dt><dd>{selectedTicket.queue}</dd>
-              <dt>Besitzer (Agent-ID)</dt><dd>{selectedTicket.ownerId??'Nicht vergeben'}</dd>
-              <dt>Verantwortlicher (Agent-ID)</dt><dd>{selectedTicket.responsibleId??'Nicht vergeben'}</dd>
-            </dl>
-            <Link to="/tickets" className="button button-secondary">
-              <ExternalLink size={14}/>Ticketsystem öffnen</Link>
-          </div>:<div className="classic-detail-empty">
-            <h2>{tab==='today'?'Tagespunkt auswählen':'Ticket auswählen'}</h2>
-            <p>Wähle links einen Termin oder ein Ticket, um die Details zu öffnen.</p>
-          </div>}
-        </section>
-        {selectedTicket&&tab!=='completed'&&<ZnunyTicketPlanPanel
-          ticketId={selectedTicket.ticketId} onChanged={()=>setRefresh(x=>x+1)}/>}
+          </div>
+        </section>:selectedTicket?<ClassicTicketDetailPanel
+          key={selectedTicket.ticketId} ticket={selectedTicket}
+          onChanged={()=>setRefresh(x=>x+1)}/>:
+          <section className="content-card plenaro-today-detail" aria-label="Task Details">
+            <span className="eyebrow">TASK DETAILS</span>
+            <div className="classic-detail-empty">
+              <h2>{tab==='today'?'Tagespunkt auswählen':'Ticket auswählen'}</h2>
+              <p>Wähle links einen Termin oder ein Ticket, um die Details zu öffnen.</p>
+            </div>
+          </section>}
       </aside>
     </div>
   </div>;

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Inbox, RefreshCw, Search, Ticket } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ZnunyTicketPlanPanel } from './ZnunyTicketPlanPanel';
+import { ClassicTicketDetailPanel } from './ClassicTicketDetailPanel';
 import {
   getCachedTickets,getTicketAccess,type CachedTicket,type TicketAccess,
 } from './znunySyncApi';
@@ -105,25 +105,7 @@ export function TicketsWorkspacePage() {
             Ticketmetadaten. Ticketaktionen und Artikelverläufe folgen separat.</p>
           <Link to="/settings" className="button button-secondary">Integrationseinstellungen öffnen</Link>
         </div>:
-        <div className="classic-ticket-detail">
-          <span className="eyebrow">ZNUNY / TICKET #{selected.ticketNumber||selected.ticketId}</span>
-          <h2>{selected.title}</h2>
-          <dl>
-            <dt>Znuny-ID</dt><dd>{selected.ticketId}</dd>
-            <dt>Status</dt><dd>{selected.state}</dd>
-            <dt>Statustyp</dt><dd>{selected.stateType}</dd>
-            <dt>Queue</dt><dd>{selected.queue}</dd>
-            <dt>Owner-ID</dt><dd>{selected.ownerId??'–'}</dd>
-            <dt>Responsible-ID</dt><dd>{selected.responsibleId??'–'}</dd>
-            <dt>Erstellt</dt><dd>{selected.createdAt?
-              new Date(selected.createdAt).toLocaleString('de-DE'):'–'}</dd>
-            <dt>Geändert</dt><dd>{selected.changedAt?
-              new Date(selected.changedAt).toLocaleString('de-DE'):'–'}</dd>
-          </dl>
-          <p className="um-hint">Nur lesbare Metadaten aus der zentralen Datenbank.
-            Keine erneuten API-Anfragen beim Öffnen und keine Ticketbuchung.</p>
-          {view!=='completed'&&<ZnunyTicketPlanPanel ticketId={selected.ticketId}/>}
-        </div>}
+        <ClassicTicketDetailPanel key={selected.ticketId} ticket={selected}/>}
       </section>
     </div>
   </div>;

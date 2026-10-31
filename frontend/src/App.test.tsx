@@ -7,7 +7,7 @@ import type { TaskSegment } from './taskWorkApi';
 import type { TaskReminder } from './notificationApi';
 import type { OutlookEvent } from './graphApi';
 import type { ManagedUser } from './userApi';
-import type { CachedTicket, TicketAgendaSegment } from './znunySyncApi';
+import type { CachedTicket, TicketAgendaSegment, TicketWorkspace } from './znunySyncApi';
 
 let calendarSegments: TaskSegment[] = [];
 let reminderItems: TaskReminder[] = [];
@@ -20,6 +20,7 @@ let ticketFixture: Record<'mine'|'new'|'completed',CachedTicket[]> = {
   mine:[],new:[],completed:[],
 };
 let ticketAgendaFixture: TicketAgendaSegment[] = [];
+let workspaceFixture: TicketWorkspace = {description:'Das ist ein lokaler Test',ticketUrl:'https://example.org/ticket/77'};
 
 
 beforeEach(() => {
@@ -32,6 +33,7 @@ beforeEach(() => {
   managedUsersFixture = [];
   ticketFixture = {mine:[],new:[],completed:[]};
   ticketAgendaFixture = [];
+  workspaceFixture = {description:'Das ist ein lokaler Test',ticketUrl:'https://example.org/ticket/77'};
   vi.stubGlobal('fetch', vi.fn(async (path: string) => {
     if (path === '/api/v1/classic-import/batches') return {
       ok: true, status: 200, json: async () => [],
@@ -54,6 +56,21 @@ beforeEach(() => {
     };
     if (path === '/api/v1/admin/users/') return {
       ok: true, status: 200, json: async () => managedUsersFixture,
+    };
+    if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/workspace')) return {
+      ok:true,status:200,json:async()=>workspaceFixture,
+    };
+    if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/time')) return {
+      ok:true,status:200,json:async()=>({
+        bookedSeconds:900,runningSeconds:0,runningSince:null,
+        adjustedMinutes:15,sessionCount:0,
+      }),
+    };
+    if (path.startsWith('/api/v1/znuny/tickets/')&&/\/time\/(start|stop|adjust)$/.test(path)) return {
+      ok:true,status:200,json:async()=>({
+        bookedSeconds:1800,runningSeconds:0,runningSince:null,
+        adjustedMinutes:30,sessionCount:0,
+      }),
     };
     if (path.startsWith('/api/v1/znuny/tickets/agenda?')) return {
       ok:true,status:200,json:async()=>ticketAgendaFixture,
@@ -423,7 +440,7 @@ describe('Plenaro web shell', () => {
       id:'seg1',ticketId:'77',ticketNumber:'2026#77',
       title:'Kundenticket für heute',queue:'IT',state:'open',stateType:'open',
       ownerId:77,responsibleId:null,createdAt:null,changedAt:null,
-      startsAt:ten.toISOString(),endsAt:eleven.toISOString(),note:'Vorbereiten'
+      startsAt:ten.toISOString(),endsAt:eleven.toISOString(),note:'Vorbereiten',participants:[]
     }];
     const localTask:WorkTask={
       id:'task',title:'Lokale Aufgabe heute',plannedFor:day,
@@ -452,10 +469,42 @@ describe('Plenaro web shell', () => {
     expect(agenda.textContent).not.toContain('Lokale Aufgabe heute');
     fireEvent.click(within(agenda).getByRole('button',{name:/Kundenticket für heute/}));
     expect(await screen.findByRole('heading',{name:'Kundenticket für heute'})).toBeTruthy();
-    expect(await screen.findByRole('region',{name:'Ticket-Zeitplanung'})).toBeTruthy();
+    expect(await screen.findByRole('region',{name:'Planung (Segmente)'})).toBeTruthy();
+    expect(await screen.findByRole('region',{name:'Timer / Buchung'})).toBeTruthy();
+    expect(await screen.findByLabelText('Beschreibung')).toBeTruthy();
+    expect((screen.getByLabelText('Beschreibung') as HTMLTextAreaElement).value)
+      .toBe('Das ist ein lokaler Test');
+    expect((screen.getByLabelText('Ticket URL') as HTMLInputElement).value)
+      .toBe('https://example.org/ticket/77');
     fireEvent.click(within(agenda).getByRole('button',{name:/Outlook Projektbesprechung/}));
     expect(await screen.findByRole('heading',{name:'Outlook Projektbesprechung'})).toBeTruthy();
     expect(screen.getByRole('link',{name:/In Outlook öffnen/})).toBeTruthy();
+  });
+
+  it('bearbeitet die lokale Task-Beschreibung und URL im Classic-Ticketdetail rechts', async()=>{
+    ticketFixture.mine=[{
+      ticketId:'77',ticketNumber:'2026#77',title:'Ticket mit Details',
+      queue:'IT',state:'open',stateType:'open',
+      ownerId:77,responsibleId:null,createdAt:null,changedAt:null
+    }];
+    renderAt('/today');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    fireEvent.click(await screen.findByRole('button',{name:/Ticket mit Details/}));
+    expect(await screen.findByRole('region',{name:'Task Details'})).toBeTruthy();
+    expect(await screen.findByRole('region',{name:'Timer / Buchung'})).toBeTruthy();
+    expect(await screen.findByRole('region',{name:'Planung (Segmente)'})).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Beschreibung'),
+      {target:{value:'Neue lokale Beschreibung'}});
+    fireEvent.change(screen.getByLabelText('Ticket URL'),
+      {target:{value:'https://example.org/neues-ticket'}});
+    fireEvent.click(screen.getByRole('button',{name:/Speichern/}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
+      String(url).endsWith('/tickets/77/workspace') &&
+      (opts as RequestInit)?.method==='PUT' &&
+      JSON.parse(String((opts as RequestInit).body)).description==='Neue lokale Beschreibung' &&
+      JSON.parse(String((opts as RequestInit).body)).ticketUrl==='https://example.org/neues-ticket'
+    )).toBe(true));
+    expect(screen.getByRole('button',{name:'Erledigt'})).toHaveProperty('disabled',true);
   });
 
   it('Aktuelle, Neue und Erledigte Aufgaben verwenden jeweils ihren Ticket-API-Filter',async()=>{
