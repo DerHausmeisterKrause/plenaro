@@ -31,7 +31,6 @@ export type ZnunyServerSettings = {
 };
 export type ZnunyPersonalSettings = {
   username: string;
-  agentId: number;
   candidateUserId: number;
   candidateKeywords: string;
   candidateExcludeKeywords: string;
@@ -42,6 +41,8 @@ export type ZnunyPersonalSettings = {
   showAllCandidatePoolTickets: boolean;
 };
 export type ZnunyPersonalView = ZnunyPersonalSettings & {
+  /** Approved by administrators, never accepted in the personal PUT body. */
+  agentId: number | null;
   passwordConfigured: boolean;
   vaultReady: boolean;
 };
