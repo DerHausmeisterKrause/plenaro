@@ -156,7 +156,9 @@ jobs:
           # Interactive remote calls are never allowed before an approved
           # local binding, valid session, route configuration and CSRF token.
           echo 'CI remote test 1: status check'
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" "$API/api/v1/znuny/tickets/77/articles")" = "404"
+          FIRST_ARTICLE_HTTP=$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" "$API/api/v1/znuny/tickets/77/articles")
+          echo "CI first foreign ticket HTTP: $FIRST_ARTICLE_HTTP"
+          test "$FIRST_ARTICLE_HTTP" = "404"
           echo 'CI remote test 2: status check'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/42/articles")" = "404"
           echo 'CI remote test 3: status check'
