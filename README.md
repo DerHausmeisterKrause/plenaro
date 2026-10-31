@@ -331,3 +331,38 @@ deshalb vertraulich aufbewahren und nach der Migration sicher löschen.
 Die Migration `0013_classic_import_batches.sql` wird beim Start automatisch eingespielt.
 
 **Schema-/Sicherheitstest** des Konverters: `python -m unittest discover -s tools -p 'test_*.py'`.
+
+### Erweiterter Classic-Export (Format 2)
+
+Der unveränderte Befehl `python tools/export_classic.py TaskTool.db -s settings.json -o plenaro-import.json`
+erzeugt nun **Format 2**. Damit werden zusätzlich archiviert:
+* Alte Aufgabenreferenzen und Kennzeichen: Ticketadresse, Pin, Znuny-Zuweisungsstatus, Ticketstatus,
+  bereits gebuchte Classic-Zeit und die bisherige Outlook-ID (als **inaktive** Referenz).
+* Einträge aus `ticket_time_bookings`, inklusive Status, Ticketnummer, Buchungs-ID,
+  gebuchten Minuten, Buchungszeit und Kurzbeschreibung. **Keine** dieser Buchungen
+  wird automatisch nach Znuny gesendet oder als neue Zeit gebucht.
+* Positive `monthly_report_time_adjustments` als historische Monatskorrekturen.
+  Diese Werte zählen **nicht automatisch** in aktuellen Web-Berichten mit.
+* Nur freigegebene nichtgeheime Einstellungen aus `settings.json`: Wochenenden
+  anzeigen, vergangene Tagesaufgaben ausblenden, Benachrichtigungston,
+  Benachrichtigungsflags, Standardsegmentdauer und Kalenderzeitzone.
+  Sie werden als **Referenz** im Importverlauf gespeichert und noch nicht
+  auf Web-Features angewendet. `ReminderLeadMinutes` bleibt die einzige
+  aktive Einstellung, die automatisch übernommen wird.
+
+Die Tabelle `classic_task_metadata` und das historische Ticketbuchungsarchiv sind
+bei der importierten Aufgabe unter **Aufgaben → Historische Classic-Daten** einsehbar.
+Im Reiter **Einstellungen → Datenimport** zeigt Plenaro Archiv-Zählwerte und
+die archivierten Einstellungen jedes Imports. Ältere Importdateien mit Format 1
+bleiben gültig; ein erneuter Export derselben Quelle fügt fehlende Archivdaten
+ohne doppelte Übernahme bestehender Aufgaben hinzu.
+
+**Datenschutz:** Der Konverter entfernt eingebettete Login-Daten, Fragmente und
+nicht freigegebene Query-Parameter aus alten Ticket-URLs. Freitext-Beschreibungen
+und Ticketnotizen können dennoch sensible Inhalte enthalten: JSON vor Import
+prüfen, nur über HTTPS verwenden, Datei nach Abschluss sicher entfernen. Keine
+gespeicherten Login-Passwörter, Verschlüsselungs-Keys oder API-Token importieren.
+
+Archivdaten sind **kein Ersatz für die noch fehlende Znuny-Anbindung** oder die
+vollständige Funktionsparität der Desktop-Version. Vor jedem Import ein Backup
+von PostgreSQL erstellen.
