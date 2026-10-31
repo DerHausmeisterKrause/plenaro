@@ -74,6 +74,9 @@ builder.Services.AddHttpClient("Plenaro.Znuny", client =>
     client.Timeout = TimeSpan.FromSeconds(10);
 }).ConfigurePrimaryHttpMessageHandler(ZnunyConnectionTester.SecureHandler);
 builder.Services.AddScoped<ZnunyConnectionTester>();
+builder.Services.AddSingleton<ZnunyReader>();
+builder.Services.AddSingleton<ZnunyCentralSync>();
+builder.Services.AddHostedService(services => services.GetRequiredService<ZnunyCentralSync>());
 builder.Services.AddDbContext<PlenaroIdentityDbContext>(options => options.UseNpgsql(connectionString));
 
 builder.Services.AddDataProtection()
@@ -410,6 +413,7 @@ app.MapPlenaroReports();
 app.MapPlenaroReminders();
 app.MapPlenaroClassicImport();
 app.MapPlenaroZnuny();
+app.MapPlenaroZnunyCentral();
 app.MapPlenaroDayMarkers();
 app.MapFallbackToFile("index.html");
 app.Run();
