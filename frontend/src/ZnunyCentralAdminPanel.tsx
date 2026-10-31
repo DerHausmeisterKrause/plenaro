@@ -1,24 +1,22 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Database, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 import {
-  approveAgent, deleteSyncPassword, getAgentBindings, getSyncStatus,
-  resetCentralCache, revokeAgent, runCentralSync, saveSyncConfig, saveSyncPassword,
-  type AgentBinding, type SyncConfig, type SyncStatus,
+  deleteSyncPassword, getSyncStatus,
+  resetCentralCache, runCentralSync, saveSyncConfig, saveSyncPassword,
+  type SyncConfig, type SyncStatus,
 } from './znunySyncApi';
 
 export function ZnunyCentralAdminPanel() {
   const [status,setStatus]=useState<SyncStatus|null>(null);
   const [settings,setSettings]=useState<SyncConfig|null>(null);
-  const [bindings,setBindings]=useState<AgentBinding[]>([]);
   const [password,setPassword]=useState('');
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
-  const [agentEdits,setAgentEdits]=useState<Record<string,string>>({});
 
   async function reload(){
-    const [next,users]=await Promise.all([getSyncStatus(),getAgentBindings()]);
-    setStatus(next);setBindings(users);
+    const next=await getSyncStatus();
+    setStatus(next);
     setSettings({
       enabled:next.enabled,serviceUsername:next.serviceUsername,
       initialLookbackDays:next.initialLookbackDays,
@@ -29,10 +27,10 @@ export function ZnunyCentralAdminPanel() {
   }
   useEffect(()=>{
     let alive=true;
-    void Promise.all([getSyncStatus(),getAgentBindings()])
-      .then(([next,users])=>{
+    void getSyncStatus()
+      .then(next=>{
         if(!alive)return;
-        setStatus(next);setBindings(users);
+        setStatus(next);
         setSettings({enabled:next.enabled,serviceUsername:next.serviceUsername,
           initialLookbackDays:next.initialLookbackDays,
           deltaIntervalMinutes:next.deltaIntervalMinutes,
@@ -136,31 +134,7 @@ export function ZnunyCentralAdminPanel() {
           Service-Passwort löschen</button>
       </div>
     </form>}
-    <h4>Freigegebene Agenten-Zuordnungen</h4>
-    <p>Erst die Freigabe durch einen Administrator erlaubt einem Benutzer, seine
-      Owner-/Responsible-Tickets aus dem Cache zu sehen. Die persönlich eingetragene
-      Agenten-ID allein reicht dafür nicht.</p>
-    <div className="znuny-bindings">
-      {bindings.map(item=><div className="znuny-binding" key={item.userId}>
-        <strong>{item.email}</strong>
-        <small>Gewünschte ID: {item.requestedAgentId||'Keine'} · Freigegeben:
-          {item.approvedAgentId??'Nein'}</small>
-        <div className="znuny-settings-actions">
-          <input aria-label={'Agenten-ID für '+item.email} type="number" min={1} max={2147483647}
-            value={agentEdits[item.userId]??String(item.approvedAgentId??item.requestedAgentId??'')}
-            onChange={e=>setAgentEdits(old=>({...old,[item.userId]:e.target.value}))}/>
-          <button className="button button-secondary" type="button" disabled={busy}
-            onClick={()=>void action(async()=>{
-              const id=Number(agentEdits[item.userId]??item.approvedAgentId??item.requestedAgentId);
-              if(!Number.isSafeInteger(id)||id<=0)throw Error('Eine gültige Agenten-ID eingeben.');
-              await approveAgent(item.userId,id);
-              setNotice('Agentenzuordnung bestätigt.');
-            })}>Zuordnen</button>
-          {item.approvedAgentId!==null&&<button type="button" className="button button-secondary" disabled={busy}
-            onClick={()=>void action(async()=>{await revokeAgent(item.userId);setNotice('Freigabe entfernt.');})}>
-            Zugriff entziehen</button>}
-        </div>
-      </div>)}
-    </div>
+    <p className="um-hint">Znuny-Agenten-IDs legst du unter Einstellungen → Administration → Benutzerverwaltung
+      direkt beim Anlegen oder Bearbeiten eines Benutzers fest.</p>
   </section>;
 }
