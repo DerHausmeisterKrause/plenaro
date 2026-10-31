@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
 using Npgsql;
@@ -58,7 +59,6 @@ public static class ZnunyEndpoints
 
     public sealed record PersonalSettings(
         string Username = "",
-        int AgentId = 0,
         int CandidateUserId = 1,
         string CandidateKeywords = "",
         string CandidateExcludeKeywords = "",
@@ -66,11 +66,16 @@ public static class ZnunyEndpoints
         bool IncludeResponsible = true,
         bool NotifyOnNewAssignedTickets = true,
         bool NotifyOnTicketChanges = true,
-        bool ShowAllCandidatePoolTickets = false
-    );
+        bool ShowAllCandidatePoolTickets = false)
+    {
+        // Reject legacy clients that attempt to set AgentId instead of quietly
+        // ignoring it. Unknown user-controlled properties are also rejected.
+        [JsonExtensionData]
+        public Dictionary<string,JsonElement>? UnexpectedProperties { get; init; }
+    }
 
     public sealed record PersonalView(
-        string Username, int AgentId, int CandidateUserId,
+        string Username, int? AgentId, int CandidateUserId,
         string CandidateKeywords, string CandidateExcludeKeywords,
         bool IncludeOwner, bool IncludeResponsible, bool NotifyOnNewAssignedTickets,
         bool NotifyOnTicketChanges, bool ShowAllCandidatePoolTickets,
@@ -131,10 +136,15 @@ public static class ZnunyEndpoints
             if (owner is null) return Results.Unauthorized();
             await using var db = await OpenAsync(config, ct);
             var settings = await LoadPersonalAsync(db, owner.Value, ct);
+            await using var approvedCmd = new NpgsqlCommand(
+                "SELECT agent_id FROM znuny_approved_agent_bindings WHERE user_id=@owner",db);
+            approvedCmd.Parameters.AddWithValue("owner",owner.Value);
+            var approved = await approvedCmd.ExecuteScalarAsync(ct);
+            int? agentId = approved is int number ? number : null;
             var hasPassword = vault.IsConfigured &&
                 (await vault.ListNamesAsync("user",owner.Value,ct)).Contains(PasswordKey);
             return Results.Ok(new PersonalView(
-                settings.Username, settings.AgentId, settings.CandidateUserId,
+                settings.Username, agentId, settings.CandidateUserId,
                 settings.CandidateKeywords, settings.CandidateExcludeKeywords,
                 settings.IncludeOwner, settings.IncludeResponsible,
                 settings.NotifyOnNewAssignedTickets, settings.NotifyOnTicketChanges,
@@ -153,14 +163,14 @@ public static class ZnunyEndpoints
                 return Results.BadRequest(new { error });
             await using var db = await OpenAsync(config, ct);
             await using var cmd = new NpgsqlCommand("""
-                INSERT INTO znuny_user_settings(user_id,username,agent_id,candidate_user_id,
+                INSERT INTO znuny_user_settings(user_id,username,candidate_user_id,
                     candidate_keywords,candidate_exclude_keywords,
                     include_owner,include_responsible,notify_new_assigned,
                     notify_ticket_changes,show_all_candidate_pool)
-                VALUES(@owner,@username,@agent,@candidate,@keywords,@excluded,@owner_role,
+                VALUES(@owner,@username,@candidate,@keywords,@excluded,@owner_role,
                     @responsible,@notify_new,@notify_changes,@show_all)
                 ON CONFLICT(user_id) DO UPDATE SET
-                    username=EXCLUDED.username, agent_id=EXCLUDED.agent_id,
+                    username=EXCLUDED.username,
                     candidate_user_id=EXCLUDED.candidate_user_id,
                     candidate_keywords=EXCLUDED.candidate_keywords,
                     candidate_exclude_keywords=EXCLUDED.candidate_exclude_keywords,
@@ -172,7 +182,6 @@ public static class ZnunyEndpoints
                 """, db);
             cmd.Parameters.AddWithValue("owner", owner.Value);
             cmd.Parameters.AddWithValue("username", input.Username.Trim());
-            cmd.Parameters.AddWithValue("agent", input.AgentId);
             cmd.Parameters.AddWithValue("candidate", input.CandidateUserId);
             cmd.Parameters.AddWithValue("keywords", input.CandidateKeywords.Trim());
             cmd.Parameters.AddWithValue("excluded", input.CandidateExcludeKeywords.Trim());
@@ -312,8 +321,10 @@ public static class ZnunyEndpoints
         if (string.IsNullOrWhiteSpace(s.Username) || s.Username.Length > 256 ||
             s.Username.Any(c=>char.IsControl(c)))
             return "Bitte einen gültigen Znuny-Benutzernamen angeben.";
-        if (s.AgentId < 0 || s.CandidateUserId < 1)
-            return "Ungültige Agenten-/Kandidaten-ID.";
+        if (s.UnexpectedProperties is { Count: > 0 })
+            return "Die Znuny-Agenten-ID kann nur durch die Administration geändert werden. Unbekannte Felder sind nicht erlaubt.";
+        if (s.CandidateUserId < 1)
+            return "Ungültige Kandidaten-ID.";
         if (s.CandidateKeywords is null || s.CandidateKeywords.Length > 2000 ||
             s.CandidateExcludeKeywords is null || s.CandidateExcludeKeywords.Length > 2000)
             return "Filter- oder Ausschlusswörter sind zu lang.";
@@ -335,7 +346,7 @@ public static class ZnunyEndpoints
         NpgsqlConnection db,Guid owner,CancellationToken ct)
     {
         await using var cmd = new NpgsqlCommand("""
-            SELECT username,agent_id,candidate_user_id,candidate_keywords,
+            SELECT username,candidate_user_id,candidate_keywords,
                 candidate_exclude_keywords,include_owner,include_responsible,
                 notify_new_assigned,notify_ticket_changes,show_all_candidate_pool
             FROM znuny_user_settings WHERE user_id=@owner
@@ -343,10 +354,10 @@ public static class ZnunyEndpoints
         cmd.Parameters.AddWithValue("owner",owner);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct) ? new PersonalSettings(
-            reader.GetString(0),reader.GetInt32(1),reader.GetInt32(2),
-            reader.GetString(3),reader.GetString(4),reader.GetBoolean(5),
-            reader.GetBoolean(6),reader.GetBoolean(7),reader.GetBoolean(8),
-            reader.GetBoolean(9)) : new PersonalSettings();
+            reader.GetString(0),reader.GetInt32(1),reader.GetString(2),
+            reader.GetString(3),reader.GetBoolean(4),reader.GetBoolean(5),
+            reader.GetBoolean(6),reader.GetBoolean(7),reader.GetBoolean(8))
+            : new PersonalSettings();
     }
 
     private static async Task<Guid?> OwnerAsync(HttpContext http,
