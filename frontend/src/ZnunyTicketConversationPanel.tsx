@@ -7,7 +7,7 @@ import {
 export function ZnunyTicketConversationPanel({ticketId,closed}:{
   ticketId:string;closed:boolean;
 }) {
-  const [opened,setOpened]=useState(false);
+  const [opened,setOpened]=useState(true);
   const [articles,setArticles]=useState<ZnunyArticle[]>([]);
   const [selectedId,setSelectedId]=useState('');
   const [busy,setBusy]=useState(false);
@@ -29,8 +29,9 @@ export function ZnunyTicketConversationPanel({ticketId,closed}:{
     }finally{setBusy(false);}
   }
   useEffect(()=>{
-    setArticles([]);setSelectedId('');setOpened(false);
+    setArticles([]);setSelectedId('');setOpened(true);
     setLoaded(false);setError('');setNotice('');setReplying(false);setReply('');
+    void reload();
   },[ticketId]);
   const selected=articles.find(a=>a.id===selectedId);
   async function submit(e:FormEvent){
