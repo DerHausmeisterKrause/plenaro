@@ -4,6 +4,7 @@ export type ManagedUser = {
   displayName: string;
   role: 'Admin' | 'User';
   disabled: boolean;
+  agentId: number | null;
 };
 
 async function csrf(): Promise<string> {
@@ -38,12 +39,16 @@ export async function listUsers(): Promise<ManagedUser[]> {
   return await r.json() as ManagedUser[];
 }
 
-export async function addUser(email: string, displayName: string, password: string, role: 'Admin' | 'User'): Promise<void> {
-  await request('/api/v1/admin/users/', 'POST', { email, displayName, password, role });
+export async function addUser(email: string, displayName: string, password: string,
+  role: 'Admin' | 'User', agentId: number | null): Promise<void> {
+  await request('/api/v1/admin/users/', 'POST',
+    { email, displayName, password, role, agentId });
 }
 
-export async function saveUser(id: string, displayName: string, role: 'Admin' | 'User', disabled: boolean): Promise<void> {
-  await request(`/api/v1/admin/users/${id}`, 'PUT', { displayName, role, disabled });
+export async function saveUser(id: string, displayName: string, role: 'Admin' | 'User',
+  disabled: boolean, agentId: number | null): Promise<void> {
+  await request(`/api/v1/admin/users/${id}`, 'PUT',
+    { displayName, role, disabled, agentId });
 }
 
 export async function resetUserPassword(id: string, password: string): Promise<void> {
