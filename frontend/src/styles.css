@@ -774,3 +774,101 @@ h1,h2,h3,p { margin-top: 0; }
   .plenaro-agenda-row { grid-template-columns: minmax(0, 1fr) auto; }
   .plenaro-agenda-time { grid-column: 1 / -1; }
 }
+
+
+/* Classic WPF TaskDetailPanel (Views/TaskDetailPanel.xaml) for Znuny cached tickets.
+   Same component is rendered in /today and /tickets. Theme-aware and responsive. */
+.classic-wpf-ticket-detail { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.classic-wpf-ticket-detail .content-card { border-radius:12px; padding:15px; min-width:0; }
+.classic-wpf-task-card { display:flex; flex-direction:column; gap:9px; }
+.classic-wpf-task-card h2 { font-size:24px; font-weight:800; margin:2px 0 4px; overflow-wrap:anywhere; }
+.classic-wpf-task-card > label,.classic-wpf-assignment label,.classic-wpf-segment-form label,
+.classic-wpf-timer-manual label,.classic-wpf-external-booking label {
+  display:block; font-size:12px; font-weight:700; color:var(--muted-strong); }
+.classic-wpf-ticket-meta { display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px; }
+.classic-wpf-ticket-meta > span { display:inline-flex;gap:4px;align-items:center;background:var(--surface-soft);
+  color:var(--muted-strong);font-size:11px;border:1px solid var(--border);
+  padding:4px 8px;border-radius:6px; }
+.classic-wpf-description { min-height:220px;max-height:390px;width:100%;resize:vertical;box-sizing:border-box;
+  color:var(--text);background:var(--surface-soft);border:1px solid var(--border);
+  padding:12px;font:inherit;font-size:13px;line-height:1.6; }
+.classic-wpf-help { margin:3px 0 6px; color:var(--muted);font-size:11px;line-height:1.5;
+  overflow-wrap:anywhere; }
+.classic-wpf-url-row { display:flex;gap:9px;align-items:center;flex-wrap:wrap; }
+.classic-wpf-url-row input { flex:1 1 180px;min-width:0; }
+.classic-wpf-ticket-detail input:not([type=checkbox]),
+.classic-wpf-ticket-detail select {
+  color:var(--text);background:var(--surface-soft);border:1px solid var(--border);
+  padding:8px 10px;min-width:0;border-radius:5px;font-size:12px;font:inherit; }
+.classic-wpf-ticket-detail input:focus,.classic-wpf-ticket-detail select:focus,
+.classic-wpf-description:focus { outline:2px solid var(--blue);outline-offset:1px; }
+.classic-wpf-ticket-detail input:disabled,.classic-wpf-ticket-detail select:disabled {
+  opacity:.7;cursor:not-allowed; }
+.classic-wpf-ticket-detail .button { font-size:12px;min-height:32px;padding:6px 12px; }
+.classic-wpf-actions { display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 2px; }
+.classic-wpf-actions > .button { flex:0 1 auto; min-width:94px;justify-content:center; }
+.classic-wpf-success { background:#059669;color:#fff;border-color:#059669; }
+.classic-wpf-assignment { display:grid;gap:7px;margin-top:6px; }
+.classic-wpf-assignment h3 { font-size:14px;margin:4px 0; }
+.classic-wpf-assignment-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+.classic-wpf-assignment-fields select {width:100%;margin-top:4px;}
+.classic-wpf-optional,.classic-wpf-wiki {background:var(--surface-soft);
+  border:1px solid var(--border);border-radius:8px;padding:10px;margin:7px 0; }
+.classic-wpf-optional summary,.classic-wpf-wiki summary { cursor:pointer;display:flex;align-items:center;
+  gap:7px;font-weight:700;font-size:13px; }
+.classic-wpf-optional-inner {padding:12px 0 0;display:grid;gap:8px;}
+.classic-wpf-optional-inner select {width:100%;}
+.classic-wpf-timer-card {display:grid;grid-template-columns:minmax(0,1.2fr) minmax(150px,1fr);
+  gap:14px;align-items:start; }
+.classic-wpf-timer-main { display:flex;flex-direction:column;min-width:0;gap:9px; }
+.classic-wpf-timer-time {display:flex;align-items:center;justify-content:center;gap:7px;
+  font-size:clamp(27px,3.2vw,38px);font-variant-numeric:tabular-nums;letter-spacing:-.02em;}
+.classic-wpf-timer-time svg {color:var(--muted);}
+.classic-wpf-unbooked {text-align:center;color:#eab308;font-size:12px;font-weight:800;margin:0 0 5px;}
+.classic-wpf-controls {display:flex;justify-content:center;gap:7px;}
+.classic-wpf-controls button {min-width:80px;justify-content:center;}
+.classic-wpf-preset-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;max-width:290px;margin:4px auto;width:100%; }
+.classic-wpf-preset-grid button { min-width:0; }
+.classic-wpf-timer-manual {display:grid;grid-template-columns:1fr;gap:6px;margin-top:9px;}
+.classic-wpf-timer-manual input {width:100%;}
+.classic-wpf-timer-manual button {justify-self:start;}
+.classic-wpf-external-booking {display:grid;gap:7px;margin-top:7px;
+  border-top:1px solid var(--border);padding-top:12px; }
+.classic-wpf-external-booking h4,.classic-wpf-booking-history h4 {margin:0 0 2px;font-size:14px;}
+.classic-wpf-external-booking select {width:100%;display:block;margin-top:5px;}
+.classic-wpf-external-booking >button {justify-self:stretch;}
+.classic-wpf-booking-history {background:var(--surface-soft);border:1px solid var(--border);
+  border-radius:8px;padding:12px;min-height:115px;display:grid;gap:9px;align-content:start;}
+.classic-wpf-segment-card h3 {font-size:14px;margin:0 0 10px;}
+.classic-wpf-segment-box {background:var(--surface-soft);border:1px solid var(--border);
+  padding:10px;border-radius:8px;margin-bottom:10px;display:grid;gap:7px; }
+.classic-wpf-segment-title {display:flex;justify-content:space-between;align-items:center;}
+.classic-wpf-segment-title strong {font-size:12px;}
+.classic-wpf-availability-heading {font-size:11px;}
+.classic-wpf-time-labels {display:flex;justify-content:space-between;gap:0;
+  font-size:9px;color:var(--muted-strong);font-variant-numeric:tabular-nums;}
+.classic-wpf-availability {height:12px;display:grid;grid-template-columns:repeat(48,minmax(0,1fr));gap:1px;}
+.classic-wpf-availability span {background:#475569;min-width:0;}
+.classic-wpf-availability span.occupied {background:#0d9488;}
+.classic-wpf-segment-form {display:grid;gap:7px;}
+.classic-wpf-segment-datetime {display:grid;grid-template-columns:minmax(0,1fr) 100px 100px;
+  gap:6px;align-items:end;}
+.classic-wpf-segment-datetime label {min-width:0;}
+.classic-wpf-segment-datetime input,.classic-wpf-segment-datetime select {
+  width:100%;height:34px;min-width:0;}
+.classic-wpf-segment-form >input {width:100%;min-width:0;}
+.classic-wpf-segment-form >button {justify-self:start;min-width:135px;}
+.classic-wpf-segment-list .classic-wpf-segment-box p {margin:3px 0;font-size:12px;}
+@media(max-width:1450px) {
+ .plenaro-today .classic-wpf-timer-card {grid-template-columns:minmax(0,1fr);}
+ .plenaro-today .classic-wpf-segment-datetime {grid-template-columns:minmax(0,1fr) 85px 85px;}
+}
+@media(max-width:650px) {
+ .classic-wpf-ticket-detail .content-card {padding:12px;}
+ .classic-wpf-timer-card {grid-template-columns:minmax(0,1fr);}
+ .classic-wpf-assignment-fields {grid-template-columns:minmax(0,1fr);}
+ .classic-wpf-segment-datetime {grid-template-columns:minmax(0,1fr) 76px 76px;}
+ .classic-wpf-time-labels {font-size:8px;}
+ .classic-wpf-url-row input {flex-basis:100%;}
+}
