@@ -20,7 +20,8 @@ public sealed class ZnunyCentralSync(
 
     public sealed record Status(bool Enabled,string ServiceUsername,bool PasswordConfigured,
         string? SourceApiUrl,int InitialLookbackDays,int DeltaIntervalMinutes,
-        int OpenIntervalMinutes,int MaxRequestsPerCycle,DateTimeOffset? BootstrapCursor,
+        int OpenIntervalMinutes,int MaxRequestsPerCycle,int CandidateDefaultAgentId,
+        DateTimeOffset? BootstrapCursor,
         DateTimeOffset? BootstrapEnd,DateTimeOffset? BootstrapFinishedAt,
         DateTimeOffset? DeltaWatermark,DateTimeOffset? LastDeltaAt,
         DateTimeOffset? LastOpenAt,DateTimeOffset? OpenCursor,
@@ -295,7 +296,8 @@ public sealed class ZnunyCentralSync(
                 c.max_requests_per_cycle,c.bootstrap_cursor,c.bootstrap_end,
                 c.bootstrap_finished_at,c.delta_watermark,c.last_delta_at,
                 c.last_open_at,c.open_cursor,c.last_attempt_at,c.last_error,
-                (SELECT count(*) FROM znuny_cached_tickets)
+                (SELECT count(*) FROM znuny_cached_tickets),
+                c.candidate_default_agent_id
             FROM znuny_sync_control c WHERE id=true
             """,db);
         await using var r=await cmd.ExecuteReaderAsync(ct);
@@ -313,11 +315,12 @@ public sealed class ZnunyCentralSync(
         var attempt=Date(14);
         var error=r.IsDBNull(15)?null:r.GetString(15);
         var total=r.GetInt64(16);
+        var candidateId=r.GetInt32(17);
         // Can't query vault while database reader is open? Vault opens its own connection.
         var hasPassword=vault.IsConfigured &&
             (await vault.ListNamesAsync("global",null,ct)).Contains(ServiceSecret);
         return new(enabled,username,hasPassword,source,lookback,delta,open,budget,
-            cursor,end,done,mark,last,opened,openCursor,attempt,error,total);
+            candidateId,cursor,end,done,mark,last,opened,openCursor,attempt,error,total);
     }
 
     private async Task<ConfigRow> LoadAsync(NpgsqlConnection db,CancellationToken ct)
