@@ -257,3 +257,16 @@ Siehe [Classic UI](CLASSIC_UI.md).
   mit sicheren Standardfiltern für Owner/Responsible lesbar machen.
 - [ ] Live-Abnahme von SSO-Provisionierung und tatsächlichem Znuny-System
   unabhängig von den geprüften lokalen Admin-/API-Flows.
+
+## Classic-Heute-Reiter nach Znuny/OTRS-Workflow (PR #35)
+
+- [x] **Heute**: ausschließlich persönliche Outlook-Termine des lokalen Tages sowie lokal geplante Znuny-Ticketsegmente, chronologisch sortiert; keine unsegmentierten lokalen Aufgaben
+- [x] **Aktuelle Aufgaben**: offene Tickets, bei denen die administrativ freigegebene Agenten-ID Owner **oder** Responsible ist, unabhängig von heute
+- [x] **Neue Aufgaben**: offene Tickets ohne echten Owner/Responsible oder mit dem administrativ konfigurierten Standard-OTRS-Agenten (standardmäßig ID 1); keine irreführende Suche nur nach Znuny-State `new`
+- [x] **Erledigte Aufgaben**: geschlossene Tickets (Znuny `state_type=closed`) mit eigener Owner-/Responsible-Zuordnung
+- [x] Persönliche Znuny-Ticket-Zeitsegmente lokal anlegen, anzeigen und entfernen; Datenbank mit Besitzerrechten; Tagesagenda per Europe/Berlin-Zeitfenster
+- [x] Identische offene/neu/erledigte Filter im separaten Ticketsystem; keine externen Ticketänderungen ohne implementierte Znuny-Schreibaktionen
+- [x] Serverprüfungen für CSRF, Agentenbindung, fremde Tickets, geschlossene Tickets, lokale Segmente und Ticket-Pool-Trennung
+- [ ] Gegen echten Znuny-Server prüfen: Default-/Root-Agenten-ID, Status-Typen, tatsächliche Ticketdaten und neue Kandidaten
+- [ ] Bereits im WPF gespeicherte Znuny-Ticket-Segmente ggf. gesondert importieren/migrieren
+- [ ] Remote-Ticketaktionen, Nachrichten/Artikel, Dynamic Fields und Zeitbuchungen umsetzen
