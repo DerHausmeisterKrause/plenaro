@@ -106,3 +106,32 @@ export const stopTicketTime=async(ticketId:string)=>
 export const adjustTicketTime=async(ticketId:string,deltaMinutes:number,note='')=>
   await (await mutate(workspaceBase(ticketId)+'/time/adjust','POST',
     {deltaMinutes,note})).json() as TicketTimeSummary;
+
+export type ZnunyArticle = {
+  id:string;subject:string;body:string;from:string;to:string;replyTo:string;
+  senderType:string;channel:string;created:string;
+};
+export type ZnunyConversation = {
+  ticketId:string;ticketNumber:string;title:string;articles:ZnunyArticle[];
+};
+export type ZnunyAgent = { id:number;name:string };
+export type ZnunyUpdateConfirmation = { confirmed:boolean;cacheUpdated?:boolean };
+export const readZnunyArticles=(ticketId:string)=>
+  request<ZnunyConversation>(workspaceBase(ticketId)+'/articles');
+export const readZnunyAgents=()=>
+  request<ZnunyAgent[]>('/api/v1/znuny/agents');
+export const updateZnunyAssignment=async(ticketId:string,ownerId:number|null,
+  responsibleId:number|null)=>{
+  const result=await mutate(workspaceBase(ticketId)+'/assignment','PUT',{
+    ownerId,responsibleId
+  });
+  return await result.json() as ZnunyUpdateConfirmation;
+};
+export const assignZnunyToMe=async(ticketId:string)=>{
+  const result=await mutate(workspaceBase(ticketId)+'/assign-to-me','POST');
+  return await result.json() as ZnunyUpdateConfirmation;
+};
+export const sendZnunyReply=async(ticketId:string,body:string)=>{
+  const result=await mutate(workspaceBase(ticketId)+'/reply','POST',{body});
+  return await result.json() as ZnunyUpdateConfirmation;
+};
