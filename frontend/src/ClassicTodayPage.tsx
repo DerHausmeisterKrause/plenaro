@@ -98,7 +98,9 @@ export function ClassicTodayPage() {
 
   const agenda = buildTodayAgenda(day, todayTasksList, segments, outlookEvents);
   const chosen = tasks.find(t => t.id === selected) ?? todayTasksList.find(t => t.id === selected);
-  const rows = tab === 'active' ? tasks.filter(t => t.status === 'active' || t.status === 'planned') :
+  const todayIds = new Set(todayTasksList.map(task => task.id));
+  const rows = tab === 'active' ? tasks.filter(t =>
+    (t.status === 'active' || t.status === 'planned') && !todayIds.has(t.id)) :
     tab === 'completed' ? tasks.filter(t => t.status === 'completed') : [];
   const selectedAppointment = tab === 'today'
     ? agenda.find(item => item.kind === 'outlook' && item.key === selectedAgendaKey)
