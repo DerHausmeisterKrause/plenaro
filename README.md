@@ -366,3 +366,12 @@ gespeicherten Login-Passwörter, Verschlüsselungs-Keys oder API-Token importier
 Archivdaten sind **kein Ersatz für die noch fehlende Znuny-Anbindung** oder die
 vollständige Funktionsparität der Desktop-Version. Vor jedem Import ein Backup
 von PostgreSQL erstellen.
+
+**Python unter Windows:** `zoneinfo` benötigt eine Zeitzonendatenbank. Wenn
+der Konverter meldet, dass `Europe/Berlin` nicht verfügbar ist, einmalig
+`py -m pip install tzdata` ausführen. Der Konverter zeigt bei fehlenden Daten
+eine verständliche Fehlermeldung und korrigiert keine Zeitpunkte auf Verdacht.
+
+Der Exporter erzwingt passend zu den Web-API-Grenzen maximal 2.000 Aufgaben
+und je 4.000 Einträge der zentralen Zeit-/Archivtabellen pro Export. Größere
+Bestände benötigen einen separaten, transaktionssicheren Bulk-Import.
