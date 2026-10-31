@@ -140,3 +140,8 @@ export const sendZnunyReply=async(ticketId:string,body:string)=>{
   const result=await mutate(workspaceBase(ticketId)+'/reply','POST',{body});
   return await result.json() as ZnunyUpdateConfirmation;
 };
+
+export const changeZnunyTicketState=async(ticketId:string,close:boolean)=>{
+  const response=await mutate(workspaceBase(ticketId)+'/state','PUT',{close});
+  return await response.json() as ZnunyUpdateConfirmation;
+};
