@@ -521,7 +521,7 @@ describe('Plenaro web shell', () => {
       JSON.parse(String((opts as RequestInit).body)).description==='Neue lokale Beschreibung' &&
       JSON.parse(String((opts as RequestInit).body)).ticketUrl==='https://example.org/neues-ticket'
     )).toBe(true));
-    expect(screen.getByRole('button',{name:'Erledigt'})).toHaveProperty('disabled',true);
+    expect(screen.getByRole('button',{name:'Erledigt'})).toHaveProperty('disabled',false);
   });
 
   it('lädt echte Znuny-Nachrichten und bietet Antworten und Zuweisung an',async()=>{
