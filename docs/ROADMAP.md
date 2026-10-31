@@ -270,3 +270,30 @@ Siehe [Classic UI](CLASSIC_UI.md).
 - [ ] Gegen echten Znuny-Server prüfen: Default-/Root-Agenten-ID, Status-Typen, tatsächliche Ticketdaten und neue Kandidaten
 - [ ] Bereits im WPF gespeicherte Znuny-Ticket-Segmente ggf. gesondert importieren/migrieren
 - [ ] Remote-Ticketaktionen, Nachrichten/Artikel, Dynamic Fields und Zeitbuchungen umsetzen
+
+## WPF-Taskdetail in Heute / Aktuelle Aufgaben / Ticketsystem (PR #36)
+
+- [x] Gemeinsam genutzter, responsiver Ticketdetailbereich nach
+  `project_tool/Views/TaskDetailPanel.xaml`: Titel, Beschreibung,
+  Ticket-URL, Status, Owner/Responsible, Timer/Buchung, Planung (Segmente)
+- [x] Persönliche lokale Ticketbeschreibung und eigene Ticket-URL
+  in PostgreSQL gespeichert; je Benutzer und Ticket autorisiert, CSRF und URL-Prüfung
+- [x] Serverseitig persistenter Ticket-Timer (Start/Stop auch beim
+  Schließen des Browsers) und manuelle Minutenkorrekturen (+15/+30/+1h und −)
+  mit eindeutigem aktivem Ticket-Timer pro Benutzer
+- [x] Segment-Editor nach Desktop-Schema: Datum, Beginn, Ende,
+  Kurzbeschreibung, Teilnehmer, visuelle lokale Zeitübersicht, bestehende
+  Segmente bearbeiten und löschen (lokale Daten, ohne Outlook-Einladungen)
+- [x] Identische Ansicht in Heute, Aktuelle Aufgaben, Neue Aufgaben und
+  im zentralen Ticketsystem; geschlossene Tickets behalten bearbeitbare
+  lokale Notizen und Zeitdaten
+- [x] WPF-Bereiche für Nachrichten, Zuweisungen, Wiki-Treffer und
+  Znuny-Zeitbuchungen im Layout gekennzeichnet, aber ohne falsche
+  Remote-Schreibaktionen: externe Funktionen bis zur sicheren Integration deaktiviert
+- [ ] Artikelabruf, Ticketantwort, Übernahme/Zuweisung, Remote-Schließen,
+  Dynamic Fields/Kostenstelle/Auftrag und Remote-Zeitbuchung
+- [ ] Wiki-Verbindungen und echte automatische Wiki-Treffer pro Ticket
+- [ ] Echte systemweite Graph-Kalender-/Teilnehmerverfügbarkeit und
+  Termineinladungen für Segmente (Anzeige derzeit nur für dieses Ticket)
+- [ ] Real-Znuny-Live-Abnahme der Detailfelder, WPF-Feldparität und
+  Legacy-Import bisheriger Ticketzeitdaten
