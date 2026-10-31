@@ -241,8 +241,6 @@ public static class ZnunyTicketRemoteEndpoints
         var user=await users.GetUserAsync(http.User);
         ContextResult Fail(IResult result)=>new(result,null,null,false,null,null,null);
         if(user is null||user.IsDisabled)return Fail(Results.Unauthorized());
-        if(!vault.IsConfigured)return Fail(Results.Problem(
-            "Secret-Vault ist nicht konfiguriert.",statusCode:503));
         if(ticketId is {Length:>80} || ticketId is not null &&
             (ticketId.Length==0||!ticketId.All(char.IsAsciiDigit)))
             return Fail(Results.BadRequest(new{error="Ungültige Ticket-ID."}));
@@ -290,6 +288,10 @@ public static class ZnunyTicketRemoteEndpoints
             if(await closed.ExecuteScalarAsync(ct) is true)
                 return Fail(Results.Conflict(new{error="Geschlossenes Ticket kann nicht bearbeitet werden."}));
         }
+        // First deny access to foreign tickets, even if the integration is
+        // disabled. Never reveal configuration state to unauthorized users.
+        if(!vault.IsConfigured)return Fail(Results.Problem(
+            "Secret-Vault ist nicht konfiguriert.",statusCode:503));
         var server=await ZnunyEndpoints.LoadServerAsync(db,ct);
         if(ZnunyEndpoints.ValidateServer(server) is not null||
             new Uri(server.ApiUrl).Host.Equals("SERVER",StringComparison.OrdinalIgnoreCase))
