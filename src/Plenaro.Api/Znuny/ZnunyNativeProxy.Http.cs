@@ -147,7 +147,7 @@ public sealed partial class ZnunyNativeProxy
     // bodies must not be mistaken for successful agent pages.
     private static bool LooksLikeHtmlDocument(string text)
     {
-        var prefix=text.AsSpan().TrimStart(" \\t\\r\\n\\ufeff".AsSpan());
+        var prefix=text.AsSpan().TrimStart(" \t\r\n\uFEFF".AsSpan());
         if(prefix.IsEmpty||prefix[0]!='<')return false;
         var sample=prefix[..Math.Min(prefix.Length,8192)].ToString();
         return Regex.IsMatch(sample,
@@ -178,7 +178,7 @@ public sealed partial class ZnunyNativeProxy
         var html=await reader.ReadToEndAsync(ct);
         if(LooksLikeHtmlDocument(html))return html;
         if(!required)return null;
-        var trimmed=html.AsSpan().TrimStart(" \\t\\r\\n\\ufeff".AsSpan());
+        var trimmed=html.AsSpan().TrimStart(" \t\r\n\uFEFF".AsSpan());
         if(trimmed.StartsWith("{",StringComparison.Ordinal)||
             trimmed.StartsWith("[",StringComparison.Ordinal)||
             content.Headers.ContentType?.MediaType is
