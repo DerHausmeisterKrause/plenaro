@@ -102,7 +102,7 @@ public static class FavoritesEndpoints
             await using(var cmd=new NpgsqlCommand("""
                 UPDATE user_favorites SET app_id=@app,name=@name,path=@path,
                     username=@username,auto_login=@auto,enabled=@enabled,
-                    sort_order=@ord WHERE id=@id AND user_id=@user
+                    sort_order=@ord WHERE id=@id AND user_id=@user AND app_id=@app
                 """,db)){
                 BindFavorite(cmd,id,user.Id,input);
                 if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();
@@ -355,7 +355,7 @@ public static class FavoritesEndpoints
         cmd.Parameters.AddWithValue("id",id);
         cmd.Parameters.AddWithValue("name",value.Name.Trim());
         cmd.Parameters.AddWithValue("slug",value.Slug);
-        cmd.Parameters.AddWithValue("url",value.UpstreamUrl);
+        cmd.Parameters.AddWithValue("url",new Uri(value.UpstreamUrl).AbsoluteUri);
         cmd.Parameters.AddWithValue("enabled",value.Enabled);
         cmd.Parameters.AddWithValue("all",value.AvailableToAll);
     }
