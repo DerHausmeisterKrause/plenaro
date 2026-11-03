@@ -225,6 +225,12 @@ public sealed partial class FavoriteProxy
             if(ctx.Request.Headers.TryGetValue(header,out var values))
                 req.Headers.TryAddWithoutValidation(header,values.ToArray());
         }
+        if(ctx.Request.Headers.TryGetValue("Origin",out var browserOrigin)&&
+            browserOrigin.ToString().Equals(
+                external.GetLeftPart(UriPartial.Authority),
+                StringComparison.OrdinalIgnoreCase))
+            req.Headers.TryAddWithoutValidation("Origin",
+                session.Upstream.GetLeftPart(UriPartial.Authority));
         if(ctx.Request.Headers.TryGetValue("Referer",out var refValue)&&
            Uri.TryCreate(refValue.ToString(),UriKind.Absolute,out var from)&&
            SameUpstream(external,from)){
