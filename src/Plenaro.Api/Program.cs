@@ -81,6 +81,7 @@ builder.Services.AddHttpClient("Plenaro.Znuny", client =>
 builder.Services.AddScoped<ZnunyConnectionTester>();
 builder.Services.AddSingleton<ZnunyReader>();
 builder.Services.AddSingleton<ZnunyNativeProxy>();
+builder.Services.AddSingleton<FavoriteProxy>();
 builder.Services.AddSingleton<ZnunyCentralSync>();
 builder.Services.AddHostedService(services => services.GetRequiredService<ZnunyCentralSync>());
 builder.Services.AddDbContext<PlenaroIdentityDbContext>(options => options.UseNpgsql(connectionString));
@@ -422,6 +423,11 @@ app.Use(async (http,next)=>{
         await proxy.ServeAsync(http,http.RequestAborted);
         return;
     }
+    var favorites=http.RequestServices.GetRequiredService<FavoriteProxy>();
+    if(favorites.IsFavoriteHost(http)){
+        await favorites.ServeAsync(http,http.RequestAborted);
+        return;
+    }
     // Reserve unassigned wildcard aliases before static files, APIs and
     // Plenaro authentication. Znuny's isolated proxy is handled above.
     var cfg=http.RequestServices.GetRequiredService<IConfiguration>();
@@ -489,6 +495,7 @@ app.MapPlenaroReports();
 app.MapPlenaroReminders();
 app.MapPlenaroClassicImport();
 app.MapPlenaroZnuny();
+app.MapPlenaroFavorites();
 ZnunyNativeProxy.Map(app);
 app.MapPlenaroZnunyCentral();
 app.MapPlenaroDayMarkers();
