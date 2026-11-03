@@ -41,10 +41,6 @@ var setupToken = args.Contains("--setup-token", StringComparer.Ordinal);
 var builder = WebApplication.CreateBuilder(
     args.Where(a => a != "--bootstrap-admin" && a != "--setup-token").ToArray());
     
-// WebDriver session IDs appear in Selenium REST paths. Do not emit them into
-// ordinary ASP.NET HttpClient diagnostic logs or flood Docker logs on every frame.
-builder.Logging.AddFilter("System.Net.Http.HttpClient.Plenaro.WebDriver",
-    LogLevel.Warning);
 // Protect one-time iframe bootstrap query tokens from ordinary request logs.
 builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics",
     LogLevel.Warning);
@@ -83,11 +79,6 @@ builder.Services.AddHttpClient("Plenaro.Znuny", client =>
 }).ConfigurePrimaryHttpMessageHandler(ZnunyConnectionTester.SecureHandler);
 builder.Services.AddScoped<ZnunyConnectionTester>();
 builder.Services.AddSingleton<ZnunyReader>();
-builder.Services.AddHttpClient("Plenaro.WebDriver",http=>{
-    http.BaseAddress=new Uri("http://znuny-browser:4444/");
-    http.Timeout=TimeSpan.FromSeconds(45);
-});
-builder.Services.AddSingleton<ZnunyRemoteBrowser>();
 builder.Services.AddSingleton<ZnunyNativeProxy>();
 builder.Services.AddSingleton<ZnunyCentralSync>();
 builder.Services.AddHostedService(services => services.GetRequiredService<ZnunyCentralSync>());
@@ -351,25 +342,13 @@ builder.Services.AddRateLimiter(options =>
             PermitLimit=240,Window=TimeSpan.FromMinutes(5),QueueLimit=0,
             AutoReplenishment=true
         }));
-    options.AddPolicy("znuny-browser", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ??
-            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _=>new FixedWindowRateLimiterOptions{
-            PermitLimit=1800,Window=TimeSpan.FromMinutes(5),QueueLimit=0,
-            AutoReplenishment=true
-        }));
-    options.AddPolicy("znuny-browser-start", context => RateLimitPartition.GetFixedWindowLimiter(
+    // A new upstream login may be expensive. Limit session/bootstrap creation,
+    // not normal HTML/CSS/API requests of the authenticated native view.
+    options.AddPolicy("znuny-native-start", context => RateLimitPartition.GetFixedWindowLimiter(
         context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ??
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _=>new FixedWindowRateLimiterOptions{
             PermitLimit=10,Window=TimeSpan.FromMinutes(5),QueueLimit=0,
-            AutoReplenishment=true
-        }));
-    options.AddPolicy("znuny-browser-frame", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ??
-            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        _=>new FixedWindowRateLimiterOptions{
-            PermitLimit=900,Window=TimeSpan.FromMinutes(5),QueueLimit=0,
             AutoReplenishment=true
         }));
     options.AddPolicy("znuny-ticket-read", context => RateLimitPartition.GetFixedWindowLimiter(
@@ -496,7 +475,6 @@ app.MapPlenaroReports();
 app.MapPlenaroReminders();
 app.MapPlenaroClassicImport();
 app.MapPlenaroZnuny();
-ZnunyRemoteBrowser.Map(app);
 ZnunyNativeProxy.Map(app);
 app.MapPlenaroZnunyCentral();
 app.MapPlenaroDayMarkers();
