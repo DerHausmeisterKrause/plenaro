@@ -606,7 +606,7 @@ PostgreSQL-Datenbank und der Vault bleiben unverändert.
 - [x] NGINX-Wildcard-Hostname, DNS und TLS dokumentiert
 - [x] Contract-Tests für unbekannte Hosts, bekannte Origins und Localhost ergänzt
 - [x] CI der neuen Wildcard-Host-Sperre erfolgreich ([PR #10](https://github.com/DerHausmeisterKrause/plenaro/pull/10), [CI #41639354920](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41639354920))
-- [ ] Admin-Freigabe für Apps, persönliche Favoriten, eigene App-Cookie-Jars und Vault-Auto-Login ergänzen
+- [x] Admin-Freigabe für Apps, persönliche Favoriten, eigene App-Cookie-Jars und Vault-Auto-Login in PR #12 ergänzt
 - [ ] Mit realer Wiki-/Favoriten-Anwendung Browserkompatibilität, Mehrbenutzerbetrieb und Sicherheitsgrenzen prüfen
 
 Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt **keinen** frei konfigurierbaren Universalproxy bereit.
@@ -620,7 +620,7 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [x] Getrennter HTTPS-HTML-Proxy pro App-Subdomain mit eigener Benutzer-Session, Browser-CSP, Server-Cookies, Bootstrap-Token und Logout-Widerruf
 - [x] Browser-Origin/CSRF, HTTPS/DNS/Peer-Prüfung und laufende Benutzer-/App-Berechtigungsprüfung; keine dynamische Freigabe beliebiger URLs
 - [x] Bestehender Znuny-Proxy fachlich unverändert; nur Register-/Logout-Middleware ergänzt
-- [ ] Vollständige CI-Abnahme für PR #12
+- [x] GitHub-CI: Backend, Frontend, Favoriten-/Znuny-Vertragstests und Docker-Favoriten-Smoke erfolgreich ([PR #12](https://github.com/DerHausmeisterKrause/plenaro/pull/12), [CI #41650719103](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41650719103))
 - [ ] Browser-Abnahme mit echtem Wiki: Login, AJAX, CSS/JS, Downloads und zwei parallele Benutzer
 - [ ] App-Sonderfälle (SSO/2FA, WebSockets, CSP und Service Worker) nur bei Bedarf implementieren
 - [ ] Legacy-Favoriten (inklusive nur sicherer Konfiguration) kontrolliert migrieren
