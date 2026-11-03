@@ -33,13 +33,14 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
     private sealed record Pending(string SessionId,string Redirect,DateTimeOffset Expires);
 
     private sealed class ProxySession(Guid user,Uri upstream,Uri entry,
-        string signature,HttpClient client)
+        string signature,HttpClient client,LoginState loginState)
     {
         public Guid User {get;}=user;
         public Uri Upstream {get;}=upstream;
         public Uri Entry {get;}=entry;
         public string Signature {get;}=signature;
         public HttpClient Client {get;}=client;
+        public LoginState InitialLogin {get;}=loginState;
         public DateTimeOffset Created {get;}=DateTimeOffset.UtcNow;
         private long _lastUsed=DateTime.UtcNow.Ticks;
         private long _approvedAt=0;
@@ -56,10 +57,14 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
         public void Dispose()=>Client.Dispose();
     }
 
-    private sealed class ProxyFailure(string reason):Exception(reason)
+    private sealed class ProxyFailure(string reason,string code="native-error")
+        :Exception(reason)
     {
         public string Reason=>Message;
+        public string Code=>code;
     }
+
+    private sealed record NativeStartResult(string Url,bool RequiresInteractiveLogin);
 
     public static void Map(WebApplication app)
     {
@@ -76,7 +81,8 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
         group.MapPost("/start",async(
             StartRequest input,HttpContext ctx,IAntiforgery anti,
             UserManager<ApplicationUser> users,SecretVault vault,
-            ZnunyNativeProxy proxy,CancellationToken ct)=>{
+            ZnunyNativeProxy proxy,ILogger<ZnunyNativeProxy> logger,
+            CancellationToken ct)=>{
             try{await anti.ValidateRequestAsync(ctx);}
             catch(AntiforgeryValidationException){return Results.BadRequest(
                 new{error="Ungültiger Sicherheitstoken."});}
@@ -99,9 +105,22 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
             try{
                 var result=await proxy.StartAsync(user.Id,input,vault,external,ct);
                 ctx.Response.Headers.CacheControl="no-store";
-                return Results.Ok(new{url=result});
+                return Results.Ok(new{
+                    url=result.Url,
+                    requiresInteractiveLogin=result.RequiresInteractiveLogin
+                });
             }catch(ProxyFailure e){
-                return Results.Json(new{error=e.Reason},statusCode:503);
+                return Results.Json(new{error=e.Reason,code=e.Code},statusCode:503);
+            }catch(Exception e) when(!ct.IsCancellationRequested){
+                // Never serialize the original exception: HTTP/DB exceptions
+                // can contain internal hosts, queries or configuration.
+                logger.LogWarning(
+                    "Native ticket startup failed ({ExceptionType}); details suppressed",
+                    e.GetType().Name);
+                return Results.Json(new{
+                    error="Interner Fehler beim Aufbau der Ticketsystem-Sitzung.",
+                    code="server-error"
+                },statusCode:503);
             }
         }).RequireRateLimiting("znuny-native-start");
     }
@@ -249,7 +268,7 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
         Convert.ToHexString(HMACSHA256.HashData(SignatureKey,
             Encoding.UTF8.GetBytes(username+"\0"+password+"\0"+url.AbsoluteUri)));
 
-    private async Task<string> StartAsync(Guid user,StartRequest input,
+    private async Task<NativeStartResult> StartAsync(Guid user,StartRequest input,
         SecretVault vault,Uri external,CancellationToken ct)
     {
         string username;
@@ -332,16 +351,49 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
                     "Zu viele gleichzeitige Ticketsystem-Sitzungen.");
                 var origin=new Uri(entry.GetLeftPart(UriPartial.Authority));
                 var client=CreateSessionClient();
+                LoginState loginState;
                 try{
-                    await LoginAsync(client,entry,origin,username,password,ct);
-                }catch(Exception e) when(e is HttpRequestException or
-                    TaskCanceledException or InvalidOperationException or
-                    ArgumentException){
+                    loginState=await LoginAsync(
+                        client,entry,origin,username,password,ct);
+                }catch(NativeLoginException e){
                     client.Dispose();
-                    throw new ProxyFailure("Native Anmeldung am Ticketsystem fehlgeschlagen. "+
-                        "Bitte Zugangsdaten, TLS-Zertifikat und Webadresse prüfen.");
+                    var message=e.Code switch{
+                        "page-not-html"=>
+                            "Die Ticketsystem-Webadresse liefert keine HTML-Anmeldeseite. "+
+                            "Bitte in den Einstellungen die Agenten-Webadresse prüfen.",
+                        "unsafe-redirect" or "unsafe-form-target"=>
+                            "Das Ticketsystem leitet bei der Anmeldung auf eine andere "+
+                            "Webadresse um. Dies wird aus Sicherheitsgründen blockiert.",
+                        "redirect-loop"=>
+                            "Das Ticketsystem leitet die Anmeldung zu oft weiter.",
+                        "unsupported-login-method"=>
+                            "Das Ticketsystem verwendet ein nicht unterstütztes Loginformular.",
+                        _=>"Die Ticketsystem-Anmeldeseite hat die Anfrage abgewiesen."
+                    };
+                    throw new ProxyFailure(message,e.Code);
+                }catch(HttpRequestException e){
+                    client.Dispose();
+                    var tls=e.HttpRequestError.ToString()=="SecureConnectionError";
+                    throw new ProxyFailure(tls?
+                        "Die HTTPS-Zertifikatsprüfung zum Ticketsystem ist fehlgeschlagen. "+
+                        "Bitte die interne Root-CA im Plenaro-Server prüfen.":
+                        "Der Plenaro-Server kann die Ticketsystem-Webadresse nicht "+
+                        "erreichen. Bitte DNS, Netzwerk und HTTPS-Verbindung prüfen.",
+                        tls?"upstream-tls":"upstream-network");
+                }catch(OperationCanceledException) when(!ct.IsCancellationRequested){
+                    client.Dispose();
+                    throw new ProxyFailure(
+                        "Der Ticketsystem-Server antwortet beim Anmelden nicht rechtzeitig.",
+                        "upstream-timeout");
+                }catch(Exception e) when(e is InvalidOperationException or
+                    ArgumentException or IOException){
+                    client.Dispose();
+                    throw new ProxyFailure(
+                        "Das Loginformular oder die Antwort des Ticketsystems konnte "+
+                        "nicht verarbeitet werden.","login-protocol");
                 }
-                session=new ProxySession(user,origin,entry,signature,client);
+                session=new ProxySession(
+                    user,origin,entry,signature,client,loginState);
                 existingKey=NewToken();
                 _sessions[existingKey]=session;
                 _users[user]=existingKey;
@@ -353,8 +405,10 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
             var token=NewToken();
             _pending[token]=new Pending(existingKey!,path,
                 DateTimeOffset.UtcNow+BootstrapTtl);
-            return external.GetLeftPart(UriPartial.Authority)+BootstrapPath+
-                "?token="+Uri.EscapeDataString(token);
+            return new NativeStartResult(
+                external.GetLeftPart(UriPartial.Authority)+BootstrapPath+
+                "?token="+Uri.EscapeDataString(token),
+                session.InitialLogin==LoginState.Interactive);
         }finally{gate.Release();}
     }
 

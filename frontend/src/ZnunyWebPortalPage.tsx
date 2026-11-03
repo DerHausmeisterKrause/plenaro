@@ -18,6 +18,7 @@ export function ZnunyWebPortalPage(){
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(true);
   const [revision,setRevision]=useState(0);
+  const [interactive,setInteractive]=useState(false);
 
   // Check configuration before attempting login. Without a separate HTTPS
   // origin fail closed: never run legacy HTML with Plenaro's own privileges.
@@ -44,7 +45,7 @@ export function ZnunyWebPortalPage(){
   useEffect(()=>{
     if(!status?.enabled)return;
     let active=true;
-    setLoading(true);setUrl('');setError('');
+    setLoading(true);setUrl('');setError('');setInteractive(false);
     void(async()=>{
       try{
         if(!validTicket)throw new Error('Ungültige Ticket-ID.');
@@ -57,13 +58,13 @@ export function ZnunyWebPortalPage(){
           headers:{'X-CSRF-TOKEN':token.token,'Content-Type':'application/json'},
           body:JSON.stringify({ticketId:ticket,reset:revision>0})
         });
-        const body=await response.json().catch(()=>({})) as {url?:string,error?:string};
+        const body=await response.json().catch(()=>({})) as {url?:string;error?:string;code?:string;requiresInteractiveLogin?:boolean};
         if(!response.ok||!body.url)
-          throw new Error(body.error||'Native Ticketsystem-Anmeldung fehlgeschlagen.');
+          throw new Error((body.error||'Verbindungsaufbau fehlgeschlagen.')+' (HTTP '+response.status+(body.code?' / '+body.code:'')+')');
         const external=new URL(body.url);
         if(external.protocol!=='https:'||external.origin===window.location.origin)
           throw new Error('Ungültige Ticketsystem-Proxy-Adresse.');
-        if(active)setUrl(external.toString());
+        if(active){setInteractive(body.requiresInteractiveLogin===true);setUrl(external.toString());}
       }catch(e){
         if(active){
           setError(e instanceof Error?e.message:'Native Ticketsystem-Ansicht nicht erreichbar.');
@@ -119,6 +120,11 @@ export function ZnunyWebPortalPage(){
       <Link className="button button-secondary" to="/settings">
         Ticketsystem-Einstellungen
       </Link>
+    </div>}
+    {configured&&interactive&&!error&&<div className="content-card znuny-native-login-hint"
+      role="status">
+      Die automatische Anmeldung konnte nicht bestätigt werden.
+      Du kannst dich im eingebetteten Ticketsystem direkt anmelden.
     </div>}
     {configured&&!error&&validTicket&&<div
       className="znuny-portal-frame-wrap znuny-native-frame-wrap">

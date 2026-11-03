@@ -28,6 +28,8 @@ let personalReplyTemplateFixture='';
 let customerArticlesFixture:ZnunyArticle[]|null=null;
 let nativeZnunyReady=false;
 let nativeProxyEnabled=false;
+let nativeInteractiveLogin=false;
+let nativeInvalidResponse=false;
 
 let workspaceFixture: TicketWorkspace = {description:'Das ist ein lokaler Test',ticketUrl:'https://example.org/ticket/77'};
 
@@ -49,6 +51,8 @@ beforeEach(() => {
   customerArticlesFixture=null;
   nativeZnunyReady=false;
   nativeProxyEnabled=false;
+  nativeInteractiveLogin=false;
+  nativeInvalidResponse=false;
 
   workspaceFixture = {description:'Das ist ein lokaler Test',ticketUrl:'https://example.org/ticket/77'};
   vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => {
@@ -150,9 +154,12 @@ beforeEach(() => {
     if (path === '/api/v1/znuny/native/status') return {
       ok:true,status:200,json:async()=>({enabled:nativeProxyEnabled})
     };
-    if (path === '/api/v1/znuny/native/start') return {
+    if (path === '/api/v1/znuny/native/start') return nativeInvalidResponse?{
+      ok:false,status:502,json:async()=>{throw new Error('Gateway response not JSON');}
+    }:{
       ok:true,status:200,json:async()=>({
-        url:'https://tickets.example.org/_plenaro/znuny-bootstrap?token=ci-placeholder'
+        url:'https://tickets.example.org/_plenaro/znuny-bootstrap?token=ci-placeholder',
+        requiresInteractiveLogin:nativeInteractiveLogin
       })
     };
     if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/write-check')) return {
@@ -486,6 +493,23 @@ describe('Plenaro web shell', () => {
     expect(screen.queryByLabelText('Text in das ausgewählte Znuny-Feld einfügen')).toBeNull();
     expect(vi.mocked(fetch).mock.calls.some(([url])=>
       String(url).includes('/api/v1/znuny/browser/'))).toBe(false);
+  });
+
+  it('ermöglicht normale HTML-Anmeldung bei einem individuellen Loginformular',async()=>{
+    nativeProxyEnabled=true;
+    nativeInteractiveLogin=true;
+    renderAt('/ticket-system');
+    expect(await screen.findByTitle(
+      'Ticketsystem – isolierte, native Weboberfläche')).toBeTruthy();
+    expect(await screen.findByText(/direkt anmelden/)).toBeTruthy();
+  });
+
+  it('zeigt HTTP-Fehler auch bei einer ungültigen Gateway-Antwort an',async()=>{
+    nativeProxyEnabled=true;
+    nativeInvalidResponse=true;
+    renderAt('/ticket-system');
+    expect(await screen.findByText(/HTTP 502/)).toBeTruthy();
+    expect(document.querySelector('iframe')).toBeNull();
   });
 
   it('zeigt die echten Classic-API-Standardwerte unter Ticketsystem', async () => {

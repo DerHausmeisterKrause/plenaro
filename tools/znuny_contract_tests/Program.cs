@@ -268,6 +268,77 @@ Assert(!(bool)origins.Invoke(new ZnunyNativeProxy(badConfig),
     new object?[]{null,null})!,
     "native proxy rejects cross-site HTTPS origins");
 
+// The native proxy must not fail closed merely because a legacy agent
+// installation uses a custom/multistep HTML login. The regular browser can
+// complete that login through the same already-authorized proxy session.
+var nativeLogin=proxyType.GetMethod("LoginAsync",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+async Task<string> RunNativeLogin(Func<HttpRequestMessage,HttpResponseMessage> respond)
+{
+    using var http=new HttpClient(new MockHandler(respond));
+    var task=(Task)nativeLogin.Invoke(null,new object[]{
+        http,page,upstream,"agent.example","example-password",CancellationToken.None
+    })!;
+    await task;
+    return task.GetType().GetProperty("Result")!.GetValue(task)!.ToString()!;
+}
+var successfulPosts=0;
+var autoLogin=await RunNativeLogin(request=>{
+    if(request.Method==HttpMethod.Post){
+        successfulPosts++;
+        Assert(request.Headers.TryGetValues("Origin",out var origins)&&
+            origins.Single()=="https://ticketsystem.example.test",
+            "native login includes upstream-only Origin for CSRF validation");
+        var post=new HttpResponseMessage(HttpStatusCode.Found);
+        post.Headers.Location=new Uri("/otrs/index.pl?Action=AgentDashboard",UriKind.Relative);
+        return post;
+    }
+    if(request.RequestUri?.Query.Contains("AgentDashboard")==true)
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent("<html><main>Agent dashboard</main></html>",
+                Encoding.UTF8,"text/html")
+        };
+    return new HttpResponseMessage(HttpStatusCode.OK){
+        Content=new StringContent(formHtml,Encoding.UTF8,"text/html")
+    };
+});
+Assert(autoLogin=="Automatic"&&successfulPosts==1,
+    "standard native login POST follows dashboard redirect exactly once");
+
+var rejectedPosts=0;
+var interactiveLogin=await RunNativeLogin(request=>{
+    if(request.Method==HttpMethod.Post)rejectedPosts++;
+    return new HttpResponseMessage(HttpStatusCode.OK){
+        Content=new StringContent(formHtml,Encoding.UTF8,"text/html")
+    };
+});
+Assert(interactiveLogin=="Interactive"&&rejectedPosts==1,
+    "login form returned after POST allows normal isolated browser login");
+
+var customLogin=await RunNativeLogin(_=>
+    new HttpResponseMessage(HttpStatusCode.OK){
+        Content=new StringContent("<html><main>Custom login</main></html>",
+            Encoding.UTF8,"text/html")
+    });
+Assert(customLogin=="Interactive",
+    "unrecognized custom login markup no longer yields unhelpful HTTP 500");
+
+try{
+    await RunNativeLogin(request=>{
+        if(request.Method==HttpMethod.Post){
+            var blocked=new HttpResponseMessage(HttpStatusCode.Found);
+            blocked.Headers.Location=new Uri("https://other.example.test/login");
+            return blocked;
+        }
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent(formHtml,Encoding.UTF8,"text/html")
+        };
+    });
+    throw new Exception("External authentication redirect incorrectly accepted");
+}catch(InvalidOperationException ex) when(ex.Message=="unsafe-redirect"){
+    Assert(true,"native auto-login never follows cross-origin authentication redirects");
+}
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory

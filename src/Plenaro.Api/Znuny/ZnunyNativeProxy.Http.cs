@@ -44,6 +44,16 @@ public sealed partial class ZnunyNativeProxy
 
     private sealed record LoginForm(Uri Action,List<KeyValuePair<string,string>> Fields);
 
+    private enum LoginState { Automatic, Interactive }
+
+    // Only short, non-sensitive category codes may be surfaced to the user.
+    // Never forward upstream error bodies, redirect targets or authentication
+    // form content. Credentials are never logged.
+    private sealed class NativeLoginException(string code):InvalidOperationException(code)
+    {
+        public string Code {get;}=code;
+    }
+
     private static string? Attribute(string input,string name)
     {
         foreach(Match match in AttributePattern.Matches(input)){
@@ -86,10 +96,10 @@ public sealed partial class ZnunyNativeProxy
             var action=Attribute(form.Groups["attrs"].Value,"action")??page.AbsoluteUri;
             if(!Uri.TryCreate(page,action,out var destination)||
                 !Allowed(origin,destination))
-                throw new InvalidOperationException("Login form target blocked");
+                throw new NativeLoginException("unsafe-form-target");
             var method=Attribute(form.Groups["attrs"].Value,"method")??"post";
             if(!method.Equals("post",StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Unsupported login form method");
+                throw new NativeLoginException("unsupported-login-method");
             return new LoginForm(destination,fields);
         }
         return null;
@@ -98,7 +108,7 @@ public sealed partial class ZnunyNativeProxy
     private static async Task<(HttpResponseMessage Response,Uri Url)> SendAndFollowAsync(
         HttpClient client,Uri origin,Uri target,CancellationToken ct)
     {
-        if(!Allowed(origin,target))throw new InvalidOperationException();
+        if(!Allowed(origin,target))throw new NativeLoginException("unsafe-redirect");
         for(var hop=0;hop<6;hop++){
             using var request=new HttpRequestMessage(HttpMethod.Get,target);
             var response=await client.SendAsync(request,
@@ -107,13 +117,13 @@ public sealed partial class ZnunyNativeProxy
                 response.Headers.Location is { } location){
                 var next=new Uri(target,location);
                 response.Dispose();
-                if(!Allowed(origin,next))throw new InvalidOperationException();
+                if(!Allowed(origin,next))throw new NativeLoginException("unsafe-redirect");
                 target=next;
                 continue;
             }
             return (response,target);
         }
-        throw new InvalidOperationException("Login redirects exceeded");
+        throw new NativeLoginException("redirect-loop");
     }
 
     private static async Task<byte[]> ReadLimitedAsync(HttpContent content,
@@ -131,7 +141,12 @@ public sealed partial class ZnunyNativeProxy
         return output.ToArray();
     }
 
-    private static async Task LoginAsync(HttpClient client,Uri entry,Uri origin,
+    // The standard agent form can be submitted server-side, preserving the
+    // initial challenge/cookie jar. For custom SSO/MFA/JS-only logins, keep
+    // the already isolated upstream browser session and let the agent sign
+    // in through the real HTML UI. Never invent a successful login.
+    private static async Task<LoginState> LoginAsync(
+        HttpClient client,Uri entry,Uri origin,
         string username,string password,CancellationToken ct)
     {
         using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -139,44 +154,60 @@ public sealed partial class ZnunyNativeProxy
         var token=timeout.Token;
         var (landing,landingUrl)=await SendAndFollowAsync(client,origin,entry,token);
         using(landing){
-            if(!landing.IsSuccessStatusCode ||
-                landing.Content.Headers.ContentType?.MediaType is not "text/html")
-                throw new InvalidOperationException("Login page unavailable");
+            if(!landing.IsSuccessStatusCode)
+                throw new NativeLoginException("page-http");
+            if(landing.Content.Headers.ContentType?.MediaType is not "text/html")
+                throw new NativeLoginException("page-not-html");
             var html=Encoding.UTF8.GetString(await ReadLimitedAsync(
                 landing.Content,MaxHtmlBytes,token));
             var login=FindLoginForm(html,landingUrl,origin,username,password);
-            if(login is null)throw new InvalidOperationException("Login form missing");
+            if(login is null)
+                return LoginState.Interactive; // e.g. custom SSO / pre-authenticated portal
+
             using var request=new HttpRequestMessage(HttpMethod.Post,login.Action){
                 Content=new FormUrlEncodedContent(login.Fields)
             };
             request.Headers.Referrer=landingUrl;
+            // Real browser form posts include Origin. Some upstream CSRF
+            // defenses reject a credential POST when that header is absent.
+            // Never copy an Origin provided by the end-user client.
+            request.Headers.TryAddWithoutValidation("Origin",
+                origin.GetLeftPart(UriPartial.Authority));
+            request.Headers.TryAddWithoutValidation("Accept","text/html,application/xhtml+xml");
             using var submitted=await client.SendAsync(request,
                 HttpCompletionOption.ResponseHeadersRead,token);
             if((int)submitted.StatusCode is >=300 and <400){
                 if(submitted.Headers.Location is not { } location)
-                    throw new InvalidOperationException("Login redirect missing");
+                    throw new NativeLoginException("login-redirect-missing");
                 var next=new Uri(login.Action,location);
-                var (result,_)=await SendAndFollowAsync(client,origin,next,token);
+                if(!Allowed(origin,next))
+                    throw new NativeLoginException("unsafe-redirect");
+                var (result,finalUrl)=await SendAndFollowAsync(
+                    client,origin,next,token);
                 using(result){
                     if(!result.IsSuccessStatusCode)
-                        throw new InvalidOperationException("Login rejected");
+                        throw new NativeLoginException("login-http");
                     if(result.Content.Headers.ContentType?.MediaType=="text/html"){
                         var page=Encoding.UTF8.GetString(await ReadLimitedAsync(
                             result.Content,MaxHtmlBytes,token));
-                        if(FindLoginForm(page,next,origin,username,password) is not null)
-                            throw new InvalidOperationException("Login rejected");
+                        if(FindLoginForm(page,finalUrl,origin,username,password) is not null)
+                            return LoginState.Interactive;
                     }
                 }
-            }else{
-                if(!submitted.IsSuccessStatusCode)
-                    throw new InvalidOperationException("Login rejected");
-                if(submitted.Content.Headers.ContentType?.MediaType=="text/html"){
-                    var page=Encoding.UTF8.GetString(await ReadLimitedAsync(
-                        submitted.Content,MaxHtmlBytes,token));
-                    if(FindLoginForm(page,login.Action,origin,username,password) is not null)
-                        throw new InvalidOperationException("Login rejected");
-                }
+                return LoginState.Automatic;
             }
+            if(submitted.StatusCode is HttpStatusCode.Unauthorized or
+                HttpStatusCode.Forbidden)
+                return LoginState.Interactive;
+            if(!submitted.IsSuccessStatusCode)
+                throw new NativeLoginException("login-http");
+            if(submitted.Content.Headers.ContentType?.MediaType=="text/html"){
+                var page=Encoding.UTF8.GetString(await ReadLimitedAsync(
+                    submitted.Content,MaxHtmlBytes,token));
+                if(FindLoginForm(page,login.Action,origin,username,password) is not null)
+                    return LoginState.Interactive;
+            }
+            return LoginState.Automatic;
         }
     }
 
