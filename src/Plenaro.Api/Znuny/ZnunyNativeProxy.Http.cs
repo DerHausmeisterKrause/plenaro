@@ -320,6 +320,37 @@ public sealed partial class ZnunyNativeProxy
         "text/plain" or "text/xml" or "application/xml" or "application/octet-stream" or
         "application/x-octet-stream" or "binary/octet-stream";
 
+    // For an octet-stream navigation, inspect only a small prefix first.
+    // A non-HTML download must stream normally, even if it is much larger
+    // than the maximum HTML rewrite size.
+    private static async Task<byte[]?> ReadOpaqueNavigationAsync(
+        HttpContent content,Stream destination,CancellationToken ct)
+    {
+        await using var source=await content.ReadAsStreamAsync(ct);
+        var first=new byte[2048];
+        var count=0;
+        while(count<first.Length){
+            var read=await source.ReadAsync(first.AsMemory(count),ct);
+            if(read==0)break;
+            count+=read;
+        }
+        if(!LooksLikeHtmlDocument(Encoding.UTF8.GetString(first,0,count))){
+            await destination.WriteAsync(first.AsMemory(0,count),ct);
+            await source.CopyToAsync(destination,ct);
+            return null;
+        }
+        using var output=new MemoryStream();
+        output.Write(first,0,count);
+        var buffer=new byte[32768];
+        int next;
+        while((next=await source.ReadAsync(buffer,ct))>0){
+            if(output.Length+next>MaxHtmlBytes)
+                throw new InvalidOperationException("HTML document too large");
+            output.Write(buffer,0,next);
+        }
+        return output.ToArray();
+    }
+
     private async Task ProxyRequestAsync(HttpContext ctx,ProxySession session,
         Uri publicOrigin,CancellationToken ct)
     {
@@ -400,7 +431,12 @@ public sealed partial class ZnunyNativeProxy
                 PotentialHtmlMime(type?.MediaType);
             var sniffOpaqueDocument=canSniffDocument&&!IsEditableText(type);
             if(IsEditableText(type)||sniffOpaqueDocument){
-                var bytes=await ReadLimitedAsync(response.Content,MaxHtmlBytes,ct);
+                var bytes=sniffOpaqueDocument?
+                    await ReadOpaqueNavigationAsync(
+                        response.Content,ctx.Response.Body,ct):
+                    await ReadLimitedAsync(response.Content,MaxHtmlBytes,ct);
+                // An opaque non-HTML response was streamed unmodified.
+                if(bytes is null)return;
                 var charset=type?.CharSet?.Trim('"');
                 Encoding encoding;
                 try{encoding=charset is null?Encoding.UTF8:
