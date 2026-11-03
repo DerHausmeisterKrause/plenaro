@@ -421,6 +421,81 @@ proxiedRequest.Scheme="http";
 Assert(!ZnunyNativeProxy.AllowedStartOrigin(proxiedRequest,expectedPublicOrigin),
     "native bootstrap requires verified HTTPS");
 
+// Regression: a real HTML agent page can arrive as plain text or binary
+// and must render as HTML for a navigation. Assets/downloads must not be
+// promoted. Only synthetic markup and fictional hostnames are tested.
+var sniff=proxyType.GetMethod("LooksLikeHtmlDocument",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+var nav=proxyType.GetMethod("IsDocumentNavigation",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+var mimeCheck=proxyType.GetMethod("PotentialHtmlMime",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+bool Html(string body)=>(bool)sniff.Invoke(null,new object[]{body})!;
+bool Mime(string? contentType)=>(bool)mimeCheck.Invoke(
+    null,new object?[]{contentType})!;
+bool Navigation(string method,string? accept,string? destination,
+    string path="/otrs/index.pl",string query="") {
+    var http=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+    http.Request.Method=method;
+    http.Request.Path=path;
+    http.Request.QueryString=new Microsoft.AspNetCore.Http.QueryString(query);
+    if(accept is not null)http.Request.Headers["Accept"]=accept;
+    if(destination is not null)http.Request.Headers["Sec-Fetch-Dest"]=destination;
+    return (bool)nav.Invoke(null,new object[]{
+        http.Request,new Uri("https://ticketsystem.example.test"+path+query),
+        new Uri("https://ticketsystem.example.test/otrs/index.pl")
+    })!;
+}
+Assert(Html("<!DOCTYPE html><html><head><title>Agent</title></head><body></body></html>"),
+    "a complete agent HTML document is recognized by its markup");
+Assert(!Html("{\"error\":\"no-html\"}")&&!Html("binary")&&!Html(""),
+    "non-HTML and JSON cannot trigger the HTML MIME override");
+foreach(var mime in new string?[]{
+    null,"text/plain","text/xml","application/xml",
+    "application/octet-stream","application/x-octet-stream","binary/octet-stream"
+})Assert(Mime(mime),"potential upstream CGI HTML MIME supported");
+foreach(var mime in new[]{"application/javascript","application/json",
+    "text/css","image/png","application/pdf","font/woff2"})
+    Assert(!Mime(mime),"asset/attachment MIME remains unchanged: "+mime);
+Assert(Navigation("GET","text/html,application/xhtml+xml",null,
+    "/otrs/index.pl","?Action=AgentDashboard"),
+    "HTML navigation with a CGI query must be recognized");
+Assert(Navigation("GET",null,"iframe","/otrs/index.pl","?Action=AgentTicketZoom"),
+    "iframe document navigation recognized with CGI query");
+Assert(!Navigation("GET","*/*",null,"/otrs/js/ticket.js"),
+    "AJAX and JavaScript resource requests are never retyped as HTML");
+Assert(!Navigation("POST","text/html","document"),
+    "POST form responses do not enter the MIME override");
+
+// Verify the actual opaque-content reader, not only its MIME predicates.
+var opaqueReader=proxyType.GetMethod("ReadOpaqueNavigationAsync",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+async Task<(byte[]? Html,byte[] Streamed)> ProbeOpaque(byte[] source)
+{
+    using var content=new ByteArrayContent(source);
+    using var streamed=new MemoryStream();
+    var task=(Task<byte[]?>)opaqueReader.Invoke(null,new object[]{
+        content,streamed,CancellationToken.None
+    })!;
+    var result=await task;
+    return(result,streamed.ToArray());
+}
+var syntheticHtml=Encoding.UTF8.GetBytes(
+    "<!DOCTYPE html><html><body><form method='post'>"+
+    "<input name='User'></form></body></html>");
+var htmlResult=await ProbeOpaque(syntheticHtml);
+Assert(htmlResult.Html is not null &&
+    htmlResult.Html.SequenceEqual(syntheticHtml) &&
+    htmlResult.Streamed.Length==0,
+    "opaque CGI HTML is buffered for safe URL rewriting");
+var syntheticBinary=new byte[6*1024*1024+8192];
+syntheticBinary[0]=0x00;
+syntheticBinary[^1]=0xff;
+var binaryResult=await ProbeOpaque(syntheticBinary);
+Assert(binaryResult.Html is null &&
+    binaryResult.Streamed.SequenceEqual(syntheticBinary),
+    "large non-HTML binary downloads stream unchanged without HTML size cap");
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory

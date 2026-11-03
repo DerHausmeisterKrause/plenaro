@@ -589,3 +589,12 @@ PostgreSQL-Datenbank und der Vault bleiben unverändert.
 - [x] Login-Nachfolgeantworten weiterhin kompatibel mit bisherigen Nicht-HTML-Erfolgsantworten
 - [x] Fiktive Tests und vollständige CI erfolgreich ([PR #6](https://github.com/DerHausmeisterKrause/plenaro/pull/6), [CI #41623430116](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41623430116))
 - [ ] Gegen echte Agenten-Weboberfläche prüfen, welcher HTTP-Antworttyp vorliegt und ob die native Einbettung vollständig funktioniert
+
+### 03.11.2026 – Native Ticketsystem-HTML und Fenstergröße (Phase 6)
+
+- [x] HTML-Dokumente bei falsch gemeldeten Navigations-MIME-Typen sicher als `text/html` ausgeben
+- [x] CGI-Navigation mit Ticket-/Dashboard-Query unterstützen; nicht-HTML-Anhänge unverändert streamen
+- [x] CSS des Ticketsystem-Reiters aus dem allgemeinen Maximalbreiten-/Seitenpadding lösen; iframe füllt Arbeitsbereich unter der Topbar
+- [x] Synthetische HTML-/Nicht-HTML-/Download-Tests ergänzen, keine echten Ticketdaten übernehmen
+- [ ] GitHub-CI: Backend/Frontend/Vertrags- und Docker-Smoke-Tests erfolgreich
+- [ ] Am tatsächlichen Ticketsystem Darstellung, interne Links, AJAX, Anhänge und mehrere Benutzer verifizieren

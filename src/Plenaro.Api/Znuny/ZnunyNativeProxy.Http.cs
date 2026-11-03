@@ -299,6 +299,58 @@ public sealed partial class ZnunyNativeProxy
         return true;
     }
 
+    // A document navigation (including the CGI agent entry point) may
+    // legitimately return HTML with an incorrect MIME header. Never perform
+    // content sniffing on background assets, downloads or ticket attachments.
+    private static bool IsDocumentNavigation(HttpRequest request,Uri target,Uri entry)
+    {
+        if(!HttpMethods.IsGet(request.Method))return false;
+        var dest=request.Headers["Sec-Fetch-Dest"].ToString();
+        if(dest is "document" or "iframe")return true;
+        if(request.Headers["Accept"].ToString().Contains("text/html",
+            StringComparison.OrdinalIgnoreCase))return true;
+        // Fallback only for a plain entry URL. CGI requests with a query
+        // may return attachments rather than navigable documents.
+        return target.Query.Length==0 &&
+            target.AbsolutePath.Equals(entry.AbsolutePath,
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool PotentialHtmlMime(string? media)=>media is null or
+        "text/plain" or "text/xml" or "application/xml" or "application/octet-stream" or
+        "application/x-octet-stream" or "binary/octet-stream";
+
+    // For an octet-stream navigation, inspect only a small prefix first.
+    // A non-HTML download must stream normally, even if it is much larger
+    // than the maximum HTML rewrite size.
+    private static async Task<byte[]?> ReadOpaqueNavigationAsync(
+        HttpContent content,Stream destination,CancellationToken ct)
+    {
+        await using var source=await content.ReadAsStreamAsync(ct);
+        var first=new byte[2048];
+        var count=0;
+        while(count<first.Length){
+            var read=await source.ReadAsync(first.AsMemory(count),ct);
+            if(read==0)break;
+            count+=read;
+        }
+        if(!LooksLikeHtmlDocument(Encoding.UTF8.GetString(first,0,count))){
+            await destination.WriteAsync(first.AsMemory(0,count),ct);
+            await source.CopyToAsync(destination,ct);
+            return null;
+        }
+        using var output=new MemoryStream();
+        output.Write(first,0,count);
+        var buffer=new byte[32768];
+        int next;
+        while((next=await source.ReadAsync(buffer,ct))>0){
+            if(output.Length+next>MaxHtmlBytes)
+                throw new InvalidOperationException("HTML document too large");
+            output.Write(buffer,0,next);
+        }
+        return output.ToArray();
+    }
+
     private async Task ProxyRequestAsync(HttpContext ctx,ProxySession session,
         Uri publicOrigin,CancellationToken ct)
     {
@@ -373,23 +425,35 @@ public sealed partial class ZnunyNativeProxy
                     "font/woff2" or "application/font-woff");
             ctx.Response.Headers.CacheControl=staticAsset?
                 "private,max-age=600":"private,no-store";
-            if(IsEditableText(type)){
-                var bytes=await ReadLimitedAsync(response.Content,MaxHtmlBytes,ct);
+            var canSniffDocument=response.IsSuccessStatusCode &&
+                response.Content.Headers.ContentDisposition is null &&
+                IsDocumentNavigation(ctx.Request,target,session.Entry) &&
+                PotentialHtmlMime(type?.MediaType);
+            var sniffOpaqueDocument=canSniffDocument&&!IsEditableText(type);
+            if(IsEditableText(type)||sniffOpaqueDocument){
+                var bytes=sniffOpaqueDocument?
+                    await ReadOpaqueNavigationAsync(
+                        response.Content,ctx.Response.Body,ct):
+                    await ReadLimitedAsync(response.Content,MaxHtmlBytes,ct);
+                // An opaque non-HTML response was streamed unmodified.
+                if(bytes is null)return;
                 var charset=type?.CharSet?.Trim('"');
                 Encoding encoding;
                 try{encoding=charset is null?Encoding.UTF8:
                     Encoding.GetEncoding(charset);}
                 catch(ArgumentException){encoding=Encoding.UTF8;}
                 var decoded=encoding.GetString(bytes);
-                // Normalize a verified CGI entry document mislabeled as
-                // plain text; keep binary responses and downloads untouched.
-                if(HttpMethods.IsGet(ctx.Request.Method) &&
-                    type?.MediaType=="text/plain" &&
-                    target.AbsolutePath.Equals(session.Entry.AbsolutePath,
-                        StringComparison.OrdinalIgnoreCase) &&
-                    response.Content.Headers.ContentDisposition is null &&
-                    LooksLikeHtmlDocument(decoded))
+                // The upstream CGI page may be reported as plain text,
+                // binary octet-stream or with no MIME at all. Only a verified
+                // HTML document from a navigation gets the browser HTML MIME.
+                // Unknown binary responses are passed through unchanged.
+                if(canSniffDocument&&LooksLikeHtmlDocument(decoded)){
                     ctx.Response.ContentType="text/html; charset="+encoding.WebName;
+                    ctx.Response.Headers.Remove("Content-Disposition");
+                }else if(sniffOpaqueDocument){
+                    await ctx.Response.Body.WriteAsync(bytes,ct);
+                    return;
+                }
                 var changed=Rewrite(decoded,session.Upstream,publicOrigin);
                 var output=encoding.GetBytes(changed);
                 await ctx.Response.Body.WriteAsync(output,ct);

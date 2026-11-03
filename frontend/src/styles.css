@@ -1040,19 +1040,28 @@ h1,h2,h3,p { margin-top: 0; }
   }
 }
 
-/* Native ticket HTML is drawn by the local browser engine, not by a
-   screenshot. A distinct HTTPS origin keeps its JS away from Plenaro. */
-.znuny-native-frame-wrap {height:calc(100dvh - 190px);min-height:520px;}
-.znuny-native-frame {
-  display:block;flex:1 1 auto;
-  width:100%;height:100%;min-height:0;
-  background:#fff;border:0;
+/* Fill the entire application work area below the fixed navigation bar.
+   The default .page padding/max-width must NOT constrain the ticket GUI. */
+.znuny-web-portal.page{
+  width:100%;max-width:none;margin:0;
+  height:calc(100dvh - 78px);min-height:0;
+  padding:10px 12px 12px;
+  display:flex;flex-direction:column;overflow:hidden;
 }
-.znuny-native-loading {
+.znuny-web-portal .znuny-portal-frame-wrap.znuny-native-frame-wrap{
+  display:flex;flex:1 1 auto;min-height:0;min-width:0;
+  width:100%;height:auto;overflow:hidden;
+}
+.znuny-web-portal .znuny-native-frame {
+  display:block;flex:1 1 auto;
+  width:100%;height:100%;min-width:0;min-height:0;
+  border:0;background:#fff;
+}
+.znuny-native-loading{
   display:flex;align-items:center;justify-content:center;
   padding:32px;min-height:100px;color:var(--muted-strong);
   font-size:13px;
 }
 @media(max-width:720px){
-  .znuny-native-frame-wrap {height:calc(100dvh - 210px);min-height:460px;}
+  .znuny-web-portal.page{padding:7px 8px 9px}
 }
