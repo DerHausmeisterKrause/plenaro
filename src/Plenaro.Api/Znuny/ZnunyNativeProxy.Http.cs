@@ -309,8 +309,11 @@ public sealed partial class ZnunyNativeProxy
         if(dest is "document" or "iframe")return true;
         if(request.Headers["Accept"].ToString().Contains("text/html",
             StringComparison.OrdinalIgnoreCase))return true;
-        return target.AbsolutePath.Equals(entry.AbsolutePath,
-            StringComparison.OrdinalIgnoreCase);
+        // Fallback only for a plain entry URL. CGI requests with a query
+        // may return attachments rather than navigable documents.
+        return target.Query.Length==0 &&
+            target.AbsolutePath.Equals(entry.AbsolutePath,
+                StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool PotentialHtmlMime(string? media)=>media is null or
