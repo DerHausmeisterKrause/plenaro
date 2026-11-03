@@ -1,0 +1,109 @@
+import { useEffect, useState, type FormEvent } from 'react';
+import { ArrowRight, LogOut, ShieldAlert } from 'lucide-react';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { login, logout, type CurrentUser } from './authApi';
+import { entraStatus } from './entraApi';
+
+export function LoginPage({ onLogin, user }: { onLogin: (value: CurrentUser) => void; user: CurrentUser | null }) {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [entraEnabled, setEntraEnabled] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    void entraStatus().then(s => { if (mounted) setEntraEnabled(s.enabled); })
+      .catch(() => { /* Local login stays available. */ });
+    return () => { mounted = false; };
+  }, []);
+  const entraMessage: Record<string, string> = {
+    denied: 'Dein Plenaro-Konto ist gesperrt oder derzeit nicht zur Anmeldung berechtigt.',
+    failed: 'Die Microsoft-Anmeldung ist fehlgeschlagen oder wurde abgebrochen.',
+  };
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const signedIn = await login(email.trim(), password);
+      onLogin(signedIn);
+      setPassword('');
+      navigate('/workspace', { replace: true });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Anmeldung fehlgeschlagen.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (user) return <Navigate to="/" replace />;
+
+  const insecureLan = window.location.protocol === 'http:' &&
+    !['127.0.0.1', 'localhost', '[::1]'].includes(window.location.hostname);
+
+  return <div className="auth-wrap">
+    <section className="content-card auth-card">
+      <div className="auth-brand"><span className="auth-brand-icon">P</span><strong>plenaro<span>.</span></strong></div>
+      <h1>Willkommen zurück.</h1>
+      <p>Melde dich mit deinem Plenaro-Konto an.</p>
+      {insecureLan && <p role="alert" className="auth-warning"><ShieldAlert size={17} aria-hidden="true"/> Achtung: HTTP überträgt Passwörter im LAN unverschlüsselt. Für echte Konten einen HTTPS-Reverse-Proxy verwenden.</p>}
+      {entraMessage[searchParams.get('entra') ?? ''] &&
+        <p role="alert" className="auth-error">{entraMessage[searchParams.get('entra') ?? '']}</p>}
+      <form onSubmit={submit} className="auth-form">
+        <label htmlFor="plenaro-email">E-Mail-Adresse</label>
+        <input id="plenaro-email" autoComplete="username" type="email" value={email}
+          onChange={event => setEmail(event.target.value)} required maxLength={256} />
+        <label htmlFor="plenaro-password">Passwort</label>
+        <input id="plenaro-password" autoComplete="current-password" type="password" value={password}
+          onChange={event => setPassword(event.target.value)} required />
+        {error && <p role="alert" className="auth-error">{error}</p>}
+        <button type="submit" disabled={busy} className="button button-primary auth-submit">
+          {busy ? 'Anmeldung läuft …' : 'Anmelden'} <ArrowRight size={17} aria-hidden="true" />
+        </button>
+      </form>
+      {entraEnabled && <>
+        <div className="auth-divider"><span>oder</span></div>
+        <a className="button button-secondary auth-submit auth-entra" href="/api/v1/auth/entra/start">
+          Mit Microsoft anmelden
+        </a>
+        <p className="um-hint">Beim ersten Microsoft-Login wird dein Plenaro-Benutzerkonto automatisch erstellt. Ticketrechte vergibt anschließend der Administrator.</p>
+      </>}
+    </section>
+  </div>;
+}
+
+export function LogoutPage({ onLogout, user }: { onLogout: () => void; user: CurrentUser | null }) {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  async function submit() {
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await logout();
+      onLogout();
+      navigate('/login', { replace: true });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Abmeldung fehlgeschlagen.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <div className="auth-wrap"><section className="content-card auth-card">
+    <div className="empty-icon"><LogOut size={28} aria-hidden="true"/></div>
+    <h1>Abmelden</h1>
+    <p>{user ? 'Möchtest du deine Plenaro-Sitzung beenden?' : 'Du bist derzeit nicht angemeldet.'}</p>
+    {error && <p role="alert" className="auth-error">{error}</p>}
+    {user && <button disabled={busy} className="button button-primary" type="button" onClick={() => void submit()}>
+      <LogOut size={17}/> {busy ? 'Abmeldung läuft …' : 'Jetzt abmelden'}
+    </button>}
+    <Link className="button button-secondary" to="/">Zur Übersicht</Link>
+  </section></div>;
+}

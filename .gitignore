@@ -1,0 +1,47 @@
+# Lokale Zugangsdaten
+.env
+.env.*
+!.env.example
+**/appsettings.Development.json
+**/appsettings.Production.json
+**/secrets.json
+
+# .NET
+**/bin/
+**/obj/
+**/TestResults/
+*.user
+*.suo
+.vs/
+.idea/
+.vscode/
+
+# Build / tools / backups
+artifacts/
+coverage/
+*.log
+*.db
+*.db-shm
+*.db-wal
+*.bak
+*.dump
+*.sql.gz
+.DS_Store
+
+# Vite / Node
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+*.tsbuildinfo
+
+# Secret material: NEVER commit vault keys or Caddy's CA private keys.
+secrets/
+deploy/certs/
+*.key
+
+# Local NGINX TLS material / CI artifacts
+certs/
+deploy/nginx/certs/
+ci-tls.crt
+ci-headers
+*.pem

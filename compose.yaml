@@ -1,0 +1,141 @@
+name: plenaro
+
+services:
+  database:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-plenaro}
+      POSTGRES_USER: ${POSTGRES_USER:-plenaro}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Setze POSTGRES_PASSWORD in der .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  web:
+    build:
+      context: .
+      dockerfile: src/Plenaro.Api/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Plenaro: "Host=database;Port=5432;Database=${POSTGRES_DB:-plenaro};Username=${POSTGRES_USER:-plenaro};Password=${POSTGRES_PASSWORD:?Setze POSTGRES_PASSWORD in der .env};Pooling=true"
+      Security__RequireHttps: "${PLENARO_HTTPS_ENABLED:-false}"
+      Security__TrustedProxyIp: "172.29.213.10"
+      PLENARO_VAULT_KEY_FILE: "${PLENARO_VAULT_KEY_FILE:-}"
+      # CA file is merged with the public OS CA bundle at container startup.
+      # Default /dev/null means "no extra CA", preserving existing installs.
+    depends_on:
+      database:
+        condition: service_healthy
+    volumes:
+      - type: bind
+        source: ./secrets
+        target: /run/plenaro-secrets
+        read_only: true
+      - type: bind
+        source: ${PLENARO_TRUSTED_CA_FILE:-/dev/null}
+        target: /run/plenaro-trust/ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - backend
+      - edge
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "dotnet", "Plenaro.Api.dll", "--healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Real Chromium WebView running entirely on the server.
+  # No host port mapping: only Plenaro's backend may use WebDriver.
+  # ~1 GB image download once; each concurrent native browser consumes RAM.
+  znuny-browser:
+    build:
+      context: .
+      dockerfile: deploy/znuny-browser/Dockerfile
+    restart: unless-stopped
+    shm_size: "2gb"
+    environment:
+      SE_NODE_MAX_SESSIONS: "4"
+      SE_NODE_OVERRIDE_MAX_SESSIONS: "true"
+      SE_NODE_SESSION_TIMEOUT: "900"
+      # Official Chromium 132+ images recommend Xvfb for headless=new.
+      SE_START_XVFB: "true"
+      # Disable both VNC endpoints entirely (not merely host-port mapping).
+      SE_START_VNC: "false"
+      SE_START_NO_VNC: "false"
+    volumes:
+      - type: bind
+        source: ${PLENARO_TRUSTED_CA_FILE:-/dev/null}
+        target: /run/plenaro-trust/ca.crt
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - edge
+    security_opt:
+      - no-new-privileges:true
+
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      PLENARO_HTTPS_ENABLED: "${PLENARO_HTTPS_ENABLED:-false}"
+      PLENARO_SERVER_NAME: "${PLENARO_SERVER_NAME:-_}"
+    entrypoint: ["/bin/sh", "/etc/plenaro-nginx/entrypoint.sh"]
+    ports:
+      - "${PLENARO_BIND_IP:-0.0.0.0}:${PLENARO_PUBLIC_HTTP_PORT:-80}:80"
+      - "${PLENARO_BIND_IP:-0.0.0.0}:${PLENARO_PUBLIC_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./deploy/nginx:/etc/plenaro-nginx:ro
+      - type: bind
+        source: ${PLENARO_TLS_CERT_PATH:-/dev/null}
+        target: /etc/nginx/tls/fullchain.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${PLENARO_TLS_KEY_PATH:-/dev/null}
+        target: /etc/nginx/tls/privkey.pem
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      edge:
+        ipv4_address: 172.29.213.10
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/nginx-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  backend:
+    internal: true
+  edge:
+    ipam:
+      config:
+        - subnet: 172.29.213.0/24
+
+volumes:
+  postgres_data:
+    name: plenaro_postgres_data

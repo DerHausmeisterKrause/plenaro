@@ -1,0 +1,946 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { AppContent } from './App';
+import { localDate, type WorkTask } from './tasksApi';
+import type { TaskSegment } from './taskWorkApi';
+import type { TaskReminder } from './notificationApi';
+import type { OutlookEvent } from './graphApi';
+import type { ManagedUser } from './userApi';
+import type { CachedTicket, TicketAgendaSegment, TicketWorkspace, ZnunyArticle } from './znunySyncApi';
+
+let calendarSegments: TaskSegment[] = [];
+let reminderItems: TaskReminder[] = [];
+let todayFixture: WorkTask[] = [];
+let allTasksFixture: WorkTask[] = [];
+let outlookFixture: OutlookEvent[] = [];
+let outlookEnabled = false;
+let managedUsersFixture: ManagedUser[] = [];
+let ticketFixture: Record<'mine'|'new'|'completed',CachedTicket[]> = {
+  mine:[],new:[],completed:[],
+};
+let ticketAgendaFixture: TicketAgendaSegment[] = [];
+let candidateAccess={approved:false,agentId:null as number|null,
+  candidateUserId:null as number|null,syncEnabled:false,
+  showAllCandidatePoolTickets:false,hasCandidateKeywords:false};
+let replyTemplateFixture='';
+let personalReplyTemplateFixture='';
+let customerArticlesFixture:ZnunyArticle[]|null=null;
+let nativeZnunyReady=false;
+
+let workspaceFixture: TicketWorkspace = {description:'Das ist ein lokaler Test',ticketUrl:'https://example.org/ticket/77'};
+
+
+beforeEach(() => {
+  calendarSegments = [];
+  reminderItems = [];
+  todayFixture = [];
+  allTasksFixture = [];
+  outlookFixture = [];
+  outlookEnabled = false;
+  managedUsersFixture = [];
+  ticketFixture = {mine:[],new:[],completed:[]};
+  ticketAgendaFixture = [];
+  candidateAccess={approved:false,agentId:null,candidateUserId:null,
+    syncEnabled:false,showAllCandidatePoolTickets:false,hasCandidateKeywords:false};
+  replyTemplateFixture='';
+  personalReplyTemplateFixture='';
+  customerArticlesFixture=null;
+  nativeZnunyReady=false;
+
+  workspaceFixture = {description:'Das ist ein lokaler Test',ticketUrl:'https://example.org/ticket/77'};
+  vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => {
+    if (path === '/api/v1/classic-import/batches') return {
+      ok: true, status: 200, json: async () => [],
+    };
+    if (path === '/api/v1/notifications/') return {
+      ok: true, status: 200, json: async () => reminderItems,
+    };
+    if (path === '/api/v1/notifications/settings') return {
+      ok: true, status: 200, json: async () => ({ enabled: true, leadMinutes: 2 }),
+    };
+    if (path === '/api/v1/admin/znuny/sync') return {
+      ok: true,status:200,json:async()=>({
+        enabled:false,serviceUsername:'',passwordConfigured:false,
+        sourceApiUrl:null,initialLookbackDays:365,deltaIntervalMinutes:15,
+        openIntervalMinutes:360,maxRequestsPerCycle:200,bootstrapCursor:null,
+        bootstrapEnd:null,bootstrapFinishedAt:null,deltaWatermark:null,
+        lastDeltaAt:null,lastOpenAt:null,openCursor:null,lastAttemptAt:null,
+        lastError:null,cachedTickets:0,candidateDefaultAgentId:1,
+      })
+    };
+    if (path === '/api/v1/admin/users/') return {
+      ok: true, status: 200, json: async () => managedUsersFixture,
+    };
+    if (path.startsWith('/api/v1/admin/users/') && options?.method === 'DELETE') {
+      const id = path.slice('/api/v1/admin/users/'.length);
+      const confirm = JSON.parse(String(options.body)) as { confirmation: string };
+      const user = managedUsersFixture.find(x=>x.id===id);
+      if (!user || user.email!==confirm.confirmation) return {
+        ok: false, status: 400, json: async () => ({error:'Bestätigung ungültig.'})
+      };
+      managedUsersFixture=managedUsersFixture.filter(x=>x.id!==id);
+      return {ok:true,status:204};
+    }
+    if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/articles')) return {
+      ok:true,status:200,json:async()=>({
+        ticketId:'77',ticketNumber:'2026#77',title:'Ticket mit Details',
+        articles:customerArticlesFixture??[{id:'12',subject:'Kundenanfrage',body:'Bitte helfen Sie uns.',
+          from:'Kunde <kunde@example.org>',to:'support@example.org',replyTo:'',
+          senderType:'customer',channel:'Email',created:'2026-10-31 09:00:00'}],
+      }),
+    };
+    if (path==='/api/v1/znuny/agents') return {
+      ok:true,status:200,json:async()=>[
+        {id:77,name:'Agent Siebenundsiebzig'},
+        {id:88,name:'Agent Achtundachtzig'},
+      ],
+    };
+    if (path.includes('/api/v1/znuny/tickets/')&&(
+      path.endsWith('/reply')||path.endsWith('/assignment')||path.endsWith('/assign-to-me')
+    )) return {ok:true,status:200,json:async()=>({confirmed:true,cacheUpdated:true})};
+    if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/workspace')) return {
+      ok:true,status:200,json:async()=>workspaceFixture,
+    };
+    if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/booking-fields')) return {
+      ok:true,status:200,json:async()=>({
+        costCenter:'100',order:'200',
+        costCenterOptions:[{key:'100',displayText:'Kostenstelle IT'}],
+        orderOptions:[{key:'200',displayText:'Auftrag Service'}],
+      }),
+    };
+    if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/time/bookings')) return {
+      ok:true,status:200,json:async()=>([]),
+    };
+    if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/time')) return {
+      ok:true,status:200,json:async()=>({
+        bookedSeconds:900,runningSeconds:0,runningSince:null,
+        adjustedMinutes:15,sessionCount:0,transferredSeconds:0,unbookedSeconds:900,
+      }),
+    };
+    if (path.startsWith('/api/v1/znuny/tickets/')&&/\/time\/(start|stop|adjust)$/.test(path)) return {
+      ok:true,status:200,json:async()=>({
+        bookedSeconds:1800,runningSeconds:0,runningSince:null,
+        adjustedMinutes:30,sessionCount:0,transferredSeconds:0,unbookedSeconds:1800,
+      }),
+    };
+    if (path.startsWith('/api/v1/znuny/tickets/agenda?')) return {
+      ok:true,status:200,json:async()=>ticketAgendaFixture,
+    };
+    if (path === '/api/v1/znuny/tickets/candidates/show-all'&&options?.method==='PUT'){
+      candidateAccess.showAllCandidatePoolTickets=
+        (JSON.parse(String(options.body)) as {showAll:boolean}).showAll;
+      return {ok:true,status:204};
+    }
+    if (path === '/api/v1/znuny/tickets/status') return {
+      ok:true,status:200,json:async()=>({...candidateAccess}),
+    };
+    if (path.startsWith('/api/v1/znuny/tickets?')) return {
+      ok:true,status:200,json:async()=>ticketFixture[
+        new URL('http://localhost'+path).searchParams.get('view') as keyof typeof ticketFixture ?? 'mine']??[],
+    };
+    if (path.includes('/api/v1/znuny/tickets/')&&path.includes('/availability?date=')) return {
+      ok:true,status:200,json:async()=>({intervals:[],hasMore:false}),
+    };
+    if (path.includes('/api/v1/znuny/tickets/')&&path.endsWith('/segments')) return {
+      ok:true,status:200,json:async()=>[],
+    };
+    if (path === '/api/v1/znuny/browser/start') return {
+      ok:true,status:200,json:async()=>({ready:true,width:1280,height:800})
+    };
+    if (path.startsWith('/api/v1/znuny/browser/frame')) return {
+      ok:true,status:200,blob:async()=>new Blob(['fake-png'],{type:'image/png'})
+    };
+    if (path === '/api/v1/znuny/browser/input') return {
+      ok:true,status:204
+    };
+    if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/write-check')) return {
+      ok:true,status:200,json:async()=>({
+        personalLogin:true,ticketGet:true,writeVerified:false,
+        writeRoute:'/Ticket/{TicketID}/Update',writeMethod:'POST',
+        message:'Persönlicher Znuny-Zugang ist lesbar.'
+      }),
+    };
+    if (path === '/api/v1/znuny/server') return {
+      ok: true, status: 200, json: async () => ({
+        webUrl: nativeZnunyReady?'https://znuny.example.org/index.pl':'https://SERVER/index.pl',
+        apiUrl: 'https://SERVER/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST',
+        ticketSearchRoute: '/Ticket', ticketSearchMethod: 'GET',
+        ticketSearchAuthMode: 'Session', ticketGetRouteTemplate: '/Ticket/{TicketID}',
+        ticketGetMethod: 'GET', ticketGetAuthMode: 'Session',
+        ticketUpdateRoute: '/Ticket/{TicketID}/Update',
+        agentListRoute: '/Ticket/Agent/List',
+        ticketCreateRoute: '/TicketCreate', ticketCreateMethod: 'POST',
+        ticketCreateQueue: '', ticketCreateState: 'open', ticketCreatePriority: '3 normal',
+        ticketCreateType: '', ticketCreateCustomerUser: '', ticketReplyTemplate: replyTemplateFixture,
+        dynamicFieldOptionsRoute: '/Ticket/DynamicField/{FieldName}/Options',
+        costCenterFieldName: 'KostenstelleID', orderFieldName: 'AuftragsID',
+        costCenterOptions: '', orderOptions: '',
+        syncIntervalMinutes: 15, candidateSyncIntervalMinutes: 5,
+        searchLimit: 100, articleLimit: 20,
+        onlyOpenTickets: true, showClosedTickets: false,
+      }),
+    };
+    if (path === '/api/v1/znuny/me'&&options?.method==='PUT'){
+      personalReplyTemplateFixture=
+        (JSON.parse(String(options.body)) as {replyTemplate?:string}).replyTemplate??'';
+      return {ok:true,status:204};
+    }
+    if (path === '/api/v1/znuny/me') return {
+      ok: true, status: 200, json: async () => ({
+        username: nativeZnunyReady?'agent.user':'', agentId: nativeZnunyReady?77:null, candidateUserId: 1,
+        candidateKeywords: '', candidateExcludeKeywords: '',
+        includeOwner: true, includeResponsible: true,
+        notifyOnNewAssignedTickets: true, notifyOnTicketChanges: true,
+        showAllCandidatePoolTickets: false,replyTemplate:personalReplyTemplateFixture,
+        passwordConfigured: nativeZnunyReady, vaultReady: true,
+      }),
+    };
+    if (path === '/api/v1/settings/me') return {
+      ok: true, status: 200, json: async () => ({ theme: 'light', weekStart: 'inherit' }),
+    };
+    if (path === '/api/v1/settings/global') return {
+      ok: true, status: 200, json: async () => ({ instanceName: 'Plenaro', supportEmail: '', defaultWeekStart: 'monday' }),
+    };
+    if (path === '/api/v1/admin/entra/') return {
+      ok: true, status: 200, json: async () => ({
+        enabled: false, tenantId: '', clientId: '', secretConfigured: false,
+        vaultReady: false, httpsRequired: false,
+      }),
+    };
+    if (path === '/api/v1/day-markers/budget') return { ok: true, status: 200, json: async () => ({ annualUlDays: null, monthlyBrDays: null }) };
+    if (path.startsWith('/api/v1/day-markers/summary?')) return { ok: true, status: 200, json: async () => ({
+      year: 2026, month: 10, annualUlDays: null, usedUlDays: 0,
+      remainingUlDays: null, ulExhausted: false, ulExceeded: false,
+      monthlyBrDays: null, usedBrDays: 0,
+      remainingBrDays: null, brExhausted: false, brExceeded: false,
+    }) };
+    if (path.startsWith('/api/v1/day-markers/?')) return { ok: true, status: 200, json: async () => [] };
+    if (path.startsWith('/api/v1/reports/month?')) return {
+      ok: true, status: 200, json: async () => ({
+        month: '2026-10', timeZone: 'Europe/Berlin', generatedAt: '2026-10-30T21:00:00Z',
+        timerSeconds: 3600, adjustmentMinutes: 15, totalSeconds: 4500,
+        sessionCount: 1, taskCount: 1,
+        tasks: [{ taskId: '00000000-0000-0000-0000-000000000003', title: 'Zeittest',
+          status: 'active', timerSeconds: 3600, adjustmentMinutes: 15,
+          totalSeconds: 4500, sessionCount: 1 }],
+      }),
+    };
+    if (path.startsWith('/api/v1/segments/?')) return {
+      ok: true, status: 200, json: async () => calendarSegments,
+    };
+    if (path.endsWith('/schedule')) return { ok: true, status: 204 };
+    if (path.startsWith('/api/v1/tasks/today?')) return {
+      ok: true, status: 200, json: async () => todayFixture,
+    };
+    if (path === '/api/v1/tasks/') return {
+      ok: true, status: 200, json: async () => allTasksFixture,
+    };
+    if (path.startsWith('/api/v1/tasks/')) return {
+      ok: true, status: 200, json: async () => ([]),
+    };
+    if (path === '/api/v1/graph/status') return {
+      ok: true, status: 200, json: async () => ({
+        enabled: outlookEnabled, linked: outlookEnabled, vaultReady: true, connected: outlookEnabled,
+      }),
+    };
+    if (path.startsWith('/api/v1/graph/calendar?')) return {
+      ok: true, status: 200,
+      json: async () => ({ events: outlookFixture, hasMore: false }),
+    };
+    if (path === '/api/v1/auth/entra/status') return {
+      ok: true, status: 200, json: async () => ({ enabled: false, linked: false }),
+    };
+    if (path === '/api/v1/auth/csrf') return {
+      ok: true, status: 200, json: async () => ({ token: 'test-token' }),
+    };
+    if (path === '/api/v1/setup/status') return {
+      ok: true, status: 200, json: async () => ({ required: false }),
+    };
+    if (path === '/api/v1/auth/me') return {
+      ok: true, status: 200, json: async () => ({
+        id: '00000000-0000-0000-0000-000000000001',
+        email: 'test@example.invalid', name: 'Test', roles: ['Admin'],
+      }),
+    };
+    return { ok: true, status: 200 };
+  }));
+  Object.defineProperty(URL,'createObjectURL',{
+    configurable:true,value:vi.fn(()=>'blob:znuny-test-frame')
+  });
+  Object.defineProperty(URL,'revokeObjectURL',{
+    configurable:true,value:vi.fn()
+  });
+  window.localStorage.clear();
+});
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+function renderAt(path: string) {
+  return render(<MemoryRouter initialEntries={[path]}><AppContent /></MemoryRouter>);
+}
+
+describe('Plenaro web shell', () => {
+  it('zeigt die Übersicht und prüft beide Health-Endpunkte', async () => {
+    renderAt('/');
+    expect(await screen.findByRole('heading', { name: /Willkommen bei Plenaro/i })).toBeTruthy();
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThanOrEqual(4));
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith('/health/live', expect.any(Object));
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith('/health/ready', expect.any(Object));
+  });
+
+  it('bündelt Tickets und lokale Aufgaben im Arbeitsplatz mit sicherem Znuny-Webzugang in der Navigation', async () => {
+    renderAt('/workspace');
+    expect(await screen.findByRole('heading', { name: 'Arbeitstag heute' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Lokale Aufgaben' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Ticketsystem' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Aufgaben' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab',{name:'Lokale Aufgaben'}));
+    expect(await screen.findByRole('region',{name:'Aufgabenliste'})).toBeTruthy();
+  });
+
+  it('lädt die neuen Tickets zentral und zeigt fehlende Kandidatenfreigaben', async () => {
+    renderAt('/workspace');
+    fireEvent.click(await screen.findByRole('tab',{name:'Neue Aufgaben'}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>
+      String(url).includes('/api/v1/znuny/tickets?view=new'))).toBe(true));
+    expect(screen.getByText(/Administrator deine Agenten-ID/)).toBeTruthy();
+  });
+
+  it('Alle neuen Aufgaben toggelt einen persistierten Filter und Such-/Sortierparameter',async()=>{
+    candidateAccess={approved:true,agentId:77,candidateUserId:1,
+      syncEnabled:true,showAllCandidatePoolTickets:false,hasCandidateKeywords:true};
+    renderAt('/workspace');
+    fireEvent.click(await screen.findByRole('tab',{name:'Neue Aufgaben'}));
+    const toggle=await screen.findByRole('button',{name:'Alle neuen Aufgaben'});
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(toggle);
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,options])=>
+      String(url)==='/api/v1/znuny/tickets/candidates/show-all'&&
+      (options as RequestInit)?.method==='PUT'&&
+      JSON.parse(String((options as RequestInit).body)).showAll===true
+    )).toBe(true));
+    fireEvent.click(screen.getByRole('button',{name:'Filter und Sortierung'}));
+    fireEvent.change(screen.getByLabelText('Tickets sortieren nach'),
+      {target:{value:'title'}});
+    fireEvent.change(screen.getByLabelText('Tickets suchen'),
+      {target:{value:'Drucker Problem'}});
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>{
+      const value=String(url);
+      return value.startsWith('/api/v1/znuny/tickets?') &&
+        value.includes('view=new') &&
+        value.includes('sort=title') && value.includes('search=Drucker+Problem');
+    })).toBe(true));
+  });
+
+  it('fügt beim Antworten die Classic-Kundenanrede automatisch ein',async()=>{
+    replyTemplateFixture='Hallo $Customer,\\n\\nvielen Dank für Ticket $TicketNumber.';
+    ticketFixture.mine=[{
+      ticketId:'77',ticketNumber:'2026#77',title:'Ticket mit Details',
+      queue:'IT',state:'open',stateType:'open',ownerId:77,responsibleId:null,
+      createdAt:null,changedAt:null
+    }];
+    renderAt('/today');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    fireEvent.click(await screen.findByRole('button',{name:/Ticket mit Details/}));
+    fireEvent.click(await screen.findByRole('button',{name:'Antworten'}));
+    await waitFor(()=>expect((screen.getByLabelText('Antworttext') as HTMLTextAreaElement)
+      .value).toContain('Hallo Kunde,'));
+    expect((screen.getByLabelText('Antworttext') as HTMLTextAreaElement)
+      .value).toContain('Ticket 2026#77');
+  });
+
+  it('öffnet Antworten auch ohne Customer-SenderType (CustomerUserID-Fallback)',async()=>{
+    replyTemplateFixture='Hallo $Customer,\\nTicket $TicketNumber.';
+    customerArticlesFixture=[{id:'12',subject:'Interne Anfrage',
+      body:'Bitte helfen Sie uns.',from:'Support <support@example.org>',
+      to:'service@example.org',replyTo:'',senderType:'agent',
+      channel:'Internal',created:'2026-10-31 09:00:00'}];
+    ticketFixture.mine=[{ticketId:'77',ticketNumber:'2026#77',
+      title:'Ticket mit Details',queue:'IT',state:'open',stateType:'open',
+      ownerId:77,responsibleId:null,createdAt:null,changedAt:null}];
+    renderAt('/workspace');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    fireEvent.click(await screen.findByRole('button',{name:/Ticket mit Details/}));
+    fireEvent.click(await screen.findByRole('button',{name:'Antworten'}));
+    const body=await screen.findByLabelText('Antworttext') as HTMLTextAreaElement;
+    expect(body.value).toContain('Ticket 2026#77');
+    expect(screen.queryByText(/Keine Kunden-E-Mail mit sicherem Empfänger/)).toBeNull();
+    expect(screen.getAllByText(/CustomerUserID/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button',{name:'Antwort senden'})).toBeTruthy();
+  });
+
+  it('erlaubt Antworten selbst wenn Znuny nur CustomerUserID und keine Artikel liefert',async()=>{
+    customerArticlesFixture=[];
+    replyTemplateFixture='Hallo $Customer,';
+    ticketFixture.mine=[{ticketId:'77',ticketNumber:'2026#77',
+      title:'Ticket ohne Artikel',queue:'IT',state:'open',stateType:'open',
+      ownerId:77,responsibleId:null,createdAt:null,changedAt:null}];
+    renderAt('/workspace');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    fireEvent.click(await screen.findByRole('button',{name:/Ticket ohne Artikel/}));
+    fireEvent.click(await screen.findByRole('button',{name:'Antworten'}));
+    expect(await screen.findByLabelText('Antworttext')).toBeTruthy();
+    expect(screen.queryByText(/Keine Kunden-E-Mail mit sicherem Empfänger/)).toBeNull();
+  });
+
+  it('Erledigt erstellt zuerst bearbeitbare Classic-Antwort und schließt in einem Update',async()=>{
+    replyTemplateFixture='Hallo $Customer,';
+    ticketFixture.mine=[{
+      ticketId:'77',ticketNumber:'2026#77',title:'Ticket mit Details',
+      queue:'IT',state:'open',stateType:'open',ownerId:77,responsibleId:null,
+      createdAt:null,changedAt:null
+    }];
+    vi.spyOn(window,'confirm').mockReturnValue(true);
+    renderAt('/today');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    fireEvent.click(await screen.findByRole('button',{name:/Ticket mit Details/}));
+    expect(await screen.findByText('Bitte helfen Sie uns.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'Erledigt'}));
+    await waitFor(()=>expect((screen.getByLabelText('Antworttext') as HTMLTextAreaElement)
+      .value).toContain('Hallo Kunde,\n\nIst erfolgt. Ticket wird geschlossen.'));
+    fireEvent.click(screen.getByRole('button',{name:'Antwort senden & schließen'}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
+      String(url).endsWith('/tickets/77/reply')&&(opts as RequestInit)?.method==='POST'&&
+      (JSON.parse(String((opts as RequestInit).body)) as {close:boolean}).close===true
+    )).toBe(true));
+  });
+
+  it('bietet den Dunkelmodus mit umschaltbarem Zustand', async () => {
+    renderAt('/settings');
+    const themeButton = await screen.findByRole('button', { name: /Dunkelmodus aktivieren/i });
+    fireEvent.click(themeButton);
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));
+  });
+
+  it('zeigt die Benachrichtigungsglocke und ein leeres persönliches Postfach', async () => {
+    renderAt('/');
+    const button = await screen.findByRole('button', { name: /Benachrichtigungen öffnen, 0 ungelesen/ });
+    fireEvent.click(button);
+    expect(await screen.findByRole('region', { name: 'Benachrichtigungen' })).toBeTruthy();
+    expect(screen.getByText('Keine ungelesenen Erinnerungen.')).toBeTruthy();
+  });
+
+  it('öffnet die direkt verlinkte Aufgabe aus einer ungelesenen Erinnerung', async () => {
+    reminderItems = [{
+      segmentId: 'a0bb1e29-6574-4970-8a91-40dfd2a15ed7',
+      taskId: '2f145e76-1853-4b88-a1be-6fbc0bdc42b7',
+      taskTitle: 'Aufgabe aus Reminder',
+      startsAt: '2026-10-30T10:30:00Z',
+      dueAt: '2026-10-30T10:28:00Z', kind: 'lead',
+    }];
+    renderAt('/');
+    const button = await screen.findByRole('button', { name: /Benachrichtigungen öffnen, 1 ungelesen/ });
+    fireEvent.click(button);
+    expect(screen.getByText('Aufgabe aus Reminder')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Aufgabe öffnen' }).getAttribute('href'))
+      .toBe('/workspace?task=2f145e76-1853-4b88-a1be-6fbc0bdc42b7');
+  });
+
+  it('bietet persönliche Reminder-Einstellungen mit Standardvorlauf', async () => {
+    renderAt('/settings');
+    fireEvent.click(await screen.findByRole('button', { name: 'Aufgaben & Kalender' }));
+    expect(await screen.findByRole('heading', { name: 'Benachrichtigungen und Reminder' })).toBeTruthy();
+    expect((screen.getByLabelText('Vorwarnung in Minuten') as HTMLInputElement).value).toBe('2');
+  });
+
+  it('bietet einen persönlichen Datenimport mit Vorschau und ohne direkte SQLite-Übertragung', async () => {
+    renderAt('/settings');
+    fireEvent.click(await screen.findByRole('button', { name: 'Datenimport' }));
+    expect(await screen.findByRole('heading', { name: 'Desktop-Daten importieren' })).toBeTruthy();
+    expect(screen.getAllByText(/tools\/export_classic.py/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Noch kein Import ausgeführt/)).toBeTruthy();
+  });
+
+  it('zeigt die native Znuny-Weboberfläche als serverseitiges Browserbild ohne iframe',async()=>{
+    nativeZnunyReady=true;
+    renderAt('/ticket-system?ticket=77');
+    expect(await screen.findByRole('heading',{name:'Znuny-Weboberfläche'})).toBeTruthy();
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,options])=>
+      url==='/api/v1/znuny/browser/start' &&
+      JSON.parse(String(options?.body)).ticketId==='77')).toBe(true));
+    expect(await screen.findByAltText('Znuny-Browserbild (serverseitig gerendert)')).toBeTruthy();
+    expect(document.querySelector('iframe')).toBeNull();
+    expect(screen.getByRole('link',{name:'Ticketsystem'}).getAttribute('href'))
+      .toBe('/ticket-system');
+  });
+
+  it('bedient Znuny ausschließlich über Plenaro-Eingabeendpunkte',async()=>{
+    nativeZnunyReady=true;
+    renderAt('/ticket-system?ticket=77');
+    const image=await screen.findByAltText('Znuny-Browserbild (serverseitig gerendert)');
+    Object.defineProperty(image,'getBoundingClientRect',{
+      configurable:true,value:()=>({left:0,top:0,width:1280,height:800})
+    });
+    fireEvent.click(image,{clientX:320,clientY:160});
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,options])=>
+      url==='/api/v1/znuny/browser/input' &&
+      JSON.parse(String(options?.body)).kind==='click')).toBe(true));
+    expect(vi.mocked(fetch).mock.calls.every(([url])=>
+      String(url).startsWith('/') || String(url).startsWith('http://localhost'))).toBe(true);
+  });
+
+  it('zeigt die echten Classic-API-Standardwerte unter Ticketsystem', async () => {
+    renderAt('/settings');
+    fireEvent.click(await screen.findByRole('button', { name: 'Ticketsystem' }));
+    expect(await screen.findByRole('heading', { name: 'GenericTicketConnectorREST' })).toBeTruthy();
+    expect((screen.getByLabelText('API-Basisadresse') as HTMLInputElement).value)
+      .toBe('https://SERVER/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST');
+    expect((screen.getByLabelText('Znuny-Benutzername') as HTMLInputElement).value).toBe('');
+    expect(screen.queryByLabelText('Eigene Agenten-ID')).toBeNull();
+    expect(screen.getByText('Keine Zuordnung')).toBeTruthy();
+    expect(screen.getByText(/durch Administrator vergeben/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Verbindung prüfen' })).toHaveProperty('disabled', true);
+    fireEvent.click(screen.getByText('Classic-Routen, Sync-Zeiten und weitere API-Standardwerte'));
+    expect((screen.getByLabelText('TicketSearch-Route') as HTMLInputElement).value).toBe('/Ticket');
+    expect((screen.getByLabelText('Maximaler TicketSearch-Umfang') as HTMLInputElement).value).toBe('100');
+    expect((screen.getByLabelText('Classic-Kandidatenintervall (Legacy, nicht aktiv)') as HTMLInputElement).value).toBe('5');
+  });
+
+  it('speichert persönliche Znuny-Filter ohne nicht änderbare Agenten- und Kandidaten-IDs',async()=>{
+    renderAt('/settings');
+    fireEvent.click(await screen.findByRole('button',{name:'Ticketsystem'}));
+    expect(await screen.findByLabelText('Znuny-Benutzername')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Znuny-Benutzername'),
+      {target:{value:'agent.muster'}});
+    fireEvent.click(screen.getByRole('button',{name:'Meine Einstellungen speichern'}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>{
+      if(String(url)!=='/api/v1/znuny/me'||(opts as RequestInit)?.method!=='PUT')return false;
+      const body=JSON.parse(String((opts as RequestInit).body)) as Record<string,unknown>;
+      return body.username==='agent.muster' && !('agentId' in body) &&
+        !('candidateUserId' in body) && !('passwordConfigured' in body);
+    })).toBe(true));
+  });
+
+  it('speichert persönliche Antwortvorlagen ohne Adminrechte',async()=>{
+    renderAt('/settings');
+    fireEvent.click(await screen.findByRole('button',{name:'Ticketsystem'}));
+    const input=await screen.findByLabelText(
+      'Persönliche Kopfzeile für Antworten und das Schließen von Tickets') as HTMLTextAreaElement;
+    expect(input.disabled).toBe(false);
+    fireEvent.change(screen.getByLabelText('Znuny-Benutzername'),
+      {target:{value:'agent.muster'}});
+    const template='Hallo $Customer,\\n\\nIhre Anfrage $TicketNumber wird bearbeitet.';
+    fireEvent.change(input,{target:{value:template}});
+    fireEvent.click(screen.getByRole('button',{name:'Meine Einstellungen speichern'}));
+    await waitFor(()=>expect(personalReplyTemplateFixture).toBe(template));
+  });
+
+  it('verwendet persönliche Vorlage vor globaler Vorlage mit echten Zeilenumbrüchen',async()=>{
+    replyTemplateFixture='Alte globale Antwort';
+    personalReplyTemplateFixture='Hallo $Customer,\\n\\nTicket $TicketNumber.';
+    ticketFixture.mine=[{ticketId:'77',ticketNumber:'2026#77',title:'Ticket mit Details',
+      queue:'IT',state:'open',stateType:'open',ownerId:77,responsibleId:null,
+      createdAt:null,changedAt:null}];
+    renderAt('/today');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    fireEvent.click(await screen.findByRole('button',{name:/Ticket mit Details/}));
+    fireEvent.click(await screen.findByRole('button',{name:'Antworten'}));
+    const result=await screen.findByLabelText('Antworttext') as HTMLTextAreaElement;
+    await waitFor(()=>expect(result.value).toBe('Hallo Kunde,\n\nTicket 2026#77.'));
+    expect(result.value).not.toContain('Alte globale Antwort');
+  });
+
+  it('öffnet Znuny-Tickets ohne neuen Browser-Tab im dedizierten Ticketsystem-Reiter',async()=>{
+    ticketFixture.mine=[{
+      ticketId:'77',ticketNumber:'2026#77',title:'Ticket mit Details',queue:'IT',
+      state:'open',stateType:'open',ownerId:77,responsibleId:null,
+      createdAt:null,changedAt:null
+    }];
+    renderAt('/workspace');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    fireEvent.click(await screen.findByRole('button',{name:/Ticket mit Details/}));
+    const link=screen.getByRole('link',{name:'Ticket öffnen'}) as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/ticket-system?ticket=77');
+    expect(link.getAttribute('target')).toBeNull();
+    const check=await screen.findByRole('button',{name:'Znuny-Schreibzugriff prüfen'});
+    fireEvent.click(check);
+    expect(await screen.findByText(/Persönlicher Znuny-Zugang ist lesbar/)).toBeTruthy();
+    // Stored ticket URLs are references, not browser egress to Znuny.
+    expect(screen.queryByRole('link',{name:'Gespeicherte externe URL'})).toBeNull();
+    expect(screen.getByText(/nur eine Referenz/)).toBeTruthy();
+    expect(screen.queryByLabelText('Ticket-Queue filtern')).toBeNull();
+    expect(screen.queryByLabelText('Ticketstatus filtern')).toBeNull();
+  });
+
+  it('zeigt getrennte Formulare für persönliche und globale Einstellungen', async () => {
+    renderAt('/settings');
+    expect(await screen.findByRole('heading', { name: 'Persönliche Einstellungen' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Instanzeinstellungen' })).toBeTruthy();
+    expect(screen.getByLabelText('Darstellung')).toBeTruthy();
+    expect(screen.getByLabelText('Instanzname')).toBeTruthy();
+  });
+
+  it('sortiert Kontingente, Microsoft und Verwaltung in passende Einstellungskategorien', async () => {
+    renderAt('/settings');
+    fireEvent.click(await screen.findByRole('button', { name: 'Aufgaben & Kalender' }));
+    expect(await screen.findByRole('heading', { name: 'UL- und BR-Kontingente' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Microsoft 365' }));
+    expect(screen.getByRole('heading', { name: 'Outlook-Kalender' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Administration' }));
+    expect(await screen.findByRole('heading', { name: 'Benutzerverwaltung' })).toBeTruthy();
+  });
+
+  it('legt Znuny-Agenten-IDs nur in der Administration beim Benutzeranlegen und Bearbeiten fest', async () => {
+    managedUsersFixture = [{
+      id: '00000000-0000-0000-0000-000000000002',
+      email:'user@example.invalid',displayName:'Test User',
+      role:'User',disabled:false,agentId:17,candidateUserId:9,
+       loginType:'Entra',hasLocalPassword:false,
+    }];
+    renderAt('/settings');
+    fireEvent.click(await screen.findByRole('button', { name: 'Administration' }));
+    expect(await screen.findByRole('heading', { name: 'Benutzerverwaltung' })).toBeTruthy();
+    expect(await screen.findByText('Znuny #17')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'Benutzer anlegen'}));
+    expect(screen.getByLabelText('Znuny-Agenten-ID (optional)')).toBeTruthy();
+    expect(screen.getByLabelText('Kandidaten-Benutzer-ID (optional)')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'Abbrechen'}));
+    fireEvent.click(screen.getByText('Test User').closest('button')!);
+    const agentInput = screen.getByLabelText('Znuny-Agenten-ID (nur Administration)') as HTMLInputElement;
+    expect(agentInput.value).toBe('17');
+    expect((screen.getByLabelText('Kandidaten-Benutzer-ID (nur Administration)') as HTMLInputElement).value).toBe('9');
+    expect(screen.getByText('Microsoft SSO')).toBeTruthy();
+    fireEvent.change(agentInput,{target:{value:'51'}});
+    fireEvent.click(screen.getByRole('button',{name:'Änderungen speichern'}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,options])=>
+      String(url).endsWith('/admin/users/00000000-0000-0000-0000-000000000002') &&
+      (options as RequestInit)?.method === 'PUT' &&
+      JSON.parse(String((options as RequestInit)?.body)).agentId === 51)).toBe(true));
+  });
+
+  it('löscht Entra-Benutzer nur nach exakt eingegebener E-Mail-Bestätigung', async () => {
+    managedUsersFixture = [{
+      id:'00000000-0000-0000-0000-000000000003',
+      email:'entra-user@example.invalid',displayName:'Externer Benutzer',
+      role:'User',disabled:false,agentId:null,candidateUserId:null,
+      loginType:'Entra',hasLocalPassword:false,
+    }];
+    renderAt('/settings');
+    fireEvent.click(await screen.findByRole('button',{name:'Administration'}));
+    fireEvent.click(await screen.findByText('Externer Benutzer'));
+    fireEvent.click(screen.getByRole('button',{name:'Benutzer löschen'}));
+    const confirm = screen.getByLabelText('E-Mail-Adresse zur Bestätigung');
+    expect(screen.getByRole('button',{name:'Endgültig löschen'})).toHaveProperty('disabled',true);
+    fireEvent.change(confirm,{target:{value:'falsche-email@example.invalid'}});
+    expect(screen.getByRole('button',{name:'Endgültig löschen'})).toHaveProperty('disabled',true);
+    fireEvent.change(confirm,{target:{value:'entra-user@example.invalid'}});
+    fireEvent.click(screen.getByRole('button',{name:'Endgültig löschen'}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
+      String(url).endsWith('/admin/users/00000000-0000-0000-0000-000000000003') &&
+      (opts as RequestInit)?.method==='DELETE' &&
+      JSON.parse(String((opts as RequestInit)?.body)).confirmation==='entra-user@example.invalid'
+    )).toBe(true));
+    expect(await screen.findByText(/Benutzerkonto wurde gelöscht/)).toBeTruthy();
+    expect(screen.queryByText('Externer Benutzer')).toBeNull();
+  });
+
+  it('bietet beim eigenen Administratorkonto keine Löschaktion an', async () => {
+    managedUsersFixture = [{
+      id:'00000000-0000-0000-0000-000000000001',
+      email:'test@example.invalid',displayName:'Test',
+      role:'Admin',disabled:false,agentId:null,candidateUserId:null,
+      loginType:'Local',hasLocalPassword:true,
+    }];
+    renderAt('/settings');
+    fireEvent.click(await screen.findByRole('button',{name:'Administration'}));
+    fireEvent.click((await screen.findByText('Test')).closest('button')!);
+    expect(screen.queryByRole('button',{name:'Benutzer löschen'})).toBeNull();
+    expect(screen.getByText('Dein eigenes Administratorkonto kann nicht gelöscht werden.')).toBeTruthy();
+  });
+
+  it('versteckt Microsoft SSO wenn Entra nicht eingerichtet ist', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (path: string) =>
+      path === '/api/v1/auth/me' ? { ok: false, status: 401 } :
+      path === '/api/v1/setup/status' ? { ok: true, status: 200, json: async () => ({ required: false }) } :
+      path === '/api/v1/auth/entra/status' ? { ok: true, status: 200, json: async () => ({ enabled: false, linked: false }) } :
+      { ok: true, status: 200 },
+    ));
+    renderAt('/login');
+    expect(await screen.findByRole('heading', { name: 'Willkommen zurück.' })).toBeTruthy();
+    expect(screen.queryByText('Mit Microsoft anmelden')).toBeNull();
+  });
+
+  it('zeigt den echten lokalen Wochenkalender ohne Microsoft Entra', async () => {
+    renderAt('/week');
+    expect(await screen.findByRole('heading', { name: 'Meine Woche' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Wochenkalender' })).toBeTruthy();
+    expect(screen.getByText('Ohne Microsoft nutzbar')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Vorherige Woche' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Nächste Woche' })).toBeTruthy();
+    expect(screen.queryByText('Microsoft Graph ist noch nicht eingerichtet')).toBeNull();
+  });
+
+  it('verschiebt ein Segment mit Drag-and-drop und erhält Notizen durch den gezielten PATCH', async () => {
+    const today = new Date();
+    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    const tuesday = new Date(monday);
+    tuesday.setDate(tuesday.getDate() + 1);
+    const start = new Date(monday);
+    start.setHours(9, 0, 0, 0);
+    const end = new Date(start.getTime() + 45 * 60 * 1000);
+    calendarSegments = [{
+      id: '1179cbb8-5b66-4c2c-940f-44ea05f4fa91',
+      taskId: 'd10e1e7c-a55d-42a0-a0df-061fcf157810',
+      taskTitle: 'Testaufgabe', startsAt: start.toISOString(), endsAt: end.toISOString(),
+      note: 'Bestehende Notiz', participants: ['kunde@example.invalid'],
+    }];
+    renderAt('/week');
+    const segment = await screen.findByRole('button', { name: /Zeitsegment Testaufgabe/ });
+    const transfer = { setData: vi.fn(), effectAllowed: 'copy', dropEffect: 'none' };
+    fireEvent.dragStart(segment, { dataTransfer: transfer });
+    expect(transfer.setData).toHaveBeenCalledWith('text/plain', calendarSegments[0].id);
+    const target = screen.getByTestId(`calendar-slot-${localDate(tuesday)}-10`);
+    fireEvent.dragOver(target, { dataTransfer: transfer, clientY: 0 });
+    fireEvent.drop(target, { dataTransfer: transfer, clientY: 0 });
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      `/api/v1/tasks/${calendarSegments[0].taskId}/segments/${calendarSegments[0].id}/schedule`,
+      expect.objectContaining({
+        method: 'PATCH',
+        body: expect.stringContaining('"expectedStartsAt"'),
+      }),
+    ));
+    const patch = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith('/schedule'));
+    const payload = JSON.parse((patch?.[1] as RequestInit).body as string) as {
+      startsAt: string; endsAt: string; expectedStartsAt: string;
+    };
+    expect(new Date(payload.startsAt).getHours()).toBe(10);
+    expect(new Date(payload.endsAt).getTime() - new Date(payload.startsAt).getTime()).toBe(45 * 60000);
+    expect(payload.expectedStartsAt).toBe(start.toISOString());
+    expect((patch?.[1] as RequestInit).headers).toMatchObject({ 'X-CSRF-TOKEN': 'test-token' });
+  });
+
+  it('erlaubt Segmentverschiebung per Tastatur bedienbarem Formular', async () => {
+    const monday = new Date();
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    monday.setHours(9, 0, 0, 0);
+    calendarSegments = [{
+      id: '1179cbb8-5b66-4c2c-940f-44ea05f4fa91',
+      taskId: 'd10e1e7c-a55d-42a0-a0df-061fcf157810',
+      taskTitle: 'Testaufgabe', startsAt: monday.toISOString(),
+      endsAt: new Date(monday.getTime() + 30 * 60000).toISOString(),
+      note: '', participants: [],
+    }];
+    renderAt('/week');
+    fireEvent.click(await screen.findByRole('button', { name: /Zeitsegment Testaufgabe/ }));
+    const form = screen.getByRole('form', { name: 'Zeitsegment verschieben' });
+    fireEvent.change(within(form).getByLabelText('Neue Startzeit'), { target: { value: '10:30' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Zeitsegment verschieben' }));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, options]) =>
+      String(url).endsWith('/schedule') && (options as RequestInit).method === 'PATCH',
+    )).toBe(true));
+  });
+
+  it('zeigt Aufgaben links und Details rechts statt Einzelkarten', async () => {
+    renderAt('/workspace?task=2f145e76-1853-4b88-a1be-6fbc0bdc42b7');
+    expect(await screen.findByRole('heading', { name: 'Aufgaben' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Aufgabenliste' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Aufgabendetails' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Keine Aufgaben gefunden' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Neue Aufgabe' }));
+    expect(await screen.findByLabelText('Titel')).toBeTruthy();
+  });
+
+  it('zeigt den Arbeitsplatz mit Ticketreitern und integrierten lokalen Aufgaben', async () => {
+    renderAt('/today');
+    expect(await screen.findByRole('heading',{name:'Arbeitstag heute'})).toBeTruthy();
+    expect(screen.getByRole('region',{name:'Arbeitsplatz-Ticketbereich'})).toBeTruthy();
+    expect(screen.getByRole('complementary',{name:'Ticketdetails und Planung'})).toBeTruthy();
+    expect(screen.getByRole('tab',{name:'Aktuelle Aufgaben'})).toBeTruthy();
+    expect(screen.getByRole('tab',{name:'Neue Aufgaben'})).toBeTruthy();
+    expect(screen.getByRole('tab',{name:'Erledigte Aufgaben'})).toBeTruthy();
+    expect(screen.getByRole('tab',{name:'Lokale Aufgaben'})).toBeTruthy();
+    expect(screen.queryByRole('region',{name:'Aufgabenbezogener Timer'})).toBeNull();
+  });
+
+  it('Heute zeigt nur lokale Znuny-Ticketsegmente und heutige Outlook-Termine',async()=>{
+    const day=localDate();
+    const morning=new Date(day+'T09:00:00');
+    const ten=new Date(day+'T10:00:00');
+    const eleven=new Date(day+'T11:00:00');
+    ticketAgendaFixture=[{
+      id:'seg1',ticketId:'77',ticketNumber:'2026#77',
+      title:'Kundenticket für heute',queue:'IT',state:'open',stateType:'open',
+      ownerId:77,responsibleId:null,createdAt:null,changedAt:null,
+      startsAt:ten.toISOString(),endsAt:eleven.toISOString(),note:'Vorbereiten',participants:[]
+    }];
+    const localTask:WorkTask={
+      id:'task',title:'Lokale Aufgabe heute',plannedFor:day,
+      status:'active',description:'',priority:3,tags:[],
+      createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),completedAt:null
+    };
+    allTasksFixture=[localTask];todayFixture=[localTask];
+    ticketFixture.mine=[{
+      ticketId:'77',ticketNumber:'2026#77',title:'Kundenticket für heute',
+      queue:'IT',state:'open',stateType:'open',ownerId:77,responsibleId:null,
+      createdAt:null,changedAt:null
+    }];
+    outlookEnabled=true;
+    outlookFixture=[{
+      id:'event1',subject:'Outlook Projektbesprechung',
+      start:morning.toISOString(),end:ten.toISOString(),isAllDay:false,
+      showAs:'busy',location:'Besprechungsraum',
+      webLink:'https://outlook.office.com/calendar',
+    }];
+    renderAt('/today');
+    const agenda=await screen.findByLabelText('Tagesagenda');
+    await waitFor(()=>expect(within(agenda).getAllByRole('button')).toHaveLength(2));
+    const names=within(agenda).getAllByRole('button').map(b=>b.textContent||'');
+    expect(names[0]).toContain('Outlook Projektbesprechung');
+    expect(names[1]).toContain('Kundenticket für heute');
+    expect(agenda.textContent).not.toContain('Lokale Aufgabe heute');
+    fireEvent.click(within(agenda).getByRole('button',{name:/Kundenticket für heute/}));
+    expect(await screen.findByRole('heading',{name:'Kundenticket für heute'})).toBeTruthy();
+    expect(await screen.findByRole('region',{name:'Planung (Segmente)'})).toBeTruthy();
+    expect(await screen.findByRole('region',{name:'Timer / Buchung'})).toBeTruthy();
+    expect(await screen.findByLabelText('Beschreibung')).toBeTruthy();
+    expect((screen.getByLabelText('Beschreibung') as HTMLTextAreaElement).value)
+      .toBe('Das ist ein lokaler Test');
+    expect((screen.getByLabelText('Ticket URL') as HTMLInputElement).value)
+      .toBe('https://example.org/ticket/77');
+    fireEvent.click(within(agenda).getByRole('button',{name:/Outlook Projektbesprechung/}));
+    expect(await screen.findByRole('heading',{name:'Outlook Projektbesprechung'})).toBeTruthy();
+    expect(screen.getByRole('link',{name:/In Outlook öffnen/})).toBeTruthy();
+  });
+
+  it('bearbeitet die lokale Task-Beschreibung und URL im Classic-Ticketdetail rechts', async()=>{
+    ticketFixture.mine=[{
+      ticketId:'77',ticketNumber:'2026#77',title:'Ticket mit Details',
+      queue:'IT',state:'open',stateType:'open',
+      ownerId:77,responsibleId:null,createdAt:null,changedAt:null
+    }];
+    renderAt('/today');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    fireEvent.click(await screen.findByRole('button',{name:/Ticket mit Details/}));
+    expect(await screen.findByRole('region',{name:'Task Details'})).toBeTruthy();
+    expect(await screen.findByRole('region',{name:'Timer / Buchung'})).toBeTruthy();
+    expect(await screen.findByRole('region',{name:'Planung (Segmente)'})).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Beschreibung'),
+      {target:{value:'Neue lokale Beschreibung'}});
+    fireEvent.change(screen.getByLabelText('Ticket URL'),
+      {target:{value:'https://example.org/neues-ticket'}});
+    fireEvent.click(screen.getByRole('button',{name:/Speichern/}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
+      String(url).endsWith('/tickets/77/workspace') &&
+      (opts as RequestInit)?.method==='PUT' &&
+      JSON.parse(String((opts as RequestInit).body)).description==='Neue lokale Beschreibung' &&
+      JSON.parse(String((opts as RequestInit).body)).ticketUrl==='https://example.org/neues-ticket'
+    )).toBe(true));
+    expect(screen.getByRole('button',{name:'Erledigt'})).toHaveProperty('disabled',false);
+  });
+
+  it('lädt echte Znuny-Nachrichten und bietet Antworten und Zuweisung an',async()=>{
+    ticketFixture.mine=[{
+      ticketId:'77',ticketNumber:'2026#77',title:'Ticket mit Details',
+      queue:'IT',state:'open',stateType:'open',ownerId:77,responsibleId:null,
+      createdAt:null,changedAt:null
+    }];
+    renderAt('/today');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    fireEvent.click(await screen.findByRole('button',{name:/Ticket mit Details/}));
+    expect(await screen.findByText('Bitte helfen Sie uns.')).toBeTruthy();
+    expect(screen.getByRole('button',{name:'Antworten'})).toBeTruthy();
+    // The names are resolved automatically; no manual reload needed.
+    await waitFor(()=>expect(screen.getByText('Agent Siebenundsiebzig')).toBeTruthy());
+    await waitFor(()=>expect(
+      (screen.getByRole('combobox',{name:'Ticket Besitzer'}) as HTMLSelectElement)
+        .querySelector('option[value="88"]')
+    ).not.toBeNull());
+    fireEvent.change(screen.getByRole('combobox',{name:'Ticket Besitzer'}),
+      {target:{value:'88'}});
+    fireEvent.click(screen.getByRole('button',{name:'Änderungen übernehmen'}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,options])=>
+      String(url).endsWith('/tickets/77/assignment') &&
+      (options as RequestInit)?.method==='PUT' &&
+      JSON.parse(String((options as RequestInit).body)).ownerId===88
+    )).toBe(true));
+  });
+
+  it('Aktuelle, Neue und Erledigte Aufgaben verwenden jeweils ihren Ticket-API-Filter',async()=>{
+    ticketFixture.mine=[{
+      ticketId:'42',ticketNumber:'42',title:'Aktuelles Znuny-Ticket',queue:'IT',
+      state:'open',stateType:'open',ownerId:77,responsibleId:null,
+      createdAt:null,changedAt:null,
+    }];
+    ticketFixture.new=[{
+      ticketId:'43',ticketNumber:'43',title:'Unzugewiesener Znuny-Kandidat',
+      queue:'IT',state:'new',stateType:'new',ownerId:1,responsibleId:null,
+      createdAt:null,changedAt:null,
+    }];
+    ticketFixture.completed=[{
+      ticketId:'44',ticketNumber:'44',title:'Geschlossenes Znuny-Ticket',
+      queue:'IT',state:'closed successful',stateType:'closed',ownerId:77,
+      responsibleId:null,createdAt:null,changedAt:null,
+    }];
+    renderAt('/today');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    expect(await screen.findByText('Aktuelles Znuny-Ticket')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab',{name:'Neue Aufgaben'}));
+    expect(await screen.findByText('Unzugewiesener Znuny-Kandidat')).toBeTruthy();
+    expect(screen.queryByText('Aktuelles Znuny-Ticket')).toBeNull();
+    fireEvent.click(screen.getByRole('tab',{name:'Erledigte Aufgaben'}));
+    expect(await screen.findByText('Geschlossenes Znuny-Ticket')).toBeTruthy();
+    expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('view=completed'))).toBe(true);
+  });
+
+  it('zeigt Normal, UL, AM, HO und BR als Tagesmarker ohne Microsoft', async () => {
+    renderAt('/today');
+    expect(await screen.findByRole('heading', { name: 'Arbeitstag heute' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'UL' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'AM' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'HO' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'BR' })).toBeTruthy();
+  });
+
+  it('zeigt echte Monatsaufgabenzeiten und bietet CSV-Export an', async () => {
+    renderAt('/reports');
+    expect(await screen.findByRole('heading', { name: 'Monatsberichte' })).toBeTruthy();
+    expect(await screen.findByText('Zeittest')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /CSV exportieren/ })).toBeTruthy();
+    expect(screen.getByLabelText('Monat auswählen')).toBeTruthy();
+  });
+
+  it('zeigt unbekannte URLs als Fehlerseite', async () => {
+    renderAt('/nicht-vorhanden');
+    expect(await screen.findByRole('heading', { name: 'Seite nicht gefunden.' })).toBeTruthy();
+  });
+
+  it('zeigt am Login nur das Loginformular und keine Navigation', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (path: string) =>
+      path === '/api/v1/auth/me' ? { ok: false, status: 401 } :
+      path === '/api/v1/setup/status' ? { ok: true, status: 200, json: async () => ({ required: false }) } :
+      { ok: true, status: 200 },
+    ));
+    renderAt('/login');
+    expect(await screen.findByRole('heading', { name: 'Willkommen zurück.' })).toBeTruthy();
+    expect(screen.getByLabelText('E-Mail-Adresse')).toBeTruthy();
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(screen.queryByText('Deine Arbeitsbereiche')).toBeNull();
+  });
+
+  it('öffnet vor dem ersten Benutzer automatisch den Einrichtungsassistenten', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (path: string) =>
+      path === '/api/v1/setup/status' ? { ok: true, status: 200, json: async () => ({ required: true }) } :
+      path === '/api/v1/auth/me' ? { ok: false, status: 401 } :
+      { ok: true, status: 200 },
+    ));
+    renderAt('/login');
+    expect(await screen.findByRole('heading', { name: 'Willkommen bei Plenaro.' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Einrichtung starten/i }));
+    expect(screen.getByRole('heading', { name: 'Administrator erstellen' })).toBeTruthy();
+    expect(screen.queryByRole('navigation')).toBeNull();
+  });
+
+  it('sperrt private Seiten ohne gültige Sitzung', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (path: string) =>
+      path === '/api/v1/auth/me' ? { ok: false, status: 401 } :
+      path === '/api/v1/setup/status' ? { ok: true, status: 200, json: async () => ({ required: false }) } :
+      { ok: true, status: 200 },
+    ));
+    renderAt('/tasks');
+    expect(await screen.findByRole('heading', { name: 'Willkommen zurück.' })).toBeTruthy();
+  });
+});
