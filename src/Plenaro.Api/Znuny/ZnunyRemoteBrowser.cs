@@ -22,7 +22,7 @@ namespace Plenaro.Api.Znuny;
 /// never sees the internal WebDriver session ID. The Selenium service must
 /// NOT publish its ports to the Docker host.
 /// </summary>
-public sealed class ZnunyRemoteBrowser(IHttpClientFactory clients)
+public sealed partial class ZnunyRemoteBrowser(IHttpClientFactory clients)
 {
     private const int Width=1280;
     private const int Height=800;
@@ -36,6 +36,7 @@ public sealed class ZnunyRemoteBrowser(IHttpClientFactory clients)
     private HttpClient Client=>clients.CreateClient("Plenaro.WebDriver");
 
     public sealed record StartInput(string? TicketId,bool Reset=false);
+    public sealed record ViewportInput(int Width,int Height);
     public sealed record BrowserInput(string Kind,int X=0,int Y=0,int DeltaY=0,
         string? Key=null,string? Text=null,bool Ctrl=false,bool Shift=false,
         bool Alt=false);
@@ -48,6 +49,8 @@ public sealed class ZnunyRemoteBrowser(IHttpClientFactory clients)
         public DateTimeOffset LastUsed {get;set;}=DateTimeOffset.UtcNow;
         public SemaphoreSlim Gate {get;}=new(1,1);
         public bool JpegSupported {get;set;}=true;
+        public int ViewWidth {get;set;}=Width;
+        public int ViewHeight {get;set;}=Height;
     }
 
     private sealed class DriverFailure(string code):Exception(code)
@@ -154,6 +157,51 @@ public sealed class ZnunyRemoteBrowser(IHttpClientFactory clients)
                 return Results.File(bytes,mime,enableRangeProcessing:false);
             }catch(DriverFailure e){return DriverError(e);}
         }).RequireRateLimiting("znuny-browser-frame");
+
+
+        // Live CDP screencast via authenticated SSE. Browser credentials and
+        // the internal Selenium websocket never reach the end user's device.
+        group.MapGet("/stream",async(HttpContext http,
+            UserManager<ApplicationUser> users,IConfiguration config,
+            ZnunyRemoteBrowser browser,CancellationToken ct)=>{
+            // Cross-site EventSource requests must never hold a browser session.
+            if(http.Request.Headers.TryGetValue("Sec-Fetch-Site",out var site)&&
+                site.ToString() is not ("same-origin" or "none"))
+            {http.Response.StatusCode=403;return;}
+            var user=await users.GetUserAsync(http.User);
+            if(user is null||user.IsDisabled){http.Response.StatusCode=401;return;}
+            if(!await ApprovedAsync(user.Id,config,ct)){
+                await browser.StopAsync(user.Id,ct);
+                http.Response.StatusCode=403;return;
+            }
+            http.Response.ContentType="text/event-stream";
+            http.Response.Headers.CacheControl="no-store, private";
+            http.Response.Headers["X-Accel-Buffering"]="no";
+            http.Response.Headers["X-Content-Type-Options"]="nosniff";
+            try{await browser.StreamAsync(user.Id,http.Response,config,ct);}
+            catch(OperationCanceledException) when(ct.IsCancellationRequested){}
+            catch(Exception){ // Never surface Selenium details or internal URLs.
+                if(!ct.IsCancellationRequested)
+                    await http.Response.WriteAsync("event: unavailable\ndata: retry\n\n",ct);
+            }
+        }).RequireRateLimiting("znuny-browser-start");
+
+        group.MapPost("/viewport",async(ViewportInput input,HttpContext http,
+            IAntiforgery anti,UserManager<ApplicationUser> users,
+            IConfiguration config,ZnunyRemoteBrowser browser,CancellationToken ct)=>{
+            if(!await Csrf(http,anti))return Results.BadRequest(
+                new{error="Ungültiger Sicherheitstoken."});
+            var user=await users.GetUserAsync(http.User);
+            if(user is null||user.IsDisabled)return Results.Unauthorized();
+            if(!await ApprovedAsync(user.Id,config,ct)){
+                await browser.StopAsync(user.Id,ct);
+                return Results.Forbid();
+            }
+            try{
+                await browser.ResizeAsync(user.Id,input,ct);
+                return Results.NoContent();
+            }catch(DriverFailure e){return DriverError(e);}
+        });
 
         group.MapPost("/input",async(BrowserInput input,HttpContext http,
             IAntiforgery anti,UserManager<ApplicationUser> users,
@@ -440,12 +488,36 @@ public sealed class ZnunyRemoteBrowser(IHttpClientFactory clients)
         }catch(FormatException){throw new DriverFailure("protocol");}
     }
 
+    private async Task ResizeAsync(Guid user,ViewportInput size,CancellationToken ct)
+    {
+        if(size.Width is <480 or >2400 || size.Height is <320 or >1600)
+            throw new DriverFailure("invalid-input");
+        var browser=Current(user);
+        await browser.Gate.WaitAsync(ct);
+        try{
+            if(browser.ViewWidth==size.Width && browser.ViewHeight==size.Height)
+                return;
+            await ConfirmHostAsync(browser,ct);
+            using var window=await CommandAsync(HttpMethod.Post,
+                "session/"+browser.SessionId+"/window/rect",
+                new{width=size.Width,height=size.Height},ct);
+            // Exact CSS viewport size, without margins from headless browser chrome.
+            using var metrics=await CommandAsync(HttpMethod.Post,
+                "session/"+browser.SessionId+"/goog/cdp/execute",
+                new{cmd="Emulation.setDeviceMetricsOverride",
+                    @params=new{width=size.Width,height=size.Height,
+                        deviceScaleFactor=1,mobile=false}},ct);
+            browser.ViewWidth=size.Width;
+            browser.ViewHeight=size.Height;
+        }finally{browser.Gate.Release();}
+    }
+
     private async Task InputAsync(Guid user,BrowserInput input,CancellationToken ct)
     {
         var browser=Current(user);
         if(input.Kind is not ("click" or "scroll" or "key" or "text" or
             "back" or "forward" or "refresh") ||
-            input.X<0||input.X>Width||input.Y<0||input.Y>Height||
+            input.X<0||input.X>browser.ViewWidth||input.Y<0||input.Y>browser.ViewHeight||
             input.DeltaY is < -1200 or >1200 ||
             input.Text?.Length>4000)
             throw new DriverFailure("invalid-input");

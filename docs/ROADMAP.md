@@ -516,3 +516,13 @@ Zielhost weiß. Die historische Checkliste dokumentiert den Zwischenstand.
 - [x] CI: CA-Mounts, NSS-Trust, .NET-Bundle und Chromium-JPEG-Screenshot erfolgreich ([PR #53](https://github.com/DerHausmeisterKrause/plenaro/pull/53), [CI #41588658814](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41588658814))
 - [ ] Auf dem Zielhost echtes Znuny-HTTPS gegen die interne interne Root-CA verifizieren und Zertifikatswarnung in Chromium prüfen
 - [ ] Die Responsivität über die tatsächliche Teleport-Verbindung im Alltag bestätigen
+
+### 03.11.2026 – Interaktive Browseransicht beschleunigen (Phase 6)
+
+- [x] Echte Chromium-CDP-Bildereignisse über serverseitige WebSocket-Verbindung abonnieren und als geschützten, same-origin SSE-Stream an die Weboberfläche liefern
+- [x] Vollständige Screenshot-Polling-Rundreisen durch kontinuierliche komprimierte JPEG-Ereignisse ersetzen; bei fehlender CDP-Unterstützung kompatiblen Bildmodus beibehalten
+- [x] Chromium-Viewport bei Größenänderungen an die verfügbare Fläche der Plenaro-Seite anpassen und nicht mehr auf 1280 Pixel Breite begrenzen
+- [x] Unnötiges zusätzliches Text-Einfügeformular unter der Browseransicht entfernen; Einfügen über die reguläre Zwischenablage bleibt möglich
+- [x] Keine internen WebDriver-/CDP-Ports veröffentlichen; nur der authentifizierte Benutzer erhält Bilddaten, persönliche Zugangsdaten bleiben serverseitig
+- [ ] End-to-End-CI: Frontend, Backend, Chromium-WebSocket-Screencast und Docker-Smoke erfolgreich
+- [ ] Echtes Zielsystem: Geschwindigkeit, Darstellung, Tastatur, Navigation und Scrollen im Browser überprüfen

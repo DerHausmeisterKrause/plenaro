@@ -87,6 +87,12 @@ jobs:
             "http://127.0.0.1:4444/session/$SESSION/goog/cdp/execute" |
             python3 -c 'import json,sys,base64;d=base64.b64decode(json.load(sys.stdin)["value"]["data"]);assert d[:3]==bytes([255,216,255]) and len(d)>100'
           echo 'CI checkpoint: Chromium CDP serves compressed JPEG frames'
+          # Real Selenium Grid websocket/CDP screencast, private Docker edge
+          # network, no published port and no third-party target.
+          docker run --rm --network plenaro_edge \
+            -e SESSION="$SESSION" \
+            -v "$PWD/tools/ci_chromium_cdp.mjs:/tests/ci_chromium_cdp.mjs:ro" \
+            node:22-alpine node /tests/ci_chromium_cdp.mjs
           docker compose exec -T znuny-browser curl -sS -X DELETE \
             "http://127.0.0.1:4444/session/$SESSION" > /dev/null
           echo 'CI checkpoint: isolated Chromium/WebDriver renders real PNG and JPEG frames'
