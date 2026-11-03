@@ -3,7 +3,7 @@ import {
   Activity, ArrowRight, ArrowUpRight, CalendarCheck2, CheckCircle2,
   ChevronRight, CircleAlert, Database, ExternalLink,
   LayoutGrid, LockKeyhole, LogIn, Menu, Moon,
-  Server, ShieldCheck, Sparkles, Sun, X,
+  Server, ShieldCheck, Sparkles, Sun, Star, X,
 } from 'lucide-react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { LoginPage, LogoutPage } from './AuthPage';
@@ -12,6 +12,8 @@ import { SetupPage } from './SetupPage';
 import { SettingsPage } from './SettingsPage';
 import { WeekCalendarPage } from './WeekCalendarPage';
 import { ZnunyWebPortalPage } from './ZnunyWebPortalPage';
+import {FavoritePage} from './FavoritesPage';
+import {loadFavorites,type Favorite} from './favoritesApi';
 import { ClassicTodayPage } from './ClassicTodayPage';
 import { ReportsPage } from './ReportsPage';
 import { NotificationCenter } from './NotificationCenter';
@@ -67,7 +69,7 @@ function StatusPill({ state, label }: { state: HealthState; label: string }) {
   );
 }
 
-function Sidebar({ onNavigate }: { onNavigate: () => void }) {
+function Sidebar({ onNavigate, favorites }: { onNavigate: () => void; favorites: Favorite[] }) {
   return (
     <>
       <div className="sidebar-top"><Brand /></div>
@@ -75,6 +77,16 @@ function Sidebar({ onNavigate }: { onNavigate: () => void }) {
         <span className="nav-caption">ARBEITSBEREICH</span>
         <nav className="nav-list" aria-label="Hauptnavigation">
           {navigation.filter(item => ['today', 'week', 'ticketsystem'].includes(item.key)).map((item) => <SidebarLink key={item.key} item={item} onNavigate={onNavigate} />)}
+        </nav>
+        <span className="nav-caption second">FAVORITEN</span>
+        <nav className="nav-list" aria-label="Persönliche Favoriten">
+          {favorites.filter(x=>x.enabled).map(item=><NavLink
+            key={item.id} to={'/favorites/'+item.id} onClick={onNavigate}
+            className={({isActive})=>'nav-link'+(isActive?' active':'')}>
+            <Star size={19}/><span>{item.name}</span>
+          </NavLink>)}
+          <NavLink className="nav-link" to="/settings?section=favorites"
+            onClick={onNavigate}><Star size={19}/><span>Favoriten verwalten</span></NavLink>
         </nav>
         <span className="nav-caption second">TOOLS & VERWALTUNG</span>
         <nav className="nav-list" aria-label="Werkzeuge und Verwaltung">
@@ -258,6 +270,8 @@ export function AppContent() {
   const [themeError, setThemeError] = useState('');
   const { web, database } = useHealth();
   const [user, setUser] = useState<CurrentUser | null | undefined>(undefined);
+  const [favorites,setFavorites]=useState<Favorite[]>([]);
+  const [favoriteVersion,setFavoriteVersion]=useState(0);
   const [setupState, setSetupState] = useState<'loading' | 'required' | 'complete' | 'error'>('loading');
 
   useEffect(() => {
@@ -291,6 +305,13 @@ export function AppContent() {
     return () => { active = false; };
   }, [user?.id]);
 
+  useEffect(()=>{
+    if(!user?.id){setFavorites([]);return;}
+    let active=true;
+    void loadFavorites().then(items=>{if(active)setFavorites(items);})
+      .catch(()=>{if(active)setFavorites([]);});
+    return()=>{active=false;};
+  },[user?.id,favoriteVersion]);
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
 
@@ -334,7 +355,7 @@ export function AppContent() {
       {menuOpen && <button className="menu-overlay" type="button" onClick={() => setMenuOpen(false)} aria-label="Menü schließen" />}
       <aside id="mobile-navigation" className={`sidebar${menuOpen ? ' open' : ''}`} aria-label="Seitenmenü">
         <div className="mobile-close"><button className="icon-button" onClick={() => setMenuOpen(false)} aria-label="Menü schließen"><X size={22} /></button></div>
-        <Sidebar onNavigate={() => setMenuOpen(false)} />
+        <Sidebar onNavigate={() => setMenuOpen(false)} favorites={favorites} />
       </aside>
       <div className="main-column">
         <header className="topbar">
@@ -359,12 +380,13 @@ export function AppContent() {
             {navigation.filter(item => !['settings', 'week', 'today', 'ticketsystem', 'reports'].includes(item.key)).map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
             <Route path="/week" element={<PrivateArea user={user}><WeekCalendarPage/></PrivateArea>} />
             <Route path="/ticket-system" element={<PrivateArea user={user}><ZnunyWebPortalPage/></PrivateArea>} />
+            <Route path="/favorites/:id" element={<PrivateArea user={user}><FavoritePage/></PrivateArea>} />
             <Route path="/tasks" element={<Navigate to={'/workspace'+location.search} replace />} />
             <Route path="/tickets" element={<Navigate to="/workspace" replace />} />
             <Route path="/reports" element={<PrivateArea user={user}><ReportsPage/></PrivateArea>} />
             <Route path="/today" element={<Navigate to="/workspace" replace />} />
              <Route path="/workspace" element={<PrivateArea user={user}><ClassicTodayPage/></PrivateArea>} />
-            <Route path="/settings" element={<PrivateArea user={user}><SettingsPage user={user} onPersonalSaved={value => { setPrefs(value); applyTheme(value.theme); setThemeError(''); }} onWorkspaceSaved={value => setInstanceName(value.instanceName)}/></PrivateArea>} />
+            <Route path="/settings" element={<PrivateArea user={user}><SettingsPage user={user} onPersonalSaved={value => { setPrefs(value); applyTheme(value.theme); setThemeError(''); }} onWorkspaceSaved={value => setInstanceName(value.instanceName)} onFavoritesChanged={() => setFavoriteVersion(x=>x+1)}/></PrivateArea>} />
             <Route path="/system" element={<SystemPage web={web} database={database}/>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
