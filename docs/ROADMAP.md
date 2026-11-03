@@ -550,7 +550,7 @@ Zielhost weiß. Die historische Checkliste dokumentiert den Zwischenstand.
 - [x] Screenshot-Bildmodus, unnötiges Paste-Feld und zugehörige CSS-Klassen entfernen
 - [x] Ohne separate HTTPS-Origin keine unsichere Einbettung oder stillschweigenden Rückfall: klare lokale Einrichtungsanleitung im Reiter
 - [x] Docker-CI auf Backend-CA-Vertrauen, native Proxy-Authentifizierung und kein zusätzliches Browser-Image umstellen
-- [ ] CI-Integration (Build/Tests/Docker-Smoke) nach dem Refactoring erfolgreich
+- [x] CI-Integration (Build/Tests/Docker-Smoke) nach dem Refactoring erfolgreich ([PR #3](https://github.com/DerHausmeisterKrause/plenaro/pull/3), [CI #41605224970](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41605224970))
 - [ ] Zielhost: DNS/TLS für zwei same-site Plenaro-Origins einrichten und echte Znuny-HTML-Anmeldung sowie parallele Nutzer prüfen
 - [ ] Reale Ticketoperationen (Antworten, Schließen, Zeitbuchen) weiterhin ausschließlich anhand eines kontrollierten Testtickets prüfen
 
