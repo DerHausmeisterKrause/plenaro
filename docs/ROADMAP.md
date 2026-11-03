@@ -524,5 +524,5 @@ Zielhost weiß. Die historische Checkliste dokumentiert den Zwischenstand.
 - [x] Chromium-Viewport bei Größenänderungen an die verfügbare Fläche der Plenaro-Seite anpassen und nicht mehr auf 1280 Pixel Breite begrenzen
 - [x] Unnötiges zusätzliches Text-Einfügeformular unter der Browseransicht entfernen; Einfügen über die reguläre Zwischenablage bleibt möglich
 - [x] Keine internen WebDriver-/CDP-Ports veröffentlichen; nur der authentifizierte Benutzer erhält Bilddaten, persönliche Zugangsdaten bleiben serverseitig
-- [ ] End-to-End-CI: Frontend, Backend, Chromium-WebSocket-Screencast und Docker-Smoke erfolgreich
+- [x] End-to-End-CI: Frontend, Backend, Chromium-WebSocket-Screencast und Docker-Smoke erfolgreich ([PR #1](https://github.com/DerHausmeisterKrause/plenaro/pull/1), [CI #41596808475](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41596808475))
 - [ ] Echtes Zielsystem: Geschwindigkeit, Darstellung, Tastatur, Navigation und Scrollen im Browser überprüfen
