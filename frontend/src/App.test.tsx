@@ -486,6 +486,10 @@ describe('Plenaro web shell', () => {
       JSON.parse(String(options?.body)).ticketId==='77')).toBe(true));
     expect(iframe.getAttribute('src')).toMatch(/^https:\/\/tickets\.example\.org\//);
     expect(iframe.getAttribute('sandbox')).toContain('allow-forms');
+    // Znuny's reply, note, owner and forward actions use popup windows.
+    // A sandboxed iframe otherwise transfers its restrictions to popups,
+    // preventing normal compose form submissions and opener communication.
+    expect(iframe.getAttribute('sandbox')).toContain('allow-popups-to-escape-sandbox');
     expect(iframe.getAttribute('sandbox')).not.toContain('allow-top-navigation');
     expect(screen.getByRole('heading',{name:'Ticketsystem-Weboberfläche'})).toBeTruthy();
     expect(screen.queryByRole('button',{name:/Kompatibler Modus/})).toBeNull();
