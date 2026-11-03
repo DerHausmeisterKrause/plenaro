@@ -131,3 +131,34 @@ docker compose logs --tail=80 nginx web
 - In den Entwicklerwerkzeugen dürfen keine Verbindungen zu internen
   Ticketsystem-Domains sichtbar sein.
 - Zwischen zwei Benutzern dürfen keine Cookies oder Sessions geteilt werden.
+
+
+## Fehlerdiagnose und alternative native Anmeldung
+
+Die automatische Anmeldung erfolgt zunächst weiterhin serverseitig mit dem
+persönlichen, verschlüsselten Zugang. Wird danach erneut eine Loginmaske
+zurückgegeben oder verwendet das Zielsystem ein individuell gestaltetes
+Loginformular, öffnet Plenaro die echte Loginseite **innerhalb der
+isolierten Proxy-Origin**. Benutzer können sich dort regulär anmelden.
+Dafür wird kein Chromium-Container und kein zusätzlicher Client-Zugang
+zum internen Ticketsystem benötigt.
+
+Verbindungs- und TLS-Fehler werden dagegen nicht durch ein unsicheres
+Fallback umgangen. Die Weboberfläche zeigt dafür einen **neutralen
+Fehlercode** an, z. B. `upstream-network`, `upstream-tls`,
+`upstream-timeout`, `unsafe-redirect` oder `server-error`.
+Vorhandene Zugangsdaten, interne Zieladressen, HTML-Antworten und
+Fehler-Stacktraces werden nicht zurückgegeben oder protokolliert.
+
+Wenn das Einloggen am Proxy funktioniert, aber das iframe nicht erscheint,
+muss der **Benutzer-Browser zusätzlich die konfigurierte zweite
+HTTPS-Origin erreichen**. Sie zeigt auf denselben Plenaro-Server, nicht
+auf den eigentlichen Ticketsystem-Server. Der vorhandene einzelne
+Plenaro-Hostname allein genügt bei dieser isolierten Architektur
+nicht. Solange ein sicherer Ein-Hostname-Mechanismus nicht separat
+entwickelt und getestet ist, wird keine gleich-origin Einbettung
+zugelassen.
+
+Für Diagnosen nur HTTP-Status und neutralen Fehlercode teilen, keine
+Screenshots mit Mitarbeiterdaten, Cookies, Loginformularen, internen
+Hostnamen oder Konfigurationsdateien veröffentlichen.
