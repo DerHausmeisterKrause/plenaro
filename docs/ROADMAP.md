@@ -540,3 +540,20 @@ Zielhost weiß. Die historische Checkliste dokumentiert den Zwischenstand.
 - [ ] Zwei HTTPS-DNS-Namen und gemeinsames Zertifikat am echten Plenaro-Host eingerichtet
 - [ ] Native Anmeldung, Navigation, AJAX, Formulare, Download und Mehrbenutzertrennung am echten Ticketsystem geprüft
 - [ ] Nach bestätigter Funktionalität optional den bisherigen Chromium-Container aus Compose entfernen
+
+
+### 03.11.2026 – Chromiums Remote-Browser vollständig entfernt (Phase 6)
+
+- [x] Serverseitigen Selenium-/Chromium-Docker-Service inklusive CA-Importskript und Image-Build entfernen
+- [x] WebDriver-Backend, Screenshot-API und CDP-Screencast vollständig entfernen
+- [x] React-Ticketsystem-Reiter ausschließlich mit nativer HTML-Einbettung über die isolierte HTTPS-Proxy-Origin betreiben
+- [x] Screenshot-Bildmodus, unnötiges Paste-Feld und zugehörige CSS-Klassen entfernen
+- [x] Ohne separate HTTPS-Origin keine unsichere Einbettung oder stillschweigenden Rückfall: klare lokale Einrichtungsanleitung im Reiter
+- [x] Docker-CI auf Backend-CA-Vertrauen, native Proxy-Authentifizierung und kein zusätzliches Browser-Image umstellen
+- [ ] CI-Integration (Build/Tests/Docker-Smoke) nach dem Refactoring erfolgreich
+- [ ] Zielhost: DNS/TLS für zwei same-site Plenaro-Origins einrichten und echte Znuny-HTML-Anmeldung sowie parallele Nutzer prüfen
+- [ ] Reale Ticketoperationen (Antworten, Schließen, Zeitbuchen) weiterhin ausschließlich anhand eines kontrollierten Testtickets prüfen
+
+**Hinweis:** Der bisherige Chromium-Container wird beim Update mit
+`docker compose up -d --build --remove-orphans` entfernt. Die
+PostgreSQL-Datenbank und der Vault bleiben unverändert.
