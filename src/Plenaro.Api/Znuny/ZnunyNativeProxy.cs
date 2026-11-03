@@ -57,7 +57,7 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
     public static void Map(WebApplication app)
     {
         var group=app.MapGroup("/api/v1/znuny/native")
-            .RequireAuthorization().RequireRateLimiting("znuny-browser-start");
+            .RequireAuthorization();
 
         group.MapGet("/status",(ZnunyNativeProxy service)=>{
             var enabled=service.Origins(out _,out _);
@@ -96,7 +96,7 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
             }catch(ProxyFailure e){
                 return Results.Json(new{error=e.Reason},statusCode:503);
             }
-        });
+        }).RequireRateLimiting("znuny-browser-start");
     }
 
     public sealed record StartRequest(string? TicketId,bool Reset=false);
