@@ -140,7 +140,7 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
     // Host header of a correctly configured reverse proxy. A browser fetch
     // POST sends Origin; only the exact configured public origin is allowed.
     // Legacy clients without Origin retain the stricter Host-only behavior.
-    internal static bool AllowedStartOrigin(HttpRequest request,Uri expected)
+    public static bool AllowedStartOrigin(HttpRequest request,Uri expected)
     {
         if(!request.IsHttps)return false;
         if(request.Headers.TryGetValue("Sec-Fetch-Site",out var fetchSite)&&
