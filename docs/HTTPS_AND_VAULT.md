@@ -175,102 +175,48 @@ statt die TLS-Prüfung pauschal abzuschalten.
   Testtickets verifiziert werden.
 
 
-## Interne Root-CA für Znuny-API UND Docker-Chromium
+## Optionale interne CA für Ticketsystem-API und nativen HTML-Proxy
 
-Wenn die interne Znuny-Instanz eine Unternehmens-PKI benutzt, muss die
-**ausstellende CA** nicht nur im Plenaro-Backend, sondern auch in der
-serverseitigen Chromium-Webansicht vertraut sein. Beides sind getrennte
-Container mit unterschiedlichen Zertifikatsspeichern. Eine CA für die
-API allein verhindert die Zertifikatswarnung im Chromium **nicht**.
+Der Plenaro-Webcontainer nutzt den Linux-Truststore, ergänzt um eine
+optionale interne Unternehmens-CA. Für die ausgehende HTTPS-Verbindung
+vom Backend zum Ticketsystem gilt **dieselbe** CA sowohl für API- als
+auch für die native HTML-Proxy-Kommunikation.
 
-Die `.env` enthält ab diesem Release einen einzigen optionalen Hostpfad:
+Nur in der **lokalen** `.env` auf dem Docker-Host setzen:
 
 ```dotenv
 PLENARO_TRUSTED_CA_FILE=/usr/local/share/ca-certificates/company-root-ca.crt
 ```
 
-Das ist die auf dem Host installierte interne Root-CA. Die Datei muss
-ein lesbares, im PEM-Format codiertes **CA-Zertifikat mit `CA:TRUE`** sein:
-kein privater Schlüssel, kein PKCS#12, kein einzelnes Webserver-Zertifikat
-und nicht die komplette `ca-certificates.crt`-Sammlung.
-Die Datei liegt nur auf dem Docker-Host und wird ausschließlich lesbar nach
-`/run/plenaro-trust/ca.crt` in **web** und **znuny-browser** gemountet.
-Die übrigen Container (PostgreSQL, NGINX) stellen die Datenbank bzw. den
-eingehenden HTTP(S)-Zugang bereit und verbinden sich nicht zu Znuny; für sie
-ist kein Znuny-CA-Trust erforderlich.
+Dies ist ein neutraler Beispielpfad zu einer PEM-kodierten Root- oder
+Intermediate-CA, **kein** privater Schlüssel und **kein** Hostzertifikat.
+Der Mount ist read-only unter `/run/plenaro-trust/ca.crt`.
+Beim Start kombiniert das Backend die internen und öffentlichen
+Vertrauensanker in `/tmp/plenaro-ca-bundle.pem` und setzt
+`SSL_CERT_FILE` für seinen eigenen Prozess. Die Zertifikatsprüfung und
+die Prüfung des HTTPS-Hostnamens bleiben aktiv.
 
-Beim Containerstart ergänzen die beiden Komponenten ihre eigenen
-Betriebssystem-/Browser-Truststores:
+Ohne die Variable bleibt der öffentliche CA-Trust des Images bestehen.
+Es gibt keinen zusätzlichen Chromium-/Selenium-Container und keinen
+Chromium-Zertifikatsspeicher mehr.
 
-- **web / .NET 10:** Kombiniert die bestehenden öffentlichen Linux-Roots
-  mit der internen CA in einer temporären PEM-Datei. `SSL_CERT_FILE`
-  zeigt nur für den Plenaro-Prozess auf diese kombinierte Datei. Andere
-  HTTPS-Dienste wie Entra/Graph bleiben durch die öffentlichen Roots
-  vertrauenswürdig. Der Prozess läuft weiterhin als unprivilegierter Benutzer.
-- **znuny-browser / Chromium:** Importiert die CA mit `certutil` als
-  vertrauenswürdige Zertifizierungsstelle in den NSS-Store von `seluser`.
-  Das ist notwendig, weil Chromium seinen eigenen Zertifikatsspeicher benutzt.
-
-Ohne gesetzte Variable wird `/dev/null` schreibgeschützt eingebunden:
-es wird kein zusätzlicher Trust verändert. Der Backend-Trust folgt dann
-den Standard-CAs des Images bzw. vorhandenen `compose.override.yaml`-Mounts.
-
-**Es werden weder** `--ignore-certificate-errors` **noch**
-`acceptInsecureCerts` **eingesetzt.** Abgelaufene, falsche und zum
-Hostnamen nicht passende Serverzertifikate bleiben ungültig.
-
-### Umstellung auf dem Docker-Host
+### Hostprüfung
 
 ```bash
 cd /opt/plenaro
-# Das Root-Zertifikat vom früheren Znuny-API-Setup:
-ls -l /usr/local/share/ca-certificates/company-root-ca.crt
-openssl x509 -in /usr/local/share/ca-certificates/company-root-ca.crt \
-  -noout -subject -issuer -dates -ext basicConstraints
-
-# In der .env einmalig setzen:
-# PLENARO_TRUSTED_CA_FILE=/usr/local/share/ca-certificates/company-root-ca.crt
-
 docker compose config --quiet
-docker compose up -d --build
+docker compose up -d --build --remove-orphans
 docker compose ps
-docker compose logs --tail=60 web znuny-browser
-```
-
-Ein eventuell vorhandener `compose.override.yaml`-Mount der
-Host-Datei `/etc/ssl/certs/ca-certificates.crt` nach `web` kann
-**nach erfolgreicher Migration** gezielt entfernt werden. Den Override
-nicht blind löschen, falls er andere lokale Einstellungen enthält.
-Das neue Verfahren verträgt den alten Mount, weil es die
-Zertifikatssammlung nur liest und nicht überschreibt.
-
-### Trust-Prüfung
-
-```bash
-# Muss 'Plenaro Internal CA' mit TLS-CA-Trust zeigen:
-docker compose exec znuny-browser certutil \
-  -d sql:/home/seluser/.pki/nssdb -L -n 'Plenaro Internal CA'
-
-# Backend-Bundle besteht aus öffentlichen und internen Roots:
 docker compose exec web sh -c \
-  'test -s /tmp/plenaro-ca-bundle.pem && echo "Backend-CA-Bundle vorhanden"'
+  'test -s /tmp/plenaro-ca-bundle.pem && echo "Zusatz-CA-Bundle aktiv"'
 ```
 
-Die CA behebt nur Warnungen wegen **unbekannter ausstellender CA**.
-Stimmt z. B. der Subject Alternative Name der OTRS-Seite nicht mit
-`ticketsystem.intern.example` überein, muss das Serverzertifikat selbst korrigiert
-werden. Die Option behebt auch keine Zertifikatswarnung des lokalen
-Browser-Tabs für **die Plenaro-Webadresse**: Dafür muss der Client/Teleport
-dem Zertifikat des öffentlichen Plenaro-HTTPS-Endpunkts vertrauen.
+Der letzte Befehl ist nur erfolgreich, wenn eine zusätzliche CA
+konfiguriert wurde. Falls das Zertifikat ungültig oder der Hostname
+falsch ist, muss die Zertifikatskette des Ticketsystems korrigiert
+werden: Die TLS-Prüfung wird **nicht** deaktiviert.
 
-## Schnellere native Znuny-Webansicht
-
-Statt vollständige PNG-Bilder bei jedem Poll zu übertragen, verwendet
-Chromium nun `Page.captureScreenshot` mit JPEG (Qualität 72). Das spart
-je nach Oberfläche viel Datenvolumen und kann die Bedienung über Teleport
-deutlich beschleunigen. Sollte Chromium diesen CDP-Befehl nicht
-unterstützen, fällt Plenaro innerhalb der Sitzung automatisch auf den
-bisherigen PNG-Screenshot zurück. Die gerenderte Ansicht bleibt ein
-serverseitiges Bild und erreicht deshalb nicht die Reaktionszeit eines
-lokalen WebView2; ein echtes Live-Streaming-Protokoll wäre ein späterer
-Ausbauschritt.
+Das Zertifikat des öffentlichen Plenaro-HTTPS-Endpunkts ist davon
+unabhängig. Für die native Webeinbettung müssen der Haupt- und
+Proxy-Hostname **beide** im NGINX-Zertifikat enthalten sein. Siehe
+[Native Ticketsystem-Webansicht](NATIVE_TICKET_PROXY.md).
