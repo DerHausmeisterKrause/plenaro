@@ -304,9 +304,17 @@ public sealed partial class ZnunyNativeProxy
     // content sniffing on background assets, downloads or ticket attachments.
     private static bool IsDocumentNavigation(HttpRequest request,Uri target,Uri entry)
     {
-        if(!HttpMethods.IsGet(request.Method))return false;
+        if(!HttpMethods.IsGet(request.Method)&&!HttpMethods.IsPost(request.Method))
+            return false;
         var dest=request.Headers["Sec-Fetch-Dest"].ToString();
         if(dest is "document" or "iframe")return true;
+        // Browser form submissions can load a full compose/action page.
+        // Do not MIME-sniff background POST/AJAX calls, whose Accept header
+        // can also include text/html even when the response is a fragment.
+        if(HttpMethods.IsPost(request.Method))
+            return request.Headers["Sec-Fetch-Mode"].ToString()=="navigate" &&
+                request.Headers["Accept"].ToString().Contains("text/html",
+                    StringComparison.OrdinalIgnoreCase);
         if(request.Headers["Accept"].ToString().Contains("text/html",
             StringComparison.OrdinalIgnoreCase))return true;
         // Fallback only for a plain entry URL. CGI requests with a query
