@@ -75,6 +75,7 @@ public static class FavoritesEndpoints
             if(!await AppAllowed(db,user.Id,input.AppId,ct))
                 return Results.Forbid();
             var id=Guid.NewGuid();
+            try{
             await using(var cmd=new NpgsqlCommand("""
                 INSERT INTO user_favorites(id,user_id,app_id,name,path,username,
                     auto_login,enabled,sort_order)
@@ -82,6 +83,12 @@ public static class FavoritesEndpoints
                 """,db)){
                 BindFavorite(cmd,id,user.Id,input);
                 await cmd.ExecuteNonQueryAsync(ct);
+            }
+            }catch(PostgresException e) when(e.SqlState==PostgresErrorCodes.UniqueViolation){
+                return Results.Conflict(new{
+                    error="Für diese Anwendung existiert bereits ein Favorit. "+
+                        "Pro Benutzer ist eine getrennte Anmeldung je Anwendung möglich."
+                });
             }
             if(!string.IsNullOrEmpty(input.Password))
                 await vault.SetAsync("user",user.Id,PasswordName(id),input.Password,ct);
