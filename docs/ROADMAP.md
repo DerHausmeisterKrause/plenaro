@@ -578,3 +578,14 @@ PostgreSQL-Datenbank und der Vault bleiben unverändert.
 - [x] Automatisierte Tests für umgeschriebenen Frontproxy-Host und Cross-Origin-Abwehr ergänzen
 - [x] GitHub-CI (Backend, Frontend, Znuny-Vertrag und Docker-Smoke) erfolgreich ([PR #5](https://github.com/DerHausmeisterKrause/plenaro/pull/5), [CI #41619802978](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41619802978))
 - [ ] Vor Ort die beiden HTTPS-Proxy-Hostnamen und automatische Anmeldung verifizieren
+
+
+### Phase 6 – Agenten-Webseite trotz ungewöhnlichem Content-Type erkennen
+
+- [x] Unberechtigte harte `text/html`-Prüfung am ursprünglichen Agenten-Webseiten-GET durch begrenzte Prüfung auf tatsächliche HTML-Struktur ersetzen
+- [x] Fehlender oder abweichender MIME-Typ (`text/plain`, `application/xhtml+xml`, `application/octet-stream`) wird bei echtem HTML akzeptiert
+- [x] JSON-/Leerantworten und sonstiges Nicht-HTML weiterhin ablehnen (`page-json`, `page-empty`, `page-not-html`)
+- [x] Falsch als `text/plain` ausgelieferte HTML-Einstiegsseite wird im isolierten iframe als HTML gerendert, keine Änderung an Anhängen oder Downloads
+- [x] Login-Nachfolgeantworten weiterhin kompatibel mit bisherigen Nicht-HTML-Erfolgsantworten
+- [x] Fiktive Tests und vollständige CI erfolgreich ([PR #6](https://github.com/DerHausmeisterKrause/plenaro/pull/6), [CI #41623430116](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41623430116))
+- [ ] Gegen echte Agenten-Weboberfläche prüfen, welcher HTTP-Antworttyp vorliegt und ob die native Einbettung vollständig funktioniert
