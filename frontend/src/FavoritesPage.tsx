@@ -127,7 +127,7 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
         <input id="fav-name" value={form.name} maxLength={120} required
           onChange={e=>setForm({...form,name:e.target.value})}/>
         <label htmlFor="fav-app">Freigegebene Webseite</label>
-        <select id="fav-app" value={form.appId} required
+        <select id="fav-app" value={form.appId} required disabled={!!current}
           onChange={e=>setForm({...form,appId:e.target.value})}>
           <option value="">Bitte auswählen</option>
           {apps.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
