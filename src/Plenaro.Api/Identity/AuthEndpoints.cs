@@ -79,10 +79,14 @@ public static class AuthEndpoints
         }).RequireAuthorization();
 
         group.MapPost("/logout", async (
-            HttpContext context, IAntiforgery antiforgery, SignInManager<ApplicationUser> signIn) =>
+            HttpContext context, IAntiforgery antiforgery, SignInManager<ApplicationUser> signIn,
+            Plenaro.Api.Znuny.ZnunyNativeProxy nativeProxy,
+            UserManager<ApplicationUser> users) =>
         {
             if (!await CsrfIsValid(context, antiforgery))
                 return Results.BadRequest(new { error = "Ungültiger Sicherheitstoken." });
+            var user=await users.GetUserAsync(context.User);
+            if(user is not null)nativeProxy.RevokeUser(user.Id);
             await signIn.SignOutAsync();
             return Results.NoContent();
         }).RequireAuthorization();
