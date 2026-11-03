@@ -140,7 +140,7 @@ export function ZnunyWebPortalPage(){
         className="znuny-native-frame"
         title="Ticketsystem – isolierte, native Weboberfläche"
         src={url}
-        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"
+        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads"
         referrerPolicy="no-referrer"
         onLoad={()=>setLoading(false)}
       />}

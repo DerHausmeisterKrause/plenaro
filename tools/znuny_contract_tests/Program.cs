@@ -529,13 +529,14 @@ bool Html(string body)=>(bool)sniff.Invoke(null,new object[]{body})!;
 bool Mime(string? contentType)=>(bool)mimeCheck.Invoke(
     null,new object?[]{contentType})!;
 bool Navigation(string method,string? accept,string? destination,
-    string path="/otrs/index.pl",string query="") {
+    string path="/otrs/index.pl",string query="",string? mode=null) {
     var http=new Microsoft.AspNetCore.Http.DefaultHttpContext();
     http.Request.Method=method;
     http.Request.Path=path;
     http.Request.QueryString=new Microsoft.AspNetCore.Http.QueryString(query);
     if(accept is not null)http.Request.Headers["Accept"]=accept;
     if(destination is not null)http.Request.Headers["Sec-Fetch-Dest"]=destination;
+    if(mode is not null)http.Request.Headers["Sec-Fetch-Mode"]=mode;
     return (bool)nav.Invoke(null,new object[]{
         http.Request,new Uri("https://ticketsystem.example.test"+path+query),
         new Uri("https://ticketsystem.example.test/otrs/index.pl")
@@ -559,8 +560,18 @@ Assert(Navigation("GET",null,"iframe","/otrs/index.pl","?Action=AgentTicketZoom"
     "iframe document navigation recognized with CGI query");
 Assert(!Navigation("GET","*/*",null,"/otrs/js/ticket.js"),
     "AJAX and JavaScript resource requests are never retyped as HTML");
-Assert(!Navigation("POST","text/html","document"),
-    "POST form responses do not enter the MIME override");
+Assert(Navigation("POST","text/html","document",
+    "/otrs/index.pl","?Action=AgentTicketCompose"),
+    "reply form POST navigation can render full HTML document");
+Assert(Navigation("POST","text/html",null,
+    "/otrs/index.pl","?Action=AgentTicketCompose",mode:"navigate"),
+    "browser navigate-mode POST accepts HTML MIME fallback");
+Assert(!Navigation("POST","text/html",null,
+    "/otrs/index.pl","?Action=AgentTicketCompose"),
+    "AJAX POST is not misclassified as a document navigation");
+Assert(!Navigation("POST","application/json",null,
+    "/otrs/index.pl","?Action=AgentTicketCompose",mode:"cors"),
+    "AJAX JSON POST never forces HTML MIME");
 
 // Verify the actual opaque-content reader, not only its MIME predicates.
 var opaqueReader=proxyType.GetMethod("ReadOpaqueNavigationAsync",
