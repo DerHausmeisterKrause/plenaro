@@ -81,3 +81,9 @@ Dies ist die aktuelle Arbeitsliste. Die ausführliche [Roadmap](ROADMAP.md) enth
 5. Erst nach Live-Abnahme verbleibende Classic-/Kalender-/Wiki-Funktionen in Phase 6/7 priorisieren.
 
 **Achtung:** Historische erledigte Checklisten zum Chromium-/Screenshot-Modus in ROADMAP.md beschreiben ersetzte Lösungen und dürfen nicht als aktuelle Architektur interpretiert werden.
+## 03.11.2026 – Favoriten-Wildcard (Phase 7, Vorbereitung)
+
+- [x] WPF-Favoritenmodell und Browser-Login als Referenz ausgewertet.
+- [x] Optionaler Host-Guard: unbekannte Wildcard-Hosts werden vor Plenaro-UI/API mit HTTP 404 abgewiesen; bekannte Origins bleiben unverändert.
+- [x] NGINX `PLENARO_SERVER_NAME` akzeptiert bereits Wildcards; optionale `PLENARO_FAVORITES_BASE_DOMAIN`, DNS und TLS dokumentiert.
+- [ ] Administratorfreigabe für Ziel-Apps, nutzerbezogene Favoriten-API, persönliche Vault-Zugänge, Auto-Login, isolierter Web-Proxy, UI und Live-Tests. Siehe [Architektur](FAVORITES_PROXY.md).

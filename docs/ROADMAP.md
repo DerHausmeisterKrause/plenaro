@@ -598,3 +598,15 @@ PostgreSQL-Datenbank und der Vault bleiben unverändert.
 - [x] Synthetische HTML-/Nicht-HTML-/Download-Tests ergänzen, keine echten Ticketdaten übernehmen
 - [x] GitHub-CI: Backend/Frontend/Vertrags- und Docker-Smoke-Tests erfolgreich ([PR #7](https://github.com/DerHausmeisterKrause/plenaro/pull/7), [CI #41635960052](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41635960052))
 - [ ] Am tatsächlichen Ticketsystem Darstellung, interne Links, AJAX, Anhänge und mehrere Benutzer verifizieren
+
+### 03.11.2026 – Wildcard-Vorbereitung für Favoriten (Phase 7)
+
+- [x] WPF-Favoritenmodell (URL, Benutzerzugang, Sortierung, Auto-Login) ausgewertet
+- [x] Optionale `PLENARO_FAVORITES_BASE_DOMAIN`: unbekannte Aliasse vor der Plenaro-Login-Origin gesperrt (404)
+- [x] NGINX-Wildcard-Hostname, DNS und TLS dokumentiert
+- [x] Contract-Tests für unbekannte Hosts, bekannte Origins und Localhost ergänzt
+- [ ] CI der neuen Wildcard-Host-Sperre abschließen
+- [ ] Admin-Freigabe für Apps, persönliche Favoriten, eigene App-Cookie-Jars und Vault-Auto-Login ergänzen
+- [ ] Mit realer Wiki-/Favoriten-Anwendung Browserkompatibilität, Mehrbenutzerbetrieb und Sicherheitsgrenzen prüfen
+
+Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt **keinen** frei konfigurierbaren Universalproxy bereit.
