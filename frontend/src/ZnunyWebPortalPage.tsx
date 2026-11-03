@@ -121,6 +121,11 @@ export function ZnunyWebPortalPage(){
         Ticketsystem-Einstellungen
       </Link>
     </div>}
+    {configured&&interactive&&!error&&<div className="content-card znuny-native-login-hint"
+      role="status">
+      Die automatische Anmeldung konnte nicht bestätigt werden.
+      Du kannst dich im eingebetteten Ticketsystem direkt anmelden.
+    </div>}
     {configured&&!error&&validTicket&&<div
       className="znuny-portal-frame-wrap znuny-native-frame-wrap">
       <div className="znuny-portal-security-caption">
