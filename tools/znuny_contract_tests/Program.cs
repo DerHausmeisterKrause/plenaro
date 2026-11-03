@@ -83,6 +83,24 @@ requestContext.Request.Host=new Microsoft.AspNetCore.Http.HostString("tickets.ex
 Assert(!favoriteProxy.IsFavoriteHost(requestContext),
     "Znuny native origin remains on existing proxy");
 
+// Znuny article bodies are nested iframes: every ancestor must satisfy
+// frame-ancestors. Parent Plenaro plus the proxy's own origin are permitted,
+// without allowing unrelated websites or disabling framing protection.
+var nativeCspMethod=typeof(ZnunyNativeProxy).GetMethod(
+    "BrowserContentSecurityPolicy",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+var nativeCsp=(string)nativeCspMethod.Invoke(null,new object[]{
+    new Uri("https://portal.example.org")
+})!;
+var frameAncestors=nativeCsp.Split(';',StringSplitOptions.TrimEntries)
+    .Single(x=>x.StartsWith("frame-ancestors ",StringComparison.Ordinal));
+Assert(frameAncestors=="frame-ancestors 'self' https://portal.example.org",
+    "Znuny nested article iframes may embed under proxy self and Plenaro");
+Assert(!frameAncestors.Contains('*') &&
+    !frameAncestors.Contains("example.net",StringComparison.Ordinal) &&
+    nativeCsp.Contains("frame-src 'self'",StringComparison.Ordinal),
+    "Znuny nested frame fix retains restricted framing and child frame policy");
+
 var settings=new ServerSettings(ApiUrl:"https://znuny.test/otrs/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST",
     WebUrl:"https://znuny.test/otrs/index.pl");
 
