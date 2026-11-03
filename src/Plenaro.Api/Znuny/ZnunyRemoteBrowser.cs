@@ -182,7 +182,7 @@ public sealed partial class ZnunyRemoteBrowser(IHttpClientFactory clients)
             catch(OperationCanceledException) when(ct.IsCancellationRequested){}
             catch(Exception){ // Never surface Selenium details or internal URLs.
                 if(!ct.IsCancellationRequested)
-                    await http.Response.WriteAsync("event: unavailable\\ndata: retry\\n\\n",ct);
+                    await http.Response.WriteAsync("event: unavailable\ndata: retry\n\n",ct);
             }
         }).RequireRateLimiting("znuny-browser-start");
 
