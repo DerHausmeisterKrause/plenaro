@@ -5,7 +5,7 @@ export type Favorite={id:string;appId:string;name:string;appName:string;
   sortOrder:number;hasPassword:boolean};
 export type FavoriteInput={appId:string;name:string;path:string;
   username:string;autoLogin:boolean;enabled:boolean;sortOrder:number;
-  password?:string};
+  password?:string;clearPassword?:boolean};
 export type AppInput={name:string;slug:string;upstreamUrl:string;
   enabled:boolean;availableToAll:boolean;allowedUsers:string[]};
 
