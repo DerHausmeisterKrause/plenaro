@@ -18,6 +18,7 @@ export function ZnunyWebPortalPage(){
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(true);
   const [revision,setRevision]=useState(0);
+  const [interactive,setInteractive]=useState(false);
 
   // Check configuration before attempting login. Without a separate HTTPS
   // origin fail closed: never run legacy HTML with Plenaro's own privileges.
@@ -44,7 +45,7 @@ export function ZnunyWebPortalPage(){
   useEffect(()=>{
     if(!status?.enabled)return;
     let active=true;
-    setLoading(true);setUrl('');setError('');
+    setLoading(true);setUrl('');setError('');setInteractive(false);
     void(async()=>{
       try{
         if(!validTicket)throw new Error('Ungültige Ticket-ID.');
@@ -63,7 +64,7 @@ export function ZnunyWebPortalPage(){
         const external=new URL(body.url);
         if(external.protocol!=='https:'||external.origin===window.location.origin)
           throw new Error('Ungültige Ticketsystem-Proxy-Adresse.');
-        if(active)setUrl(external.toString());
+        if(active){setInteractive(body.requiresInteractiveLogin===true);setUrl(external.toString());}
       }catch(e){
         if(active){
           setError(e instanceof Error?e.message:'Native Ticketsystem-Ansicht nicht erreichbar.');
