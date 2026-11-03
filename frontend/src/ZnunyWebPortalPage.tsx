@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import type {MouseEvent as ReactMouseEvent,KeyboardEvent as ReactKeyboardEvent} from 'react';
 import {Link,useSearchParams} from 'react-router-dom';
-import {ArrowLeft,ArrowRight,ClipboardPaste,RefreshCw,ShieldCheck,Ticket,WifiOff} from 'lucide-react';
+import {ArrowLeft,ArrowRight,RefreshCw,ShieldCheck,Ticket,WifiOff} from 'lucide-react';
 import {getZnunyPersonal,getZnunyServer} from './znunyApi';
 
 const api='/api/v1/znuny/browser';
@@ -13,7 +13,7 @@ type RemoteInput={
 
 /**
  * The visible Znuny GUI is rendered by Chromium INSIDE Docker.
- * The local browser receives PNG frames and sends mouse/keyboard commands
+ * The local browser receives streamed JPEG frames and sends mouse/keyboard commands
  * to authenticated Plenaro endpoints. No Znuny HTML/JS/cookies/credentials
  * execute or exist on the user's computer and no extra public port is needed.
  */
@@ -26,12 +26,15 @@ export function ZnunyWebPortalPage(){
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('Starte die interne Chromium-Webansicht …');
   const [frame,setFrame]=useState<string|null>(null);
-  const [pasteText,setPasteText]=useState('');
+  const [live,setLive]=useState(false);
+  const liveRef=useRef(false);
+  const lastViewport=useRef('');
   const [revision,setRevision]=useState(0);
   const csrfRef=useRef('');
   const frameRef=useRef<HTMLImageElement|null>(null);
   const viewRef=useRef<HTMLDivElement|null>(null);
   const actionQueue=useRef<Promise<void>>(Promise.resolve());
+  const streamRef=useRef<EventSource|null>(null);
   const loadingFrame=useRef(false);
   const lastFrameAt=useRef(0);
   const alive=useRef(true);
@@ -61,6 +64,7 @@ export function ZnunyWebPortalPage(){
 
   useEffect(()=>{
     alive.current=true;setReady(false);setLoading(true);setFrame(null);setError('');
+    liveRef.current=false;setLive(false);lastViewport.current='';
     setNotice('Starte die interne Chromium-Webansicht …');
     let active=true;
     void(async()=>{
@@ -93,16 +97,77 @@ export function ZnunyWebPortalPage(){
         if(active)setError(e instanceof Error?e.message:'Die Znuny-Webansicht konnte nicht gestartet werden.');
       }finally{if(active)setLoading(false);}
     })();
-    return()=>{active=false;alive.current=false;};
+    return()=>{active=false;alive.current=false;streamRef.current?.close();};
   },[ticket,revision,validTicket,fetchFrame]);
 
-  useEffect(()=>{return()=>{if(frame)URL.revokeObjectURL(frame);};},[frame]);
+  useEffect(()=>{return()=>{if(frame?.startsWith('blob:'))URL.revokeObjectURL(frame);};},[frame]);
 
+  // Native Chromium screencast (one long-lived HTTP response). No websocket,
+  // browser credentials or third-party connection is exposed to the client.
+  // If the Selenium CDP stream is unavailable, keep the secure polling fallback.
   useEffect(()=>{
     if(!ready)return;
-    const timer=window.setInterval(()=>void fetchFrame(),700);
+    let active=true;
+    const source=new EventSource(api+'/stream');
+    streamRef.current=source;
+    source.addEventListener('frame',(event)=>{
+      if(!active)return;
+      const image=(event as MessageEvent).data as string;
+      if(!image||image.length>9000000)return;
+      liveRef.current=true;
+      setLive(true);
+      setFrame('data:image/jpeg;base64,'+image);
+    });
+    source.addEventListener('unavailable',()=>{
+      if(!active)return;
+      liveRef.current=false;setLive(false);
+      setNotice('Browseransicht im kompatiblen Bildmodus.');
+      source.close();
+    });
+    source.onerror=()=>{
+      if(!active)return;
+      liveRef.current=false;setLive(false);
+      setNotice('Browseransicht im kompatiblen Bildmodus.');
+      source.close();
+    };
+    return()=>{active=false;source.close();if(streamRef.current===source)streamRef.current=null;
+      liveRef.current=false;};
+  },[ready]);
+
+  // Match Chromium's *real* viewport to the content area. Previously a fixed
+  // 1280x800 capture was constrained to 1280px while the panel was wider.
+  useEffect(()=>{
+    if(!ready||!viewRef.current)return;
+    const surface=viewRef.current;
+    let timer:number|undefined;
+    let active=true;
+    const apply=()=>{
+      if(!active||!csrfRef.current)return;
+      const rect=surface.getBoundingClientRect();
+      const width=Math.max(480,Math.min(2400,Math.round(rect.width)));
+      const height=Math.max(320,Math.min(1600,Math.round(rect.height)));
+      const current=width+'x'+height;
+      if(lastViewport.current===current)return;
+      lastViewport.current=current;
+      void fetch(api+'/viewport',{
+        method:'POST',credentials:'same-origin',
+        headers:{'X-CSRF-TOKEN':csrfRef.current,'Content-Type':'application/json'},
+        body:JSON.stringify({width,height})
+      }).catch(()=>{lastViewport.current='';});
+    };
+    const schedule=()=>{if(timer!==undefined)window.clearTimeout(timer);
+      timer=window.setTimeout(apply,180);};
+    const observer=new ResizeObserver(schedule);
+    observer.observe(surface);
+    schedule();
+    return()=>{active=false;observer.disconnect();if(timer!==undefined)window.clearTimeout(timer);};
+  },[ready]);
+
+  useEffect(()=>{
+    if(!ready||live)return;
+    const timer=window.setInterval(()=>void fetchFrame(),850);
     return()=>window.clearInterval(timer);
-  },[ready,fetchFrame]);
+  },[ready,live,fetchFrame]);
 
   const send=useCallback((input:RemoteInput)=>{
     if(!ready)return;
@@ -119,7 +184,7 @@ export function ZnunyWebPortalPage(){
       }
       // Do not block the keyboard command queue on screenshot latency.
       // Frames are separately refreshed/polled with only one request in flight.
-      void fetchFrame();
+      if(!liveRef.current)void fetchFrame();
     }).catch(e=>{if(alive.current)setError(e instanceof Error?e.message:'Browseraktion fehlgeschlagen.');});
   },[ready,fetchFrame]);
 
@@ -162,7 +227,7 @@ export function ZnunyWebPortalPage(){
     };
     image.addEventListener('wheel',onWheel,{passive:false});
     return()=>image.removeEventListener('wheel',onWheel);
-  },[ready,frame,send]);
+  },[ready,send]);
 
   const reload=()=>setRevision(n=>n+1);
 
@@ -171,7 +236,7 @@ export function ZnunyWebPortalPage(){
       <div>
         <span className="eyebrow"><Ticket size={14}/>Plenaro / Ticketsystem</span>
         <h1>Znuny-Weboberfläche</h1>
-        <p>Wie im Desktop-Client: eine interaktive Browseransicht – jetzt vollständig im Plenaro-Docker ausgeführt.</p>
+        <p>Interaktive Browseransicht über den Plenaro-Server.</p>
       </div>
       <div className="znuny-browser-toolbar">
         <button type="button" className="button button-secondary" disabled={!ready}
@@ -200,28 +265,18 @@ export function ZnunyWebPortalPage(){
       {loading&&!frame&&<div className="znuny-browser-loading" role="status">
         Interne Chromium-Webansicht wird gestartet …
       </div>}
-      {frame&&<div className="znuny-browser-surface"
+      {ready&&<div className="znuny-browser-surface"
         tabIndex={0} ref={viewRef} onKeyDown={keyDown}
         onPaste={e=>{e.preventDefault();send({kind:'text',text:e.clipboardData.getData('text')});}}
         aria-label="Interaktive Znuny-Webansicht">
-        <img ref={frameRef} src={frame} alt="Znuny-Browserbild (serverseitig gerendert)"
+        <img ref={frameRef} src={frame??undefined}
+          alt="Znuny-Browserbild (serverseitig gerendert)"
+          style={{visibility:frame?'visible':'hidden'}}
           draggable={false} onClick={e=>{
             send({kind:'click',...position(e)});
             viewRef.current?.focus();
           }}
           />
-      </div>}
-      {ready&&<div className="znuny-browser-paste">
-        <label htmlFor="znuny-browser-paste-text">Text in das ausgewählte Znuny-Feld einfügen</label>
-        <textarea id="znuny-browser-paste-text" rows={2} value={pasteText}
-          onChange={e=>setPasteText(e.target.value)}
-          placeholder="Optional: längeren Antworttext hier einfügen"/>
-        <button className="button button-secondary" type="button"
-          disabled={!pasteText} onClick={()=>{
-            send({kind:'text',text:pasteText.slice(0,4000)});
-            setPasteText('');
-            viewRef.current?.focus();
-          }}><ClipboardPaste size={14}/>Einfügen</button>
       </div>}
     </div>}
   </div>;
