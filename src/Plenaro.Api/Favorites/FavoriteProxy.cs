@@ -203,9 +203,10 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             Remove(key,session);
             ctx.Response.StatusCode=403;return;
         }
-        if(ctx.Request.Path.StartsWithSegments("/api",StringComparison.OrdinalIgnoreCase)||
-            ctx.Request.Path.StartsWithSegments("/health",StringComparison.OrdinalIgnoreCase)||
-            ctx.Request.Path.StartsWithSegments("/_plenaro",StringComparison.OrdinalIgnoreCase)){
+        // The app proxy host never enters the normal Plenaro route pipeline.
+        // /api and /health belong to the approved upstream app here, while
+        // reserved bootstrap paths must never be forwarded.
+        if(ctx.Request.Path.StartsWithSegments("/_plenaro",StringComparison.OrdinalIgnoreCase)){
             ctx.Response.StatusCode=404;return;
         }
         session.Touch();
