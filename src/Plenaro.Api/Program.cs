@@ -22,6 +22,7 @@ using Plenaro.Api.Graph;
 using Plenaro.Api.Tasks;
 using Plenaro.Api.DayMarkers;
 using Plenaro.Api.Znuny;
+using Plenaro.Api.Favorites;
 
 if (args.Contains("--healthcheck", StringComparer.Ordinal))
 {
@@ -419,6 +420,19 @@ app.Use(async (http,next)=>{
     var proxy=http.RequestServices.GetRequiredService<ZnunyNativeProxy>();
     if(proxy.IsProxyHost(http)){
         await proxy.ServeAsync(http,http.RequestAborted);
+        return;
+    }
+    // Reserve unassigned wildcard aliases before static files, APIs and
+    // Plenaro authentication. Znuny's isolated proxy is handled above.
+    var cfg=http.RequestServices.GetRequiredService<IConfiguration>();
+    if(FavoriteHostGuard.IsUnassignedAlias(
+        http.Request.Host.Host,
+        cfg["PLENARO_FAVORITES_BASE_DOMAIN"],
+        cfg["PLENARO_PUBLIC_ORIGIN"],
+        cfg["PLENARO_ZNUNY_PROXY_ORIGIN"])){
+        http.Response.StatusCode=StatusCodes.Status404NotFound;
+        http.Response.Headers.CacheControl="no-store";
+        http.Response.Headers["X-Content-Type-Options"]="nosniff";
         return;
     }
     await next();
