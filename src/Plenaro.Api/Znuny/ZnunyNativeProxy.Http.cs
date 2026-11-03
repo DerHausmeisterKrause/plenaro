@@ -307,14 +307,14 @@ public sealed partial class ZnunyNativeProxy
         if(!HttpMethods.IsGet(request.Method))return false;
         var dest=request.Headers["Sec-Fetch-Dest"].ToString();
         if(dest is "document" or "iframe")return true;
-        if(request.Headers.Accept.ToString().Contains("text/html",
+        if(request.Headers["Accept"].ToString().Contains("text/html",
             StringComparison.OrdinalIgnoreCase))return true;
         return target.AbsolutePath.Equals(entry.AbsolutePath,
             StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool PotentialHtmlMime(string? media)=>media is null or
-        "text/plain" or "application/octet-stream" or
+        "text/plain" or "text/xml" or "application/xml" or "application/octet-stream" or
         "application/x-octet-stream" or "binary/octet-stream";
 
     private async Task ProxyRequestAsync(HttpContext ctx,ProxySession session,
