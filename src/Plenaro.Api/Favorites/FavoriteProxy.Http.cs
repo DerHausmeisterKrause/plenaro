@@ -36,10 +36,10 @@ public sealed partial class FavoriteProxy
     // Standard HTML username/password forms only. Non-standard sign-in
     // (SSO, 2FA, JavaScript-generated fields) remains interactive. Credentials
     // are NEVER emitted to the browser, GET query or another upstream origin.
-    private static async Task TryLoginAsync(HttpClient client,Uri origin,
+    private static async Task TryLoginAsync(HttpClient client,Uri origin,Uri entry,
         string username,string password,CancellationToken ct)
     {
-        using var initial=new HttpRequestMessage(HttpMethod.Get,origin);
+        using var initial=new HttpRequestMessage(HttpMethod.Get,entry);
         using var response=await client.SendAsync(initial,
             HttpCompletionOption.ResponseHeadersRead,ct);
         if(!response.IsSuccessStatusCode ||
@@ -75,7 +75,7 @@ public sealed partial class FavoriteProxy
             }
             if(!userFound||!passwordFound)continue;
             var action=Attribute(form.Groups["attrs"].Value,"action")??"/";
-            if(!Uri.TryCreate(origin,action,out var target)||
+            if(!Uri.TryCreate(entry,action,out var target)||
                 !SameUpstream(origin,target))return;
             using var req=new HttpRequestMessage(HttpMethod.Post,target){
                 Content=new FormUrlEncodedContent(names)
