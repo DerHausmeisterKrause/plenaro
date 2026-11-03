@@ -31,6 +31,8 @@ services:
       Security__RequireHttps: "${PLENARO_HTTPS_ENABLED:-false}"
       Security__TrustedProxyIp: "172.29.213.10"
       PLENARO_VAULT_KEY_FILE: "${PLENARO_VAULT_KEY_FILE:-}"
+      PLENARO_PUBLIC_ORIGIN: "${PLENARO_PUBLIC_ORIGIN:-}"
+      PLENARO_ZNUNY_PROXY_ORIGIN: "${PLENARO_ZNUNY_PROXY_ORIGIN:-}"
       # CA file is merged with the public OS CA bundle at container startup.
       # Default /dev/null means "no extra CA", preserving existing installs.
     depends_on:

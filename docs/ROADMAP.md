@@ -526,3 +526,17 @@ Zielhost weiß. Die historische Checkliste dokumentiert den Zwischenstand.
 - [x] Keine internen WebDriver-/CDP-Ports veröffentlichen; nur der authentifizierte Benutzer erhält Bilddaten, persönliche Zugangsdaten bleiben serverseitig
 - [x] End-to-End-CI: Frontend, Backend, Chromium-WebSocket-Screencast und Docker-Smoke erfolgreich ([PR #1](https://github.com/DerHausmeisterKrause/plenaro/pull/1), [CI #41596808475](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41596808475))
 - [ ] Echtes Zielsystem: Geschwindigkeit, Darstellung, Tastatur, Navigation und Scrollen im Browser überprüfen
+
+### Phase 6 – Native HTML-Einbettung über isolierte Ticketsystem-Origin
+
+- [x] Separate HTTPS-Hostnamen für Plenaro-Frontend und Ticketsystem-Proxy konfigurieren – gleicher Server, gleicher Port 443
+- [x] Interne HTTP-Requests, Redirects, HTML/CSS/JS/JSON und binäre Antworten serverseitig weiterleiten
+- [x] Automatisches Agenten-Login mit individuellen Vault-Zugangsdaten, Loginformular und getrennten Upstream-Cookie-Jars
+- [x] Einmaliges Bootstrap-Token, host-exklusives HttpOnly-Cookie, CSP und iframe-Sandbox für getrennte Browser-Origin
+- [x] Je Nutzer eigene parallele Proxy-Sitzung mit Ablaufzeiten, Autorisierungsprüfung und Widerruf beim Plenaro-Logout
+- [x] Native HTML-Weboberfläche füllt die Ticketsystem-Fläche, ohne Server-Screenshot-Streaming
+- [x] Vorherigen Chromium-Modus als manuell auswählbaren Fallback behalten
+- [ ] CI: .NET-Build, React-UI-Tests und Docker-Start für den neuen Proxy abgeschlossen
+- [ ] Zwei HTTPS-DNS-Namen und gemeinsames Zertifikat am echten Plenaro-Host eingerichtet
+- [ ] Native Anmeldung, Navigation, AJAX, Formulare, Download und Mehrbenutzertrennung am echten Ticketsystem geprüft
+- [ ] Nach bestätigter Funktionalität optional den bisherigen Chromium-Container aus Compose entfernen

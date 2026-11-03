@@ -17,7 +17,7 @@ type RemoteInput={
  * to authenticated Plenaro endpoints. No Znuny HTML/JS/cookies/credentials
  * execute or exist on the user's computer and no extra public port is needed.
  */
-export function ZnunyWebPortalPage(){
+function LegacyZnunyWebPortalPage(){
   const [params]=useSearchParams();
   const ticket=params.get('ticket');
   const validTicket=ticket===null||/^\d{1,40}$/.test(ticket);
@@ -283,5 +283,129 @@ export function ZnunyWebPortalPage(){
           />
       </div>}
     </div>}
+  </div>;
+}
+
+type NativeStatus={enabled:boolean;mode?:string;reason?:string};
+
+/** Prefer real HTML/JS in an isolated, server-proxied HTTPS origin.
+ * A legacy Chromium screenshot mode remains available for nonconfigured
+ * single-host installations and as a manual emergency fallback.
+ */
+export function ZnunyWebPortalPage(){
+  const [status,setStatus]=useState<NativeStatus|null>(null);
+  const [legacy,setLegacy]=useState(false);
+  const [problem,setProblem]=useState('');
+  useEffect(()=>{
+    let active=true;
+    void fetch('/api/v1/znuny/native/status',{credentials:'same-origin',
+      cache:'no-store'})
+      .then(async response=>{
+        if(!response.ok)throw new Error('Native Anzeige nicht erreichbar.');
+        return await response.json() as NativeStatus;
+      })
+      .then(value=>{if(active)setStatus(value);})
+      .catch(()=>{if(active){setStatus({enabled:false});
+        setProblem('Native Ansicht nicht erreichbar; kompatible Ansicht aktiv.');}});
+    return()=>{active=false;};
+  },[]);
+  if(!status)return <div className="page znuny-web-portal">
+    <div className="znuny-browser-loading" role="status">
+      Ticketsystem-Ansicht wird vorbereitet …
+    </div>
+  </div>;
+  if(!status.enabled||legacy)return <>
+    {problem&&<p role="status" className="um-hint">{problem}</p>}
+    <LegacyZnunyWebPortalPage/>
+  </>;
+  return <NativeZnunyWebPortalPage onLegacy={()=>setLegacy(true)}/>;
+}
+
+function NativeZnunyWebPortalPage({onLegacy}:{onLegacy:()=>void}){
+  const [params]=useSearchParams();
+  const ticket=params.get('ticket');
+  const validTicket=ticket===null||/^\d{1,40}$/.test(ticket);
+  const [url,setUrl]=useState('');
+  const [error,setError]=useState('');
+  const [loading,setLoading]=useState(true);
+  const [revision,setRevision]=useState(0);
+
+  useEffect(()=>{
+    let active=true;
+    setLoading(true);setUrl('');setError('');
+    void(async()=>{
+      try{
+        if(!validTicket)throw new Error('Ungültige Ticket-ID.');
+        const tokenResponse=await fetch('/api/v1/auth/csrf',{
+          credentials:'same-origin',cache:'no-store'});
+        if(!tokenResponse.ok)throw new Error('Sicherheitstoken nicht verfügbar.');
+        const token=await tokenResponse.json() as {token:string};
+        const start=await fetch('/api/v1/znuny/native/start',{
+          method:'POST',credentials:'same-origin',cache:'no-store',
+          headers:{'X-CSRF-TOKEN':token.token,'Content-Type':'application/json'},
+          body:JSON.stringify({ticketId:ticket,reset:revision>0})
+        });
+        const body=await start.json().catch(()=>({})) as {url?:string,error?:string};
+        if(!start.ok||!body.url)throw new Error(body.error||
+          'Ticketsystem-Anmeldung konnte nicht aufgebaut werden.');
+        const external=new URL(body.url);
+        if(external.protocol!=='https:'||external.origin===location.origin)
+          throw new Error('Ungültige Proxy-Origin.');
+        if(active)setUrl(external.toString());
+      }catch(e){
+        if(active){setError(e instanceof Error?e.message:
+          'Native Ticketsystem-Ansicht nicht erreichbar.');setLoading(false);}
+      }
+    })();
+    return()=>{active=false;};
+  },[ticket,revision,validTicket]);
+
+  return <div className="page znuny-web-portal">
+    <div className="znuny-web-portal-toolbar content-card">
+      <div>
+        <span className="eyebrow"><Ticket size={14}/>Plenaro / Ticketsystem</span>
+        <h1>Ticketsystem-Weboberfläche</h1>
+        <p>Originale HTML-Oberfläche – flüssig im Browser, Verbindung über Plenaro.</p>
+      </div>
+      <div className="znuny-browser-toolbar">
+        <button type="button" className="button button-secondary"
+          onClick={()=>setRevision(n=>n+1)} title="Ticketsystem neu verbinden">
+          <RefreshCw size={15}/>Neu verbinden
+        </button>
+        <button type="button" className="button button-secondary"
+          onClick={onLegacy} title="Serverseitigen Bildmodus verwenden">
+          Kompatibler Modus
+        </button>
+      </div>
+    </div>
+    {error&&<div className="content-card znuny-portal-error" role="alert">
+      <WifiOff size={20}/><strong>Native Ticketsystem-Verbindung</strong>
+      <p>{error}</p>
+      <button type="button" className="button button-secondary"
+        onClick={()=>setRevision(n=>n+1)}>Erneut versuchen</button>
+      <button type="button" className="button button-secondary"
+        onClick={onLegacy}>Kompatiblen Modus öffnen</button>
+      <Link className="button button-secondary" to="/settings">
+        Ticketsystem-Einstellungen
+      </Link>
+    </div>}
+    <div className="znuny-portal-frame-wrap znuny-native-frame-wrap">
+      <div className="znuny-portal-security-caption">
+        <ShieldCheck size={14}/>
+        Echte Browseransicht. Persönliche Ticketsystem-Sitzung läuft isoliert
+        über den Plenaro-Server.
+      </div>
+      {loading&&<div className="znuny-native-loading" role="status">
+        Ticketsystem wird verbunden …
+      </div>}
+      {url&&<iframe
+        className="znuny-native-frame"
+        title="Ticketsystem – isolierte, native Weboberfläche"
+        src={url}
+        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"
+        referrerPolicy="no-referrer"
+        onLoad={()=>setLoading(false)}
+      />}
+    </div>
   </div>;
 }

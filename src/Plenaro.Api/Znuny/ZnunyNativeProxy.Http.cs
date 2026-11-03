@@ -1,0 +1,325 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.RegularExpressions;
+
+namespace Plenaro.Api.Znuny;
+
+public sealed partial class ZnunyNativeProxy
+{
+    private const int MaxHtmlBytes=6*1024*1024;
+    private static readonly Regex FormPattern=new(
+        @"<form\b(?<attrs>[^>]*)>(?<body>.*?)</form\s*>",
+        RegexOptions.Compiled|RegexOptions.Singleline|RegexOptions.IgnoreCase,
+        TimeSpan.FromSeconds(2));
+    private static readonly Regex InputPattern=new(
+        @"<input\b(?<attrs>[^>]*)>",
+        RegexOptions.Compiled|RegexOptions.Singleline|RegexOptions.IgnoreCase,
+        TimeSpan.FromSeconds(2));
+    private static readonly Regex AttributePattern=new(
+        @"(?<name>[a-z_:][a-z0-9_:.-]*)\s*=\s*(?:""(?<dq>[^""]*)""|'(?<sq>[^']*)'|(?<bare>[^\s>]+))",
+        RegexOptions.Compiled|RegexOptions.IgnoreCase,
+        TimeSpan.FromSeconds(2));
+
+    private static HttpClient CreateSessionClient()
+    {
+        // Reuse the existing SSRF-safe DNS+TCP validation. Unlike API clients,
+        // the native GUI needs a separate CookieContainer for every user.
+        var handler=ZnunyConnectionTester.SecureHandler();
+        handler.UseCookies=true;
+        handler.CookieContainer=new CookieContainer(256,64,8192);
+        handler.AutomaticDecompression=DecompressionMethods.GZip|
+            DecompressionMethods.Deflate|DecompressionMethods.Brotli;
+        handler.MaxConnectionsPerServer=24;
+        return new HttpClient(handler,disposeHandler:true){
+            Timeout=TimeSpan.FromSeconds(40)
+        };
+    }
+
+    private static bool Allowed(Uri origin,Uri target)=>
+        target.Scheme==Uri.UriSchemeHttps &&
+        target.Host.Equals(origin.Host,StringComparison.OrdinalIgnoreCase) &&
+        target.Port==origin.Port &&
+        string.IsNullOrEmpty(target.UserInfo);
+
+    private sealed record LoginForm(Uri Action,List<KeyValuePair<string,string>> Fields);
+
+    private static string? Attribute(string input,string name)
+    {
+        foreach(Match match in AttributePattern.Matches(input)){
+            if(!match.Groups["name"].Value.Equals(name,
+                StringComparison.OrdinalIgnoreCase))continue;
+            var raw=match.Groups["dq"].Success?match.Groups["dq"].Value:
+                match.Groups["sq"].Success?match.Groups["sq"].Value:
+                match.Groups["bare"].Value;
+            return WebUtility.HtmlDecode(raw);
+        }
+        return null;
+    }
+
+    private static LoginForm? FindLoginForm(string html,Uri page,Uri origin,
+        string username,string password)
+    {
+        foreach(Match form in FormPattern.Matches(html)){
+            var fields=new List<KeyValuePair<string,string>>();
+            var foundPassword=false;
+            var foundUsername=false;
+            foreach(Match input in InputPattern.Matches(form.Groups["body"].Value)){
+                var attrs=input.Groups["attrs"].Value;
+                var name=Attribute(attrs,"name");
+                if(string.IsNullOrEmpty(name))continue;
+                var type=Attribute(attrs,"type")??"text";
+                if(type.Equals("password",StringComparison.OrdinalIgnoreCase)||
+                    name.Equals("Password",StringComparison.OrdinalIgnoreCase)){
+                    foundPassword=true;
+                    fields.Add(new(name,password));
+                }else if(name.Equals("User",StringComparison.OrdinalIgnoreCase)||
+                    name.Equals("UserLogin",StringComparison.OrdinalIgnoreCase)){
+                    foundUsername=true;
+                    fields.Add(new(name,username));
+                }else if(type.Equals("hidden",StringComparison.OrdinalIgnoreCase)||
+                    type.Equals("submit",StringComparison.OrdinalIgnoreCase)){
+                    fields.Add(new(name,Attribute(attrs,"value")??""));
+                }
+            }
+            if(!foundUsername||!foundPassword)continue;
+            var action=Attribute(form.Groups["attrs"].Value,"action")??page.AbsoluteUri;
+            if(!Uri.TryCreate(page,action,out var destination)||
+                !Allowed(origin,destination))
+                throw new InvalidOperationException("Login form target blocked");
+            var method=Attribute(form.Groups["attrs"].Value,"method")??"post";
+            if(!method.Equals("post",StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Unsupported login form method");
+            return new LoginForm(destination,fields);
+        }
+        return null;
+    }
+
+    private static async Task<(HttpResponseMessage Response,Uri Url)> SendAndFollowAsync(
+        HttpClient client,Uri origin,Uri target,CancellationToken ct)
+    {
+        if(!Allowed(origin,target))throw new InvalidOperationException();
+        for(var hop=0;hop<6;hop++){
+            using var request=new HttpRequestMessage(HttpMethod.Get,target);
+            var response=await client.SendAsync(request,
+                HttpCompletionOption.ResponseHeadersRead,ct);
+            if((int)response.StatusCode is >=300 and <400 &&
+                response.Headers.Location is { } location){
+                var next=new Uri(target,location);
+                response.Dispose();
+                if(!Allowed(origin,next))throw new InvalidOperationException();
+                target=next;
+                continue;
+            }
+            return (response,target);
+        }
+        throw new InvalidOperationException("Login redirects exceeded");
+    }
+
+    private static async Task<byte[]> ReadLimitedAsync(HttpContent content,
+        int max,CancellationToken ct)
+    {
+        if(content.Headers.ContentLength>max)throw new InvalidOperationException();
+        await using var stream=await content.ReadAsStreamAsync(ct);
+        using var output=new MemoryStream();
+        var buffer=new byte[32768];
+        int read;
+        while((read=await stream.ReadAsync(buffer,ct))>0){
+            if(output.Length+read>max)throw new InvalidOperationException();
+            output.Write(buffer,0,read);
+        }
+        return output.ToArray();
+    }
+
+    private static async Task LoginAsync(HttpClient client,Uri entry,Uri origin,
+        string username,string password,CancellationToken ct)
+    {
+        using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(35));
+        var token=timeout.Token;
+        var (landing,landingUrl)=await SendAndFollowAsync(client,origin,entry,token);
+        using(landing){
+            if(!landing.IsSuccessStatusCode ||
+                landing.Content.Headers.ContentType?.MediaType is not "text/html")
+                throw new InvalidOperationException("Login page unavailable");
+            var html=Encoding.UTF8.GetString(await ReadLimitedAsync(
+                landing.Content,MaxHtmlBytes,token));
+            var login=FindLoginForm(html,landingUrl,origin,username,password);
+            if(login is null)throw new InvalidOperationException("Login form missing");
+            using var request=new HttpRequestMessage(HttpMethod.Post,login.Action){
+                Content=new FormUrlEncodedContent(login.Fields)
+            };
+            request.Headers.Referrer=landingUrl;
+            using var submitted=await client.SendAsync(request,
+                HttpCompletionOption.ResponseHeadersRead,token);
+            if((int)submitted.StatusCode is >=300 and <400){
+                if(submitted.Headers.Location is not { } location)
+                    throw new InvalidOperationException("Login redirect missing");
+                var next=new Uri(login.Action,location);
+                var (result,_)=await SendAndFollowAsync(client,origin,next,token);
+                using(result){
+                    if(!result.IsSuccessStatusCode)
+                        throw new InvalidOperationException("Login rejected");
+                    if(result.Content.Headers.ContentType?.MediaType=="text/html"){
+                        var page=Encoding.UTF8.GetString(await ReadLimitedAsync(
+                            result.Content,MaxHtmlBytes,token));
+                        if(FindLoginForm(page,next,origin,username,password) is not null)
+                            throw new InvalidOperationException("Login rejected");
+                    }
+                }
+            }else{
+                if(!submitted.IsSuccessStatusCode)
+                    throw new InvalidOperationException("Login rejected");
+                if(submitted.Content.Headers.ContentType?.MediaType=="text/html"){
+                    var page=Encoding.UTF8.GetString(await ReadLimitedAsync(
+                        submitted.Content,MaxHtmlBytes,token));
+                    if(FindLoginForm(page,login.Action,origin,username,password) is not null)
+                        throw new InvalidOperationException("Login rejected");
+                }
+            }
+        }
+    }
+
+    private static string Rewrite(string text,Uri origin,Uri publicOrigin)
+    {
+        var source=origin.GetLeftPart(UriPartial.Authority);
+        var destination=publicOrigin.GetLeftPart(UriPartial.Authority);
+        // Native HTML, CSS, JS and JSON are served from the second origin.
+        // Relative paths need no rewrite. Replace absolute canonical URLs,
+        // escaped JSON/JS URLs and common percent-encoded URL forms.
+        return text.Replace(source,destination,StringComparison.OrdinalIgnoreCase)
+            .Replace(source.Replace("/","\\/"),
+                destination.Replace("/","\\/"),StringComparison.OrdinalIgnoreCase)
+            .Replace(Uri.EscapeDataString(source),
+                Uri.EscapeDataString(destination),StringComparison.OrdinalIgnoreCase)
+            .Replace(source.Replace("/","&#47;"),
+                destination.Replace("/","&#47;"),StringComparison.OrdinalIgnoreCase)
+            .Replace("//"+origin.Authority,
+                "//"+publicOrigin.Authority,StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsEditableText(MediaTypeHeaderValue? type)
+    {
+        var value=type?.MediaType??"";
+        return value.StartsWith("text/",StringComparison.OrdinalIgnoreCase) ||
+            value is "application/javascript" or "application/x-javascript" or
+                "application/json" or "application/xml" or "application/xhtml+xml" or
+                "image/svg+xml";
+    }
+
+    private static bool ApprovedBrowserMutation(HttpRequest request,Uri external)
+    {
+        if(HttpMethods.IsGet(request.Method)||HttpMethods.IsHead(request.Method))
+            return true;
+        // Protect the proxy cookie against cross-origin form/JS POSTs.
+        if(request.Headers.TryGetValue("Origin",out var origin)&&
+            !origin.ToString().Equals(external.GetLeftPart(UriPartial.Authority),
+                StringComparison.OrdinalIgnoreCase))
+            return false;
+        if(request.Headers.TryGetValue("Sec-Fetch-Site",out var site)&&
+            site.ToString() is not ("same-origin" or "none"))
+            return false;
+        if(request.Headers.TryGetValue("Referer",out var referer)&&
+            Uri.TryCreate(referer.ToString(),UriKind.Absolute,out var from)&&
+            !Allowed(external,from))
+            return false;
+        return true;
+    }
+
+    private async Task ProxyRequestAsync(HttpContext ctx,ProxySession session,
+        Uri publicOrigin,CancellationToken ct)
+    {
+        if(ctx.Request.Method is not ("GET" or "POST" or "HEAD" or "PUT" or
+            "PATCH" or "DELETE")||!ApprovedBrowserMutation(ctx.Request,publicOrigin)){
+            ctx.Response.StatusCode=403;return;
+        }
+        var builder=new UriBuilder(session.Upstream){
+            Path=ctx.Request.Path.ToUriComponent(),
+            Query=ctx.Request.QueryString.ToUriComponent().TrimStart('?'),
+            Fragment=""
+        };
+        var target=builder.Uri;
+        if(!Allowed(session.Upstream,target)){
+            ctx.Response.StatusCode=403;return;
+        }
+        using var request=new HttpRequestMessage(new HttpMethod(ctx.Request.Method),target);
+        if(ctx.Request.ContentLength>0||ctx.Request.Headers.ContainsKey("Transfer-Encoding")){
+            request.Content=new StreamContent(ctx.Request.Body);
+            if(!string.IsNullOrEmpty(ctx.Request.ContentType))
+                request.Content.Headers.TryAddWithoutValidation("Content-Type",ctx.Request.ContentType);
+            if(ctx.Request.ContentLength is { } length)
+                request.Content.Headers.ContentLength=length;
+        }
+        foreach(var name in new[]{"Accept","Accept-Language","User-Agent",
+            "X-Requested-With","X-Requested-By","X-Requested-Action",
+            "If-Modified-Since","If-None-Match","Range"}){
+            if(ctx.Request.Headers.TryGetValue(name,out var value))
+                request.Headers.TryAddWithoutValidation(name,value.ToArray());
+        }
+        if(ctx.Request.Headers.TryGetValue("Origin",out _))
+            request.Headers.TryAddWithoutValidation("Origin",
+                session.Upstream.GetLeftPart(UriPartial.Authority));
+        if(ctx.Request.Headers.TryGetValue("Referer",out var referer)&&
+            Uri.TryCreate(referer.ToString(),UriKind.Absolute,out var refererUrl)&&
+            Allowed(publicOrigin,refererUrl)){
+            request.Headers.Referrer=new Uri(session.Upstream,
+                refererUrl.PathAndQuery);
+        }
+        try{
+            using var response=await session.Client.SendAsync(request,
+                HttpCompletionOption.ResponseHeadersRead,ct);
+            ctx.Response.StatusCode=(int)response.StatusCode;
+            // Forward only necessary response metadata. Never expose upstream
+            // Set-Cookie, internal URLs, server identifiers or hop-by-hop headers.
+            if(response.Headers.Location is { } redirect){
+                var destination=new Uri(target,redirect);
+                if(!Allowed(session.Upstream,destination)){
+                    ctx.Response.StatusCode=502;return;
+                }
+                ctx.Response.Headers.Location=
+                    publicOrigin.GetLeftPart(UriPartial.Authority)+destination.PathAndQuery;
+            }
+            if(response.Content.Headers.ContentDisposition is { } disposition)
+                ctx.Response.Headers.ContentDisposition=disposition.ToString();
+            if(response.Headers.TryGetValues("Accept-Ranges",out var ranges))
+                ctx.Response.Headers["Accept-Ranges"]=string.Join(",",ranges);
+            if(response.Content.Headers.ContentRange is { } range)
+                ctx.Response.Headers.ContentRange=range.ToString();
+            var type=response.Content.Headers.ContentType;
+            if(type is not null)ctx.Response.ContentType=type.ToString();
+            if(HttpMethods.IsHead(ctx.Request.Method)||response.StatusCode is
+                HttpStatusCode.NotModified or HttpStatusCode.NoContent)
+                return;
+            // Static assets are user-private but can be cached briefly by
+            // their own browser. HTML, JSON and ticket responses are never
+            // cached across navigations or login changes.
+            var staticAsset=HttpMethods.IsGet(ctx.Request.Method) &&
+                response.IsSuccessStatusCode &&
+                (type?.MediaType?.StartsWith("image/",StringComparison.OrdinalIgnoreCase)==true ||
+                type?.MediaType is "text/css" or "font/woff" or
+                    "font/woff2" or "application/font-woff");
+            ctx.Response.Headers.CacheControl=staticAsset?
+                "private,max-age=600":"private,no-store";
+            if(IsEditableText(type)){
+                var bytes=await ReadLimitedAsync(response.Content,MaxHtmlBytes,ct);
+                var charset=type?.CharSet?.Trim('"');
+                Encoding encoding;
+                try{encoding=charset is null?Encoding.UTF8:
+                    Encoding.GetEncoding(charset);}
+                catch(ArgumentException){encoding=Encoding.UTF8;}
+                var changed=Rewrite(encoding.GetString(bytes),
+                    session.Upstream,publicOrigin);
+                var output=encoding.GetBytes(changed);
+                await ctx.Response.Body.WriteAsync(output,ct);
+            }else{
+                // Binary attachments, images and fonts never pass through a
+                // text decoder; stream to keep memory bounded per user.
+                await response.Content.CopyToAsync(ctx.Response.Body,ct);
+            }
+        }catch(Exception e) when(e is HttpRequestException or
+            TaskCanceledException or InvalidOperationException or IOException){
+            if(!ctx.Response.HasStarted)
+                ctx.Response.StatusCode=502;
+        }
+    }
+}

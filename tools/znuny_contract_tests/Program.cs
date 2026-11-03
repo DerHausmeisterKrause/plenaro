@@ -1,4 +1,6 @@
 using System.Net;
+using System.Reflection;
+using Microsoft.Extensions.Configuration;
 using System.Text;
 using System.Text.Json;
 using Plenaro.Api.Znuny;
@@ -197,6 +199,74 @@ var fieldResult=await optionReader.GetBookingFieldsAsync(fallbackSettings,
 Assert(optionCalls==2 && fieldResult.CostCenterOptions.Count==2 &&
     fieldResult.OrderOptions.Single().Key=="AB",
     "404 on optional DynamicField route falls back to admin-controlled booking keys");
+
+// Native iframe proxy tests use ONLY synthetic example hosts, never
+// customer infrastructure. Verify the exact standard agent login markup.
+var proxyType=typeof(ZnunyNativeProxy);
+var findLogin=proxyType.GetMethod("FindLoginForm",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+var upstream=new Uri("https://ticketsystem.example.test");
+var page=new Uri("https://ticketsystem.example.test/otrs/index.pl");
+const string formHtml="""
+    <html><form method="post" action="/otrs/index.pl">
+      <input type="hidden" name="ChallengeToken" value="synthetic-challenge">
+      <input type="hidden" name="Action" value="Login">
+      <input type="hidden" name="RequestedURL" value="">
+      <input type="text" name="User" value="">
+      <input type="password" name="Password">
+    </form></html>
+    """;
+var parsed=findLogin.Invoke(null,new object[]{
+    formHtml,page,upstream,"agent.example","test-password"
+})!;
+var target=(Uri)parsed.GetType().GetProperty("Action")!.GetValue(parsed)!;
+var fields=(IEnumerable<KeyValuePair<string,string>>)parsed.GetType()
+    .GetProperty("Fields")!.GetValue(parsed)!;
+Assert(target==page && fields.Any(f=>f.Key=="ChallengeToken"&&
+    f.Value=="synthetic-challenge")&&
+    fields.Any(f=>f.Key=="User"&&f.Value=="agent.example")&&
+    fields.Any(f=>f.Key=="Password"&&f.Value=="test-password"),
+    "native agent login retains CSRF hidden fields and fills user credentials");
+try{
+    findLogin.Invoke(null,new object[]{
+        formHtml.Replace("action=\"/otrs/index.pl\"",
+            "action=\"https://other.example.test/steal\""),
+        page,upstream,"agent.example","test-password"
+    });
+    throw new Exception("Cross-origin login action accepted");
+}catch(TargetInvocationException e) when(e.InnerException is InvalidOperationException){
+    Assert(true,"native login blocks credential delivery to a different host");
+}
+var rewriter=proxyType.GetMethod("Rewrite",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+var rewritten=(string)rewriter.Invoke(null,new object[]{
+    "https://ticketsystem.example.test/otrs/index.pl "+
+    "https:\\/\\/ticketsystem.example.test/otrs/index.pl",
+    upstream,new Uri("https://tickets.example.test")
+})!;
+Assert(!rewritten.Contains("ticketsystem.example.test")&&
+    rewritten.Contains("https://tickets.example.test"),
+    "native proxy rewrites original absolute and escaped JS URLs");
+var config=new ConfigurationBuilder().AddInMemoryCollection(
+    new Dictionary<string,string?>{
+        ["Security:RequireHttps"]="true",
+        ["PLENARO_PUBLIC_ORIGIN"]="https://portal.example.test",
+        ["PLENARO_ZNUNY_PROXY_ORIGIN"]="https://tickets.example.test"
+    }).Build();
+var proxy=new ZnunyNativeProxy(config);
+var origins=proxyType.GetMethod("Origins",
+    BindingFlags.Instance|BindingFlags.NonPublic)!;
+Assert((bool)origins.Invoke(proxy,new object?[]{null,null})!,
+    "native proxy accepts two distinct same-site HTTPS origins");
+var badConfig=new ConfigurationBuilder().AddInMemoryCollection(
+    new Dictionary<string,string?>{
+        ["Security:RequireHttps"]="true",
+        ["PLENARO_PUBLIC_ORIGIN"]="https://portal.example.test",
+        ["PLENARO_ZNUNY_PROXY_ORIGIN"]="https://tickets.other.test"
+    }).Build();
+Assert(!(bool)origins.Invoke(new ZnunyNativeProxy(badConfig),
+    new object?[]{null,null})!,
+    "native proxy rejects cross-site HTTPS origins");
 
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
