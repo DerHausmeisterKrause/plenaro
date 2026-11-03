@@ -28,7 +28,7 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
     private readonly ConcurrentDictionary<string,ProxySession> _sessions=new();
     private readonly ConcurrentDictionary<Guid,string> _users=new();
     private readonly ConcurrentDictionary<string,Pending> _pending=new();
-    private readonly SemaphoreSlim _startLock=new(1,1);
+    private readonly ConcurrentDictionary<Guid,SemaphoreSlim> _startLocks=new();
 
     private sealed record Pending(string SessionId,string Redirect,DateTimeOffset Expires);
 
@@ -135,7 +135,9 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
 
     public bool IsProxyHost(HttpContext ctx)
     {
-        return Origins(out _,out var external) &&
+        // Intercept even if the parent origin is misconfigured: never serve
+        // the normal Plenaro authentication UI on the isolated alias.
+        return ValidOrigin(configuration["PLENARO_ZNUNY_PROXY_ORIGIN"],out var external) &&
             ctx.Request.Host.Host.Equals(external.Host,
                 StringComparison.OrdinalIgnoreCase) &&
             ctx.Request.Host.Port.GetValueOrDefault(443)==443;
@@ -152,8 +154,15 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
         ctx.Response.Headers["X-Content-Type-Options"]="nosniff";
         ctx.Response.Headers["Referrer-Policy"]="no-referrer";
         ctx.Response.Headers["Content-Security-Policy"]=
+            "default-src 'self' data: blob:; "+
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
+            "style-src 'self' 'unsafe-inline'; "+
+            "img-src 'self' data: blob:; font-src 'self' data:; "+
+            "connect-src 'self'; frame-src 'self'; worker-src 'self' blob:; "+
+            "form-action 'self'; base-uri 'self'; object-src 'none'; "+
             "frame-ancestors "+parent.GetLeftPart(UriPartial.Authority);
-        ctx.Response.Headers["X-Frame-Options"]=""; // never forward upstream DENY/SAMEORIGIN
+        // Upstream X-Frame-Options is deliberately NOT forwarded. The
+        // administrator explicitly allows embedding from the configured parent.
         if(ctx.Request.Path==BootstrapPath){
             await BootstrapAsync(ctx,ct);return;
         }
@@ -257,7 +266,9 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
             "Persönliches Ticketsystem-Passwort fehlt.");
 
         var signature=CredentialSignature(username,password,entry);
-        await _startLock.WaitAsync(ct);
+        // Independent user logins must not block each other.
+        var gate=_startLocks.GetOrAdd(user,_=>new SemaphoreSlim(1,1));
+        await gate.WaitAsync(ct);
         try{
             // A maximum protects memory and HTTP connections in a shared server.
             foreach(var pair in _sessions){
@@ -303,13 +314,15 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
                 DateTimeOffset.UtcNow+BootstrapTtl);
             return external.GetLeftPart(UriPartial.Authority)+BootstrapPath+
                 "?token="+Uri.EscapeDataString(token);
-        }finally{_startLock.Release();}
+        }finally{gate.Release();}
     }
 
     private void RemoveSession(string key,ProxySession session)
     {
-        if(_sessions.TryRemove(new KeyValuePair<string,ProxySession>(key,session))){
-            _users.TryRemove(new KeyValuePair<Guid,string>(session.User,key));
+        if(((ICollection<KeyValuePair<string,ProxySession>>)_sessions)
+            .Remove(new KeyValuePair<string,ProxySession>(key,session))){
+            ((ICollection<KeyValuePair<Guid,string>>)_users)
+                .Remove(new KeyValuePair<Guid,string>(session.User,key));
             session.Dispose();
         }
     }
