@@ -225,10 +225,27 @@ public static class FavoritesEndpoints
             CancellationToken ct)=>{
             if(!await ValidCsrf(ctx,anti))return CsrfError();
             await using var db=await Open(config,ct);
-            await using var cmd=new NpgsqlCommand(
-                "DELETE FROM favorite_apps WHERE id=@id",db);
-            cmd.Parameters.AddWithValue("id",id);
-            if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();
+            await using var tx=await db.BeginTransactionAsync(ct);
+            // App deletion also clears encrypted user credentials tied to
+            // bookmarks that the FK cascade will remove.
+            await using(var secrets=new NpgsqlCommand("""
+                DELETE FROM encrypted_secrets secret
+                USING user_favorites favorite
+                WHERE favorite.app_id=@app AND
+                    secret.scope='user' AND
+                    secret.owner_user_id=favorite.user_id AND
+                    secret.secret_name='fav.' ||
+                        replace(favorite.id::text,'-','') || '.password'
+                """,db,tx)){
+                secrets.Parameters.AddWithValue("app",id);
+                await secrets.ExecuteNonQueryAsync(ct);
+            }
+            await using(var cmd=new NpgsqlCommand(
+                "DELETE FROM favorite_apps WHERE id=@id",db,tx)){
+                cmd.Parameters.AddWithValue("id",id);
+                if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();
+            }
+            await tx.CommitAsync(ct);
             proxy.RevokeApp(id);
             return Results.NoContent();
         });
