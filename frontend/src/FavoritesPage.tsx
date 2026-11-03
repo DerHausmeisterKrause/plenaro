@@ -239,7 +239,7 @@ export function FavoriteAppsAdminPanel(){
         <input id="app-slug" value={form.slug} required maxLength={40}
           pattern="[a-z][a-z0-9-]+" onChange={e=>setForm({...form,slug:e.target.value})}/>
         <label htmlFor="app-upstream">Interne HTTPS-Adresse (Serverursprung)</label>
-        <input id="app-upstream" type="url" value={form.upstreamUrl} required
+        <input id="app-upstream" type="url" value={form.upstreamUrl} required disabled={!!current}
           onChange={e=>setForm({...form,upstreamUrl:e.target.value})}/>
         <p className="um-hint">Nur HTTPS-Origin, etwa https://wiki.example.org/.
           Die Zieladresse bleibt in der Administration; keine freie Zielwahl durch Benutzer.
