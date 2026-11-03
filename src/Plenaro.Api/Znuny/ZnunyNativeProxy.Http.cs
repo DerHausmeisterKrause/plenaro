@@ -213,7 +213,6 @@ public sealed partial class ZnunyNativeProxy
             return true;
         // Protect the proxy cookie against cross-origin form/JS POSTs.
         if(request.Headers.TryGetValue("Origin",out var origin)&&
-            origin.ToString()!="null"&&
             !origin.ToString().Equals(external.GetLeftPart(UriPartial.Authority),
                 StringComparison.OrdinalIgnoreCase))
             return false;
@@ -297,9 +296,8 @@ public sealed partial class ZnunyNativeProxy
             var staticAsset=HttpMethods.IsGet(ctx.Request.Method) &&
                 response.IsSuccessStatusCode &&
                 (type?.MediaType?.StartsWith("image/",StringComparison.OrdinalIgnoreCase)==true ||
-                type?.MediaType is "text/css" or "application/javascript" or
-                    "text/javascript" or "application/x-javascript" or
-                    "font/woff" or "font/woff2" or "application/font-woff");
+                type?.MediaType is "text/css" or "font/woff" or
+                    "font/woff2" or "application/font-woff");
             ctx.Response.Headers.CacheControl=staticAsset?
                 "private,max-age=600":"private,no-store";
             if(IsEditableText(type)){
