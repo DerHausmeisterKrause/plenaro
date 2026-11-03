@@ -596,5 +596,5 @@ PostgreSQL-Datenbank und der Vault bleiben unverändert.
 - [x] CGI-Navigation mit Ticket-/Dashboard-Query unterstützen; nicht-HTML-Anhänge unverändert streamen
 - [x] CSS des Ticketsystem-Reiters aus dem allgemeinen Maximalbreiten-/Seitenpadding lösen; iframe füllt Arbeitsbereich unter der Topbar
 - [x] Synthetische HTML-/Nicht-HTML-/Download-Tests ergänzen, keine echten Ticketdaten übernehmen
-- [ ] GitHub-CI: Backend/Frontend/Vertrags- und Docker-Smoke-Tests erfolgreich
+- [x] GitHub-CI: Backend/Frontend/Vertrags- und Docker-Smoke-Tests erfolgreich ([PR #7](https://github.com/DerHausmeisterKrause/plenaro/pull/7), [CI #41635960052](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41635960052))
 - [ ] Am tatsächlichen Ticketsystem Darstellung, interne Links, AJAX, Anhänge und mehrere Benutzer verifizieren
