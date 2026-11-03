@@ -1,3 +1,20 @@
+## Neue Funktion (PR #12)
+
+Administratoren können unter Einstellungen → Favoriten freigegebene HTTPS-Anwendungen anlegen, auf Subdomain-Slugs zuordnen und allen oder ausgewählten Benutzern gestatten. Ein Benutzer kann daraus Favoriten erstellen, umbenennen, sortieren und im Plenaro-Reiter öffnen. Benutzername/Passwort sind optional und bleiben serverseitig verschlüsselt. Automatisches Login unterstützt nur übliche HTML-POST-Formulare; ansonsten ist eine interaktive Anmeldung erforderlich.
+
+Erforderliche Konfiguration auf dem Host (Beispieldaten):
+
+```dotenv
+PLENARO_PUBLIC_ORIGIN=https://portal.example.org
+PLENARO_ZNUNY_PROXY_ORIGIN=https://tickets.example.org
+PLENARO_SERVER_NAME=portal.example.org tickets.example.org *.apps.example.org
+PLENARO_FAVORITES_BASE_DOMAIN=apps.example.org
+```
+
+Zusätzlich Wildcard-DNS und ein vertrauenswürdiges Zertifikat für die App-Domains einrichten. Neue freigegebene Apps erfordern dann keine weitere NGINX-Änderung. Fremde Redirects, direkte Benutzer-URLs und Cross-Origin-Zugriffe bleiben gesperrt. SSO/2FA, WebSockets und komplexe Apps erfordern möglicherweise eigene Integrationen. Reale Host-Abnahme bleibt offen.
+
+---
+
 # Plenaro 2.0 – Wildcard-Hosts und zukünftige Favoriten
 
 ## Ziel und WPF-Referenz
