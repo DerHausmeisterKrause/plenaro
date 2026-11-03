@@ -103,7 +103,7 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
             }catch(ProxyFailure e){
                 return Results.Json(new{error=e.Reason},statusCode:503);
             }
-        }).RequireRateLimiting("znuny-browser-start");
+        }).RequireRateLimiting("znuny-native-start");
     }
 
     public sealed record StartRequest(string? TicketId,bool Reset=false);
