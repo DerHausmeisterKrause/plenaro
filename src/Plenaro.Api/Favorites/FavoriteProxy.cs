@@ -17,7 +17,7 @@ namespace Plenaro.Api.Favorites;
 /// and each Plenaro user/favorite gets an independent upstream cookie jar.
 /// No arbitrary browser-specified destination, no original credentials/cookies.
 /// </summary>
-public sealed class FavoriteProxy(IConfiguration configuration)
+public sealed partial class FavoriteProxy(IConfiguration configuration)
 {
     private const string CookieName="Plenaro.FavoriteProxy";
     private const string BootstrapPath="/_plenaro/favorite-bootstrap";
@@ -170,10 +170,10 @@ public sealed class FavoriteProxy(IConfiguration configuration)
         var host=ctx.Request.Host.Host.ToLowerInvariant();
         var suffix="."+BaseDomain;
         if(!host.EndsWith(suffix,StringComparison.Ordinal)||
-            host[..^suffix.Length] is not { } slug||
-            !Regex.IsMatch(slug,"^[a-z][a-z0-9-]{1,39}$")){
+            !Regex.IsMatch(host[..^suffix.Length],"^[a-z][a-z0-9-]{1,39}$")){
             ctx.Response.StatusCode=404;return;
         }
+        var slug=host[..^suffix.Length];
         var external=ProxyOrigin(slug);
         if(external is null){ctx.Response.StatusCode=404;return;}
         ctx.Response.Headers["X-Content-Type-Options"]="nosniff";
