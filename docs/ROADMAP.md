@@ -566,5 +566,5 @@ PostgreSQL-Datenbank und der Vault bleiben unverändert.
 - [x] Transport/TLS, Timeout, nicht unterstützte Redirects und HTTP-Serverfehler durch neutrale, nicht-sensitive Fehlercodes unterscheiden
 - [x] Bei nicht-JSON-Gateway-Antworten den HTTP-Status statt einer irreführenden generischen Login-Meldung anzeigen
 - [x] Tests mit rein fiktiven Hostnamen für automatische Anmeldung, interaktiven Login und blockierte externe Weiterleitung ergänzen
-- [ ] Neueste GitHub-CI vollständig grün
+- [x] GitHub-CI erfolgreich: Backend, Frontend, fiktive Loginfälle und Docker-Smoke ([PR #4](https://github.com/DerHausmeisterKrause/plenaro/pull/4), [CI #41610855241](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41610855241))
 - [ ] Am Zielhost Ursache anhand des neutralen Fehlercodes verifizieren sowie native Anmeldung und iframe-Bedienung prüfen
