@@ -218,13 +218,7 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
         ctx.Response.Headers["X-Content-Type-Options"]="nosniff";
         ctx.Response.Headers["Referrer-Policy"]="no-referrer";
         ctx.Response.Headers["Content-Security-Policy"]=
-            "default-src 'self' data: blob:; "+
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
-            "style-src 'self' 'unsafe-inline'; "+
-            "img-src 'self' data: blob:; font-src 'self' data:; "+
-            "connect-src 'self'; frame-src 'self'; worker-src 'self' blob:; "+
-            "form-action 'self'; base-uri 'self'; object-src 'none'; "+
-            "frame-ancestors "+parent.GetLeftPart(UriPartial.Authority);
+            BrowserContentSecurityPolicy(parent);
         // Upstream X-Frame-Options is deliberately NOT forwarded. The
         // administrator explicitly allows embedding from the configured parent.
         if(ctx.Request.Path==BootstrapPath){
@@ -252,6 +246,19 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
         }
         await ProxyRequestAsync(ctx,session,external,ct);
     }
+
+    // Znuny embeds article bodies and email previews in nested iframes.
+    // CSP frame-ancestors is evaluated against EVERY ancestor: the outer
+    // Plenaro page AND the native Znuny proxy page. Allow exactly those
+    // two HTTPS origins; never use a wildcard or disable frame protection.
+    internal static string BrowserContentSecurityPolicy(Uri parent)=>
+        "default-src 'self' data: blob:; "+
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
+        "style-src 'self' 'unsafe-inline'; "+
+        "img-src 'self' data: blob:; font-src 'self' data:; "+
+        "connect-src 'self'; frame-src 'self'; worker-src 'self' blob:; "+
+        "form-action 'self'; base-uri 'self'; object-src 'none'; "+
+        "frame-ancestors 'self' "+parent.GetLeftPart(UriPartial.Authority);
 
     private async Task<bool> StillApprovedAsync(ProxySession session,
         IServiceProvider services,CancellationToken ct)
