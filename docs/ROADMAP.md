@@ -557,3 +557,14 @@ Zielhost weiß. Die historische Checkliste dokumentiert den Zwischenstand.
 **Hinweis:** Der bisherige Chromium-Container wird beim Update mit
 `docker compose up -d --build --remove-orphans` entfernt. Die
 PostgreSQL-Datenbank und der Vault bleiben unverändert.
+
+
+### Phase 6 – Native Anmeldung diagnostizieren ohne Architekturwechsel
+
+- [x] Den ursprünglichen serverseitigen Agenten-Autologin beibehalten
+- [x] Bei individuellen Loginformularen oder zurückkehrender Loginseite eine reguläre Anmeldung in derselben isolierten HTML-Proxy-Sitzung erlauben
+- [x] Transport/TLS, Timeout, nicht unterstützte Redirects und HTTP-Serverfehler durch neutrale, nicht-sensitive Fehlercodes unterscheiden
+- [x] Bei nicht-JSON-Gateway-Antworten den HTTP-Status statt einer irreführenden generischen Login-Meldung anzeigen
+- [x] Tests mit rein fiktiven Hostnamen für automatische Anmeldung, interaktiven Login und blockierte externe Weiterleitung ergänzen
+- [ ] Neueste GitHub-CI vollständig grün
+- [ ] Am Zielhost Ursache anhand des neutralen Fehlercodes verifizieren sowie native Anmeldung und iframe-Bedienung prüfen
