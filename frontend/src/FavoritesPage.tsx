@@ -176,7 +176,7 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
   </section>;
 }
 
-export function FavoriteAppsAdminPanel(){
+export function FavoriteAppsAdminPanel({onChanged}:{onChanged:()=>void}){
   const [apps,setApps]=useState<FavoriteApp[]>([]);
   const [people,setPeople]=useState<ManagedUser[]>([]);
   const [selected,setSelected]=useState('');
@@ -208,7 +208,7 @@ export function FavoriteAppsAdminPanel(){
       const id=current?current.id:(await createApprovedApp(payload)).id;
       if(current)await updateApprovedApp(current.id,payload);
       await refresh();setSelected(id);setForm(payload);
-      setInfo('Webanwendung freigegeben.');
+      setInfo('Webanwendung freigegeben.');onChanged();
     }catch(e){setError(e instanceof Error?e.message:'Speichern fehlgeschlagen.');}
     finally{setBusy(false);}
   }
@@ -217,7 +217,7 @@ export function FavoriteAppsAdminPanel(){
     if(!window.confirm('Anwendung entfernen? Zugehörige Favoriten werden gelöscht.'))return;
     setBusy(true);setError('');
     try{await removeApprovedApp(current.id);await refresh();fresh();
-      setInfo('Anwendung entfernt.');}
+      setInfo('Anwendung entfernt.');onChanged();}
     catch(e){setError(e instanceof Error?e.message:'Löschen fehlgeschlagen.');}
     finally{setBusy(false);}
   }
