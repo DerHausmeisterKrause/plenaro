@@ -58,9 +58,9 @@ export function ZnunyWebPortalPage(){
           headers:{'X-CSRF-TOKEN':token.token,'Content-Type':'application/json'},
           body:JSON.stringify({ticketId:ticket,reset:revision>0})
         });
-        const body=await response.json().catch(()=>({})) as {url?:string,error?:string};
+        const body=await response.json().catch(()=>({})) as {url?:string;error?:string;code?:string;requiresInteractiveLogin?:boolean};
         if(!response.ok||!body.url)
-          throw new Error(body.error||'Native Ticketsystem-Anmeldung fehlgeschlagen.');
+          throw new Error((body.error||'Verbindungsaufbau fehlgeschlagen.')+' (HTTP '+response.status+(body.code?' / '+body.code:'')+')');
         const external=new URL(body.url);
         if(external.protocol!=='https:'||external.origin===window.location.origin)
           throw new Error('Ungültige Ticketsystem-Proxy-Adresse.');
