@@ -576,5 +576,5 @@ PostgreSQL-Datenbank und der Vault bleiben unverändert.
 - [x] HTTPS-, CSRF- und Browser-Fetch-Metadata-Prüfungen beibehalten; fremde/opaque Origins weiterhin verweigern
 - [x] Neutrale Fehlercodes bei falschem HTTPS oder nicht passender Browser-Origin ausgeben
 - [x] Automatisierte Tests für umgeschriebenen Frontproxy-Host und Cross-Origin-Abwehr ergänzen
-- [ ] GitHub-CI (Backend, Frontend, Znuny-Vertrag und Docker-Smoke) erfolgreich
+- [x] GitHub-CI (Backend, Frontend, Znuny-Vertrag und Docker-Smoke) erfolgreich ([PR #5](https://github.com/DerHausmeisterKrause/plenaro/pull/5), [CI #41619802978](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41619802978))
 - [ ] Vor Ort die beiden HTTPS-Proxy-Hostnamen und automatische Anmeldung verifizieren
