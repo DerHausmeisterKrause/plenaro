@@ -467,6 +467,35 @@ Assert(!Navigation("GET","*/*",null,"/otrs/js/ticket.js"),
 Assert(!Navigation("POST","text/html","document"),
     "POST form responses do not enter the MIME override");
 
+// Verify the actual opaque-content reader, not only its MIME predicates.
+var opaqueReader=proxyType.GetMethod("ReadOpaqueNavigationAsync",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+async Task<(byte[]? Html,byte[] Streamed)> ProbeOpaque(byte[] source)
+{
+    using var content=new ByteArrayContent(source);
+    using var streamed=new MemoryStream();
+    var task=(Task<byte[]?>)opaqueReader.Invoke(null,new object[]{
+        content,streamed,CancellationToken.None
+    })!;
+    var result=await task;
+    return(result,streamed.ToArray());
+}
+var syntheticHtml=Encoding.UTF8.GetBytes(
+    "<!DOCTYPE html><html><body><form method='post'>"+
+    "<input name='User'></form></body></html>");
+var htmlResult=await ProbeOpaque(syntheticHtml);
+Assert(htmlResult.Html is not null &&
+    htmlResult.Html.SequenceEqual(syntheticHtml) &&
+    htmlResult.Streamed.Length==0,
+    "opaque CGI HTML is buffered for safe URL rewriting");
+var syntheticBinary=new byte[6*1024*1024+8192];
+syntheticBinary[0]=0x00;
+syntheticBinary[^1]=0xff;
+var binaryResult=await ProbeOpaque(syntheticBinary);
+Assert(binaryResult.Html is null &&
+    binaryResult.Streamed.SequenceEqual(syntheticBinary),
+    "large non-HTML binary downloads stream unchanged without HTML size cap");
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory
