@@ -207,8 +207,9 @@ public static class FavoritesEndpoints
             await using var db=await Open(config,ct);
             await using var tx=await db.BeginTransactionAsync(ct);
             await using(var cmd=new NpgsqlCommand("""
-                UPDATE favorite_apps SET name=@name,slug=@slug,upstream_url=@url,
-                    enabled=@enabled,available_to_all=@all WHERE id=@id
+                UPDATE favorite_apps SET name=@name,slug=@slug,
+                    enabled=@enabled,available_to_all=@all
+                WHERE id=@id AND upstream_url=@url
                 """,db,tx)){
                 BindApp(cmd,id,input);
                 if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();
