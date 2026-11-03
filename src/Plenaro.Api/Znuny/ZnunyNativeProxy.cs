@@ -68,7 +68,7 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
 
         group.MapGet("/status",(ZnunyNativeProxy service)=>{
             var enabled=service.Origins(out _,out _);
-            return Results.Ok(new{enabled,mode=enabled?"native":"legacy",
+            return Results.Ok(new{enabled,mode=enabled?"native":"setup",
                 reason=enabled?"": "Für die direkte HTML-Ansicht sind zwei "+
                     "HTTPS-Hostnamen in der lokalen .env erforderlich."});
         });
