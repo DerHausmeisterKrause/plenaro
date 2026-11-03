@@ -140,7 +140,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                     FavoritesEndpoints.PasswordName(favorite.Id),ct);
                 if(!string.IsNullOrEmpty(password) &&
                    !string.IsNullOrWhiteSpace(favorite.Username))
-                    await TryLoginAsync(client,root,favorite.Username,password,ct);
+                    await TryLoginAsync(client,root,new Uri(root,favorite.Path),favorite.Username,password,ct);
             }
         }catch(Exception e) when(!ct.IsCancellationRequested &&
             e is HttpRequestException or InvalidOperationException or TaskCanceledException){
