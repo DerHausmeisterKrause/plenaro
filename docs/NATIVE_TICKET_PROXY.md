@@ -162,3 +162,48 @@ zugelassen.
 Für Diagnosen nur HTTP-Status und neutralen Fehlercode teilen, keine
 Screenshots mit Mitarbeiterdaten, Cookies, Loginformularen, internen
 Hostnamen oder Konfigurationsdateien veröffentlichen.
+
+
+## HTTPS-Frontproxy: Fehler 400 bei der Startadresse
+
+Ein vorgeschalteter Zugangs- oder Reverse Proxy kann die öffentliche
+`Host`-Angabe durch einen internen Servernamen ersetzen. Der
+Ticketsystem-Start prüft deshalb den **Origin-Header des Browsers** gegen
+`PLENARO_PUBLIC_ORIGIN` (zusätzlich zu angemeldeter Plenaro-Sitzung, CSRF,
+HTTPS und `Sec-Fetch-Site`). Damit wird eine gültige Anfrage nicht nur
+wegen eines intern normalisierten Host-Headers als HTTP 400 abgewiesen.
+Unbekannte oder fremde Browser-Origins werden weiterhin blockiert.
+Fehlercodes: `application-https-required` und
+`application-origin-mismatch`; reale Hostnamen werden nicht ausgegeben.
+
+Der vorgeschaltete Reverse Proxy sollte trotzdem bei **beiden**
+Hostnamen den ursprünglichen HTTP-Host erhalten; andernfalls lässt
+sich der native Ticketsystem-Frame nicht der isolierten Proxy-Origin
+zuordnen. Beispiel für einen bereits autorisierten Proxy-Upstream:
+
+```nginx
+proxy_set_header Host $http_host;
+proxy_set_header X-Forwarded-Proto https;
+```
+
+Das ist **kein** Aufruf dazu, eingehende ungeprüfte
+`X-Forwarded-Host`-Header blind zu übernehmen. Der Plenaro-Container
+verarbeitet Forwarded-Header nur von seinem ausdrücklich konfigurierten
+vertrauenswürdigen NGINX.
+
+### Eine Adresse wie bei Teleport?
+
+Teleport bietet einen gemeinsamen Zugangsproxy, verwendet für
+eigentliche HTML-Anwendungen aber normalerweise **eigene App-Subdomains**.
+Alle können auf dieselbe Proxy-IP und denselben TLS-Port zeigen; nur die
+internen Zielserver bleiben für den Benutzer unerreichbar.
+
+Plenaro folgt demselben Prinzip. Der Benutzer öffnet ausschließlich
+die Haupt-URL in der Adresszeile; beim Aufrufen des Ticketsystem-Reiters
+stellt der Browser automatisch auch eine Verbindung zur separaten
+HTTPS-App-Origin her. Diese zweite Origin muss für den Browser
+DNS-seitig auflösbar und erreichbar sein und ein gültiges Zertifikat
+vorweisen. Es ist keine zweite Container-IP oder ein zusätzlicher Port
+erforderlich. Eine Einbettung fremder aktiver Skripte unter **exakt**
+derselben Origin wie das Plenaro-Login wird aus
+Sitzungs-/XSS-Sicherheitsgründen nicht automatisch aktiviert.
