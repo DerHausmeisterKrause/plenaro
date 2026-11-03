@@ -380,8 +380,17 @@ public sealed partial class ZnunyNativeProxy
                 try{encoding=charset is null?Encoding.UTF8:
                     Encoding.GetEncoding(charset);}
                 catch(ArgumentException){encoding=Encoding.UTF8;}
-                var changed=Rewrite(encoding.GetString(bytes),
-                    session.Upstream,publicOrigin);
+                var decoded=encoding.GetString(bytes);
+                // Normalize a verified CGI entry document mislabeled as
+                // plain text; keep binary responses and downloads untouched.
+                if(HttpMethods.IsGet(ctx.Request.Method) &&
+                    type?.MediaType=="text/plain" &&
+                    target.AbsolutePath.Equals(session.Entry.AbsolutePath,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    response.Content.Headers.ContentDisposition is null &&
+                    LooksLikeHtmlDocument(decoded))
+                    ctx.Response.ContentType="text/html; charset="+encoding.WebName;
+                var changed=Rewrite(decoded,session.Upstream,publicOrigin);
                 var output=encoding.GetBytes(changed);
                 await ctx.Response.Body.WriteAsync(output,ct);
             }else{
