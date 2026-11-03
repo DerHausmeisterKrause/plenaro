@@ -193,7 +193,9 @@ public sealed partial class ZnunyNativeProxy
             .Replace(Uri.EscapeDataString(source),
                 Uri.EscapeDataString(destination),StringComparison.OrdinalIgnoreCase)
             .Replace(source.Replace("/","&#47;"),
-                destination.Replace("/","&#47;"),StringComparison.OrdinalIgnoreCase);
+                destination.Replace("/","&#47;"),StringComparison.OrdinalIgnoreCase)
+            .Replace("//"+origin.Authority,
+                "//"+publicOrigin.Authority,StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsEditableText(MediaTypeHeaderValue? type)
@@ -246,6 +248,8 @@ public sealed partial class ZnunyNativeProxy
             request.Content=new StreamContent(ctx.Request.Body);
             if(!string.IsNullOrEmpty(ctx.Request.ContentType))
                 request.Content.Headers.TryAddWithoutValidation("Content-Type",ctx.Request.ContentType);
+            if(ctx.Request.ContentLength is { } length)
+                request.Content.Headers.ContentLength=length;
         }
         foreach(var name in new[]{"Accept","Accept-Language","User-Agent",
             "X-Requested-With","X-Requested-By","X-Requested-Action",
@@ -287,7 +291,17 @@ public sealed partial class ZnunyNativeProxy
             if(HttpMethods.IsHead(ctx.Request.Method)||response.StatusCode is
                 HttpStatusCode.NotModified or HttpStatusCode.NoContent)
                 return;
-            ctx.Response.Headers.CacheControl="private,no-store";
+            // Static assets are user-private but can be cached briefly by
+            // their own browser. HTML, JSON and ticket responses are never
+            // cached across navigations or login changes.
+            var staticAsset=HttpMethods.IsGet(ctx.Request.Method) &&
+                response.IsSuccessStatusCode &&
+                (type?.MediaType?.StartsWith("image/",StringComparison.OrdinalIgnoreCase)==true ||
+                type?.MediaType is "text/css" or "application/javascript" or
+                    "text/javascript" or "application/x-javascript" or
+                    "font/woff" or "font/woff2" or "application/font-woff");
+            ctx.Response.Headers.CacheControl=staticAsset?
+                "private,max-age=600":"private,no-store";
             if(IsEditableText(type)){
                 var bytes=await ReadLimitedAsync(response.Content,MaxHtmlBytes,ct);
                 var charset=type?.CharSet?.Trim('"');
