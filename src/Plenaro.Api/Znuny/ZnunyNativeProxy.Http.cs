@@ -141,6 +141,52 @@ public sealed partial class ZnunyNativeProxy
         return output.ToArray();
     }
 
+    // Some upstream application gateways serve genuine agent HTML as
+    // text/plain, application/octet-stream or without a Content-Type. Trust
+    // the actual document shape, never the header alone; JSON and error
+    // bodies must not be mistaken for successful agent pages.
+    private static bool LooksLikeHtmlDocument(string text)
+    {
+        var prefix=text.AsSpan().TrimStart(" \t\r\n\uFEFF".AsSpan());
+        if(prefix.IsEmpty||prefix[0]!='<')return false;
+        var sample=prefix[..Math.Min(prefix.Length,8192)].ToString();
+        return Regex.IsMatch(sample,
+            @"<(?:!doctype\s+html\b|html\b|head\b|body\b|form\b|main\b|div\b|meta\b|title\b|script\b)",
+            RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,
+            TimeSpan.FromSeconds(1));
+    }
+
+    private static async Task<string?> ReadLoginHtmlAsync(HttpContent content,
+        CancellationToken ct,bool required=true)
+    {
+        var bytes=await ReadLimitedAsync(content,MaxHtmlBytes,ct);
+        if(bytes.Length==0){
+            if(required)throw new NativeLoginException("page-empty");
+            return null;
+        }
+        Encoding encoding=Encoding.UTF8;
+        var charset=content.Headers.ContentType?.CharSet?.Trim('"');
+        if(!string.IsNullOrEmpty(charset)){
+            try{encoding=Encoding.GetEncoding(charset);}
+            catch(ArgumentException){encoding=Encoding.UTF8;}
+        }
+        // Respect BOMs on UTF-8/UTF-16 installations; the decoding always
+        // happens server-side and no raw response is logged or returned.
+        using var stream=new MemoryStream(bytes,writable:false);
+        using var reader=new StreamReader(stream,encoding,
+            detectEncodingFromByteOrderMarks:true);
+        var html=await reader.ReadToEndAsync(ct);
+        if(LooksLikeHtmlDocument(html))return html;
+        if(!required)return null;
+        var trimmed=html.AsSpan().TrimStart(" \t\r\n\uFEFF".AsSpan());
+        if(trimmed.StartsWith("{",StringComparison.Ordinal)||
+            trimmed.StartsWith("[",StringComparison.Ordinal)||
+            content.Headers.ContentType?.MediaType is
+                "application/json" or "application/problem+json")
+            throw new NativeLoginException("page-json");
+        throw new NativeLoginException("page-not-html");
+    }
+
     // The standard agent form can be submitted server-side, preserving the
     // initial challenge/cookie jar. For custom SSO/MFA/JS-only logins, keep
     // the already isolated upstream browser session and let the agent sign
@@ -156,10 +202,8 @@ public sealed partial class ZnunyNativeProxy
         using(landing){
             if(!landing.IsSuccessStatusCode)
                 throw new NativeLoginException("page-http");
-            if(landing.Content.Headers.ContentType?.MediaType is not "text/html")
-                throw new NativeLoginException("page-not-html");
-            var html=Encoding.UTF8.GetString(await ReadLimitedAsync(
-                landing.Content,MaxHtmlBytes,token));
+            var html=await ReadLoginHtmlAsync(landing.Content,token)
+                ?? throw new NativeLoginException("page-not-html");
             var login=FindLoginForm(html,landingUrl,origin,username,password);
             if(login is null)
                 return LoginState.Interactive; // e.g. custom SSO / pre-authenticated portal
@@ -187,12 +231,11 @@ public sealed partial class ZnunyNativeProxy
                 using(result){
                     if(!result.IsSuccessStatusCode)
                         throw new NativeLoginException("login-http");
-                    if(result.Content.Headers.ContentType?.MediaType=="text/html"){
-                        var page=Encoding.UTF8.GetString(await ReadLimitedAsync(
-                            result.Content,MaxHtmlBytes,token));
-                        if(FindLoginForm(page,finalUrl,origin,username,password) is not null)
-                            return LoginState.Interactive;
-                    }
+                    var page=await ReadLoginHtmlAsync(result.Content,token,
+                        required:false);
+                    if(page is not null&&
+                        FindLoginForm(page,finalUrl,origin,username,password) is not null)
+                        return LoginState.Interactive;
                 }
                 return LoginState.Automatic;
             }
@@ -201,12 +244,11 @@ public sealed partial class ZnunyNativeProxy
                 return LoginState.Interactive;
             if(!submitted.IsSuccessStatusCode)
                 throw new NativeLoginException("login-http");
-            if(submitted.Content.Headers.ContentType?.MediaType=="text/html"){
-                var page=Encoding.UTF8.GetString(await ReadLimitedAsync(
-                    submitted.Content,MaxHtmlBytes,token));
-                if(FindLoginForm(page,login.Action,origin,username,password) is not null)
-                    return LoginState.Interactive;
-            }
+            var submittedPage=await ReadLoginHtmlAsync(submitted.Content,token,
+                required:false);
+            if(submittedPage is not null&&
+                FindLoginForm(submittedPage,login.Action,origin,username,password) is not null)
+                return LoginState.Interactive;
             return LoginState.Automatic;
         }
     }
@@ -338,8 +380,17 @@ public sealed partial class ZnunyNativeProxy
                 try{encoding=charset is null?Encoding.UTF8:
                     Encoding.GetEncoding(charset);}
                 catch(ArgumentException){encoding=Encoding.UTF8;}
-                var changed=Rewrite(encoding.GetString(bytes),
-                    session.Upstream,publicOrigin);
+                var decoded=encoding.GetString(bytes);
+                // Normalize a verified CGI entry document mislabeled as
+                // plain text; keep binary responses and downloads untouched.
+                if(HttpMethods.IsGet(ctx.Request.Method) &&
+                    type?.MediaType=="text/plain" &&
+                    target.AbsolutePath.Equals(session.Entry.AbsolutePath,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    response.Content.Headers.ContentDisposition is null &&
+                    LooksLikeHtmlDocument(decoded))
+                    ctx.Response.ContentType="text/html; charset="+encoding.WebName;
+                var changed=Rewrite(decoded,session.Upstream,publicOrigin);
                 var output=encoding.GetBytes(changed);
                 await ctx.Response.Body.WriteAsync(output,ct);
             }else{
