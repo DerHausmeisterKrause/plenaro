@@ -463,6 +463,8 @@ describe('Plenaro web shell', () => {
       JSON.parse(String(options?.body)).ticketId==='77')).toBe(true));
     expect(await screen.findByAltText('Znuny-Browserbild (serverseitig gerendert)')).toBeTruthy();
     expect(document.querySelector('iframe')).toBeNull();
+    // No redundant manual text-paste field beneath the browser.
+    expect(screen.queryByLabelText('Text in das ausgewählte Znuny-Feld einfügen')).toBeNull();
     expect(screen.getByRole('link',{name:'Ticketsystem'}).getAttribute('href'))
       .toBe('/ticket-system');
   });
@@ -471,6 +473,7 @@ describe('Plenaro web shell', () => {
     nativeZnunyReady=true;
     renderAt('/ticket-system?ticket=77');
     const image=await screen.findByAltText('Znuny-Browserbild (serverseitig gerendert)');
+    await waitFor(()=>expect(image.getAttribute('src')).toBeTruthy());
     Object.defineProperty(image,'getBoundingClientRect',{
       configurable:true,value:()=>({left:0,top:0,width:1280,height:800})
     });
