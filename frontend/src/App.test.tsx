@@ -27,6 +27,7 @@ let replyTemplateFixture='';
 let personalReplyTemplateFixture='';
 let customerArticlesFixture:ZnunyArticle[]|null=null;
 let nativeZnunyReady=false;
+let nativeProxyEnabled=false;
 
 let workspaceFixture: TicketWorkspace = {description:'Das ist ein lokaler Test',ticketUrl:'https://example.org/ticket/77'};
 
@@ -47,6 +48,7 @@ beforeEach(() => {
   personalReplyTemplateFixture='';
   customerArticlesFixture=null;
   nativeZnunyReady=false;
+  nativeProxyEnabled=false;
 
   workspaceFixture = {description:'Das ist ein lokaler Test',ticketUrl:'https://example.org/ticket/77'};
   vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => {
@@ -144,6 +146,14 @@ beforeEach(() => {
     };
     if (path.includes('/api/v1/znuny/tickets/')&&path.endsWith('/segments')) return {
       ok:true,status:200,json:async()=>[],
+    };
+    if (path === '/api/v1/znuny/native/status') return {
+      ok:true,status:200,json:async()=>({enabled:nativeProxyEnabled})
+    };
+    if (path === '/api/v1/znuny/native/start') return {
+      ok:true,status:200,json:async()=>({
+        url:'https://tickets.example.org/_plenaro/znuny-bootstrap?token=ci-placeholder'
+      })
     };
     if (path === '/api/v1/znuny/browser/start') return {
       ok:true,status:200,json:async()=>({ready:true,width:1280,height:800})
@@ -468,6 +478,21 @@ describe('Plenaro web shell', () => {
     expect(screen.queryByLabelText('Text in das ausgewählte Znuny-Feld einfügen')).toBeNull();
     expect(screen.getByRole('link',{name:'Ticketsystem'}).getAttribute('href'))
       .toBe('/ticket-system');
+  });
+
+  it('nutzt native HTML-Sitzung auf getrennter HTTPS-Origin statt Chromium-Screenshots',async()=>{
+    nativeProxyEnabled=true;
+    renderAt('/ticket-system?ticket=77');
+    const iframe=await screen.findByTitle('Ticketsystem – isolierte, native Weboberfläche');
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,options])=>
+      url==='/api/v1/znuny/native/start' &&
+      JSON.parse(String(options?.body)).ticketId==='77')).toBe(true));
+    expect(iframe.getAttribute('src')).toMatch(/^https:\/\/tickets\.example\.org\//);
+    expect(iframe.getAttribute('sandbox')).toContain('allow-forms');
+    expect(iframe.getAttribute('sandbox')).not.toContain('allow-top-navigation');
+    expect(vi.mocked(fetch).mock.calls.some(([url])=>
+      String(url).includes('/api/v1/znuny/browser/start'))).toBe(false);
+    expect(screen.queryByLabelText('Text in das ausgewählte Znuny-Feld einfügen')).toBeNull();
   });
 
   it('bedient Znuny ausschließlich über Plenaro-Eingabeendpunkte',async()=>{
