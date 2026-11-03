@@ -255,9 +255,9 @@ public sealed partial class FavoriteProxy
                 HttpStatusCode.NotModified or HttpStatusCode.NoContent)
                 return;
             var sniff=Navigation(ctx.Request)&&res.IsSuccessStatusCode&&
-                disposition is null && mime?.MediaType is null or
+                disposition is null && (mime?.MediaType is null or
                     "text/plain" or "application/octet-stream" or
-                    "application/x-octet-stream" or "text/xml" or "application/xml";
+                    "application/x-octet-stream" or "text/xml" or "application/xml");
             var textual=RewriteMime(mime);
             if(textual||sniff){
                 var binarySniff=sniff&&!textual;
