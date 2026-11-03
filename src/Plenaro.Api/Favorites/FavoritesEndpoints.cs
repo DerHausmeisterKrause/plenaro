@@ -13,7 +13,7 @@ public static class FavoritesEndpoints
     public sealed record AppInput(string Name,string Slug,string UpstreamUrl,
         bool Enabled,bool AvailableToAll,Guid[]? AllowedUsers);
     public sealed record FavoriteInput(Guid AppId,string Name,string Path,
-        string Username,bool AutoLogin,bool Enabled,int SortOrder,string? Password);
+        string Username,bool AutoLogin,bool Enabled,int SortOrder,string? Password,bool ClearPassword=false);
     public sealed record AppInfo(Guid Id,string Name,string Slug,bool Enabled,
         bool AvailableToAll,string? UpstreamUrl,Guid[]? AllowedUsers);
     public sealed record FavoriteInfo(Guid Id,Guid AppId,string Name,string AppName,
@@ -90,7 +90,7 @@ public static class FavoritesEndpoints
 
         group.MapPut("/{id:guid}",async(Guid id,FavoriteInput input,
             HttpContext ctx,IAntiforgery anti,UserManager<ApplicationUser> users,
-            IConfiguration config,SecretVault vault,CancellationToken ct)=>{
+            IConfiguration config,SecretVault vault,FavoriteProxy proxy,CancellationToken ct)=>{
             if(!await ValidCsrf(ctx,anti))return CsrfError();
             var user=await CurrentUser(ctx,users);
             if(user is null)return Results.Unauthorized();
@@ -107,8 +107,11 @@ public static class FavoritesEndpoints
                 BindFavorite(cmd,id,user.Id,input);
                 if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();
             }
-            if(input.Password is { Length: >0 })
+            if(input.ClearPassword&&vault.IsConfigured)
+                await vault.DeleteAsync("user",user.Id,PasswordName(id),ct);
+            else if(input.Password is { Length: >0 })
                 await vault.SetAsync("user",user.Id,PasswordName(id),input.Password,ct);
+            proxy.RevokeFavorite(user.Id,id);
             return Results.NoContent();
         });
 
@@ -324,7 +327,8 @@ public static class FavoritesEndpoints
             value.Path.Contains('\\')||value.Path.Any(char.IsControl)||
             value.Path.Contains('#')||value.Path.Contains("://")||
             value.SortOrder is <0 or >10000||
-            value.Password is { Length: >4096 })return false;
+            (value.Password is { Length: >4096 } ||
+             (value.ClearPassword && !string.IsNullOrEmpty(value.Password))))return false;
         if(value.AutoLogin&&string.IsNullOrWhiteSpace(value.Username)){
             error="Automatische Anmeldung erfordert einen Benutzernamen.";
             return false;
