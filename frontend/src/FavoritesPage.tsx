@@ -12,7 +12,7 @@ import {
 
 const blankFavorite=(appId=''):FavoriteInput=>({
   appId,name:'',path:'/',username:'',autoLogin:false,enabled:true,
-  sortOrder:0,password:''
+  sortOrder:0,password:'',clearPassword:false
 });
 const blankApp=():AppInput=>({
   name:'',slug:'',upstreamUrl:'https://',enabled:true,
@@ -41,7 +41,7 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
     setSelected(item.id);
     setForm({appId:item.appId,name:item.name,path:item.path,
       username:item.username,autoLogin:item.autoLogin,enabled:item.enabled,
-      sortOrder:item.sortOrder,password:''});
+      sortOrder:item.sortOrder,password:'',clearPassword:false});
     setError('');setInfo('');
   }
   function newFavorite(){
@@ -60,7 +60,7 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
       const id=current?current.id:(await createFavorite(toSave)).id;
       if(current)await updateFavorite(current.id,toSave);
       await reload();
-      setSelected(id);setForm({...toSave,password:''});
+      setSelected(id);setForm({...toSave,password:'',clearPassword:false});
       setInfo('Favorit gespeichert.');
       onChanged();
     }catch(e){setError(e instanceof Error?e.message:'Speichern fehlgeschlagen.');}
@@ -143,6 +143,12 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
           placeholder={current?.hasPassword?'Gespeichert – leer lassen zum Beibehalten':'Neues Passwort'}
           autoComplete="new-password"
           onChange={e=>setForm({...form,password:e.target.value})}/>
+        {current?.hasPassword&&<label className="favorites-check">
+          <input type="checkbox" checked={form.clearPassword===true}
+            onChange={e=>setForm({...form,clearPassword:e.target.checked,
+              password:e.target.checked?'':form.password})}/>
+          Gespeichertes Passwort löschen
+        </label>}
         <label className="favorites-check"><input type="checkbox" checked={form.enabled}
           onChange={e=>setForm({...form,enabled:e.target.checked})}/>Aktiv</label>
         <label className="favorites-check"><input type="checkbox" checked={form.autoLogin}
