@@ -536,7 +536,7 @@ Zielhost weiß. Die historische Checkliste dokumentiert den Zwischenstand.
 - [x] Je Nutzer eigene parallele Proxy-Sitzung mit Ablaufzeiten, Autorisierungsprüfung und Widerruf beim Plenaro-Logout
 - [x] Native HTML-Weboberfläche füllt die Ticketsystem-Fläche, ohne Server-Screenshot-Streaming
 - [x] Vorherigen Chromium-Modus als manuell auswählbaren Fallback behalten
-- [ ] CI: .NET-Build, React-UI-Tests und Docker-Start für den neuen Proxy abgeschlossen
+- [x] CI: .NET-Build, React-UI-Tests, isolierte Loginformular-/Origin-Prüfungen und Docker-Start erfolgreich ([PR #2](https://github.com/DerHausmeisterKrause/plenaro/pull/2), [CI #41601862700](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41601862700))
 - [ ] Zwei HTTPS-DNS-Namen und gemeinsames Zertifikat am echten Plenaro-Host eingerichtet
 - [ ] Native Anmeldung, Navigation, AJAX, Formulare, Download und Mehrbenutzertrennung am echten Ticketsystem geprüft
 - [ ] Nach bestätigter Funktionalität optional den bisherigen Chromium-Container aus Compose entfernen
