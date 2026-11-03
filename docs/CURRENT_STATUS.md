@@ -86,13 +86,15 @@ Dies ist die aktuelle Arbeitsliste. Die ausführliche [Roadmap](ROADMAP.md) enth
 - [x] WPF-Favoritenmodell und Browser-Login als Referenz ausgewertet.
 - [x] Optionaler Host-Guard: unbekannte Wildcard-Hosts werden vor Plenaro-UI/API mit HTTP 404 abgewiesen; bekannte Origins bleiben unverändert.
 - [x] NGINX `PLENARO_SERVER_NAME` akzeptiert bereits Wildcards; optionale `PLENARO_FAVORITES_BASE_DOMAIN`, DNS und TLS dokumentiert.
-- [ ] Administratorfreigabe für Ziel-Apps, nutzerbezogene Favoriten-API, persönliche Vault-Zugänge, Auto-Login, isolierter Web-Proxy, UI und Live-Tests. Siehe [Architektur](FAVORITES_PROXY.md).
+- [x] Administratorfreigabe, Favoriten-API, Vault-Zugänge und isolierter Browser-Proxy in PR #12 implementiert.
+- [ ] Echte Wiki-/Webseiten und parallele Benutzer live prüfen.
 
 ## 03.11.2026 – Favoriten-Web-Apps (Phase 7, PR #12)
 
 - [x] Admin-Apps und Benutzer-ACL im PostgreSQL-Schema; zentrale freigegebene HTTPS-Ziel-Origins
 - [x] Benutzerfavoriten, Sortierung, persönliche verschlüsselte Zugänge, separater Browser-Reiter
 - [x] Dedizierte App-Subdomains im vorhandenen NGINX-Wildcard-Host, individuelle serverseitige Sessions, CSRF und Origin-Isolation
-- [ ] CI sowie live ein Wiki und eine zweite HTML-Anwendung testen; keine Aussage über SSO-/WebSocket-Kompatibilität vor Live-Test
+- [x] CI für PR #12 erfolgreich (Run 41650719103).
+- [ ] Echte Wiki-/Webseiten und parallele Benutzer auf dem Zielhost prüfen.
 - [ ] Vollständige Legacy-Favoritenmigration und mehr unterstützte Authentifizierungstypen bei Bedarf
 
