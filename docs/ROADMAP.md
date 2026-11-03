@@ -568,3 +568,13 @@ PostgreSQL-Datenbank und der Vault bleiben unverändert.
 - [x] Tests mit rein fiktiven Hostnamen für automatische Anmeldung, interaktiven Login und blockierte externe Weiterleitung ergänzen
 - [x] GitHub-CI erfolgreich: Backend, Frontend, fiktive Loginfälle und Docker-Smoke ([PR #4](https://github.com/DerHausmeisterKrause/plenaro/pull/4), [CI #41610855241](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41610855241))
 - [ ] Am Zielhost Ursache anhand des neutralen Fehlercodes verifizieren sowie native Anmeldung und iframe-Bedienung prüfen
+
+
+### Phase 6 – HTTP 400 hinter vorgeschaltetem HTTPS-Proxy
+
+- [x] Öffentliche Browser-Origin statt intern normalisiertem Host zur Prüfung des nativen Sitzungsstarts verwenden
+- [x] HTTPS-, CSRF- und Browser-Fetch-Metadata-Prüfungen beibehalten; fremde/opaque Origins weiterhin verweigern
+- [x] Neutrale Fehlercodes bei falschem HTTPS oder nicht passender Browser-Origin ausgeben
+- [x] Automatisierte Tests für umgeschriebenen Frontproxy-Host und Cross-Origin-Abwehr ergänzen
+- [ ] GitHub-CI (Backend, Frontend, Znuny-Vertrag und Docker-Smoke) erfolgreich
+- [ ] Vor Ort die beiden HTTPS-Proxy-Hostnamen und automatische Anmeldung verifizieren
