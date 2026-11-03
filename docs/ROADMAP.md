@@ -610,3 +610,18 @@ PostgreSQL-Datenbank und der Vault bleiben unverändert.
 - [ ] Mit realer Wiki-/Favoriten-Anwendung Browserkompatibilität, Mehrbenutzerbetrieb und Sicherheitsgrenzen prüfen
 
 Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt **keinen** frei konfigurierbaren Universalproxy bereit.
+
+### 03.11.2026 – Favoritenverwaltung und dedizierte Web-App-Proxy-Origins (PR #12)
+
+- [x] Classic-Favoritenmodell (Name, URL, Sortierung, optionales Login) als Web-Favoriten nachgebildet
+- [x] PostgreSQL-Migration 0027 für freigegebene Admin-Web-Apps, Benutzer-ACL und persönliche Favoriten
+- [x] Administrationsoberfläche für HTTPS-App-Origins, Slug, aktiven Zustand und Benutzerfreigaben
+- [x] Persönliche Favoriten-CRUD, Sortierung, optionale verschlüsselte Passwörter und eigener Browser-Reiter
+- [x] Getrennter HTTPS-HTML-Proxy pro App-Subdomain mit eigener Benutzer-Session, Browser-CSP, Server-Cookies, Bootstrap-Token und Logout-Widerruf
+- [x] Browser-Origin/CSRF, HTTPS/DNS/Peer-Prüfung und laufende Benutzer-/App-Berechtigungsprüfung; keine dynamische Freigabe beliebiger URLs
+- [x] Bestehender Znuny-Proxy fachlich unverändert; nur Register-/Logout-Middleware ergänzt
+- [ ] Vollständige CI-Abnahme für PR #12
+- [ ] Browser-Abnahme mit echtem Wiki: Login, AJAX, CSS/JS, Downloads und zwei parallele Benutzer
+- [ ] App-Sonderfälle (SSO/2FA, WebSockets, CSP und Service Worker) nur bei Bedarf implementieren
+- [ ] Legacy-Favoriten (inklusive nur sicherer Konfiguration) kontrolliert migrieren
+
