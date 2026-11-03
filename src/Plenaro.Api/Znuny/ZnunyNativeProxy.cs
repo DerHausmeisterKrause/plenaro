@@ -252,8 +252,12 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
     private async Task<string> StartAsync(Guid user,StartRequest input,
         SecretVault vault,Uri external,CancellationToken ct)
     {
-        await using var db=new NpgsqlConnection(
-            configuration.GetConnectionString("Plenaro"));
+        string username;
+        ZnunyEndpoints.ServerSettings settings;
+        // Keep DB connections brief: native upstream login can take seconds
+        // and must not exhaust PostgreSQL's connection pool for other users.
+        await using(var db=new NpgsqlConnection(
+            configuration.GetConnectionString("Plenaro"))){
         await db.OpenAsync(ct);
         await using var cmd=new NpgsqlCommand("""
             SELECT p.username,b.agent_id
@@ -265,7 +269,7 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
         await using var reader=await cmd.ExecuteReaderAsync(ct);
         if(!await reader.ReadAsync(ct))throw new ProxyFailure(
             "Keine freigegebene Ticketsystem-Agentenzuordnung.");
-        var username=reader.GetString(0);
+        username=reader.GetString(0);
         var agentId=reader.GetInt32(1);
         await reader.DisposeAsync();
         if(string.IsNullOrWhiteSpace(username)||agentId<=0)throw new ProxyFailure(
@@ -291,7 +295,8 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
                 throw new ProxyFailure("Für dieses Ticket fehlt die Freigabe.");
         }
 
-        var settings=await ZnunyEndpoints.LoadServerAsync(db,ct);
+        settings=await ZnunyEndpoints.LoadServerAsync(db,ct);
+        }
         if(ZnunyEndpoints.ValidateServer(settings) is not null ||
             !Uri.TryCreate(settings.WebUrl,UriKind.Absolute,out var entry)||
             entry.Host.Equals("SERVER",StringComparison.OrdinalIgnoreCase))
