@@ -38,8 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p secrets
-          # Ephemeral test root CA: verify a single .env-style host file is
-          # trusted in both the .NET OpenSSL bundle and Chromium's NSS DB.
+          # Ephemeral CA for the backend's real HTTPS client trust store.
           openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
             -subj '/CN=Plenaro-Root-CA-CI' \
             -addext 'basicConstraints=critical,CA:TRUE' \
@@ -55,48 +54,12 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/graph/status")" = "401"
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/auth/entra/start")" = "404"
 
-          # Native browser container is internal only: real Chromium
-          # session + screenshot, no connection to any customer Znuny system.
-          for attempt in $(seq 1 30); do
-            if docker compose exec -T znuny-browser curl -fsS http://127.0.0.1:4444/status |
-                python3 -c 'import json,sys;assert json.load(sys.stdin)["value"]["ready"] is True' 2>/dev/null; then
-              break
-            fi
-            sleep 2
-          done
-          docker compose exec -T znuny-browser certutil \
-            -d sql:/home/seluser/.pki/nssdb -L |
-            grep -q 'Plenaro Internal CA'
+          # The native HTML proxy needs no Selenium, VNC, screencast or
+          # separate Docker browser. Validate only backend CA trust here.
           docker compose exec -T web sh -c \
             'test -s /tmp/plenaro-ca-bundle.pem && grep -q "BEGIN CERTIFICATE" /tmp/plenaro-ca-bundle.pem'
-          echo 'CI checkpoint: internal CA present in Chromium NSS and backend OpenSSL bundle'
-          SESSION=$(docker compose exec -T znuny-browser curl -fsS \
-            -H 'Content-Type: application/json' \
-            -d '{"capabilities":{"alwaysMatch":{"browserName":"chrome","goog:chromeOptions":{"args":["--headless=new","--disable-dev-shm-usage","--window-size=1280,800"]}}}}' \
-            http://127.0.0.1:4444/session |
-            python3 -c 'import json,sys;print(json.load(sys.stdin)["value"]["sessionId"])')
-          test -n "$SESSION"
-          docker compose exec -T znuny-browser curl -fsS \
-            "http://127.0.0.1:4444/session/$SESSION/screenshot" |
-            python3 -c 'import json,sys,base64;d=base64.b64decode(json.load(sys.stdin)["value"]);assert d[:4]==bytes([137,80,78,71]) and len(d)>100'
-          # ChromeDriver CDP captures compressed JPEG directly for faster
-          # browser streaming, without the huge PNG traffic per frame.
-          docker compose exec -T znuny-browser curl -fsS \
-            -H 'Content-Type: application/json' \
-            -d '{"cmd":"Page.captureScreenshot","params":{"format":"jpeg","quality":72,"captureBeyondViewport":false}}' \
-            "http://127.0.0.1:4444/session/$SESSION/goog/cdp/execute" |
-            python3 -c 'import json,sys,base64;d=base64.b64decode(json.load(sys.stdin)["value"]["data"]);assert d[:3]==bytes([255,216,255]) and len(d)>100'
-          echo 'CI checkpoint: Chromium CDP serves compressed JPEG frames'
-          # Real Selenium Grid websocket/CDP screencast, private Docker edge
-          # network, no published port and no third-party target.
-          docker run --rm --network plenaro_edge \
-            -e SESSION="$SESSION" \
-            -v "$PWD/tools/ci_chromium_cdp.mjs:/tests/ci_chromium_cdp.mjs:ro" \
-            node:22-alpine node /tests/ci_chromium_cdp.mjs
-          docker compose exec -T znuny-browser curl -sS -X DELETE \
-            "http://127.0.0.1:4444/session/$SESSION" > /dev/null
-          echo 'CI checkpoint: isolated Chromium/WebDriver renders real PNG and JPEG frames'
-
+          ! docker compose config --services | grep -qx 'znuny-browser'
+          echo 'CI checkpoint: backend CA trust; no Chromium service in Compose'
 
           echo 'CI checkpoint: services healthy, starting initial setup'
           TOKEN=$(docker compose exec -T web dotnet Plenaro.Api.dll --setup-token | sed -n 's/^SETUP_TOKEN=//p' | tr -d '\r')
@@ -245,20 +208,14 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/znuny/me" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"username":"user-agent","replyTemplate":"X","candidateUserId":7}')" = "400"
           echo 'CI checkpoint: user-specific Znuny reply header persisted without administrative privileges'
 
-          # A native Chromium is fully server-side; never expose its session
-          # to an unauthenticated caller, and never launch on invalid settings.
-          VIEW_ANON=$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/znuny/browser/frame")
-          VIEW_USER=$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/browser/frame")
-          VIEW_NO_CSRF=$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/browser/start" -H 'Content-Type: application/json' -d '{"ticketId":null}')
-          VIEW_INVALID=$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/browser/start" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"ticketId":"abc"}')
-          VIEW_UNCONFIGURED=$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/browser/start" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"ticketId":null}')
-          echo "Remote WebView access: anonymous=$VIEW_ANON no-session=$VIEW_USER no-csrf=$VIEW_NO_CSRF invalid=$VIEW_INVALID unconfigured=$VIEW_UNCONFIGURED"
-          test "$VIEW_ANON" = "401"
-          test "$VIEW_USER" = "409"
-          test "$VIEW_NO_CSRF" = "400"
-          test "$VIEW_INVALID" = "400"
-          test "$VIEW_UNCONFIGURED" = "503"
-          echo 'CI checkpoint: remote Chromium endpoints enforce login, agent permission, CSRF and vault'
+          # The native proxy is guarded by local authentication and CSRF.
+          # With no second HTTPS hostname configured it must fail closed.
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/znuny/native/status")" = "401"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/native/status" |
+            python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["enabled"] is False'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/native/start" -H 'Content-Type: application/json' -d '{"ticketId":null}')" = "400"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/native/start" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"ticketId":null}')" = "409"
+          echo 'CI checkpoint: native HTML proxy enforces local authentication, CSRF and separate HTTPS origin'
           docker compose exec -T database psql -U plenaro -d plenaro -c "INSERT INTO znuny_cached_tickets(ticket_id,ticket_number,title,queue,state,state_type,owner_agent_id,responsible_agent_id,created_at,changed_at) VALUES ('42','2026#42','Nur Admin','Admin','open','open',42,NULL,'2026-01-01','2026-01-02'),('77','2016#77','Altes offenes User-Ticket','IT','open','open',77,NULL,'2016-01-01','2026-01-02'),('78','2026#78','Anderer Mitarbeiter verantwortlich','IT','new','new',77,42,'2026-01-03','2026-01-04'),('79','2026#79','Standard OTRS User','IT','new','new',1,NULL,'2026-01-03','2026-01-04'),('80','2026#80','Ohne Besitzer','IT','new','new',NULL,NULL,'2026-01-03','2026-01-04'),('81','2026#81','Erledigtes User-Ticket','IT','closed successful','closed',77,NULL,'2026-01-03','2026-01-04')"
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert set(x["ticketId"] for x in d)=={"77","78"}'
           curl -fsS -b "$COOKIE" "$API/api/v1/znuny/tickets" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert set(x["ticketId"] for x in d)=={"42","78"}'
@@ -647,20 +604,10 @@ jobs:
             -H 'Content-Type: application/json' -d '{"email":"admin@example.invalid","password":"CiTestPassword123!"}'
           grep -i '^set-cookie: Plenaro.Session=.*secure' ci-headers
           T=$(secure -c "$JAR" -b "$JAR" "$HTTPS/api/v1/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
-          # No extra public Znuny port or client-side HTML proxy.
-          # Real Chromium/WebDriver stays entirely inside Docker.
-          FRAME_ACCESS=$(secure -b "$JAR" -o /dev/null -w '%{http_code}' "$HTTPS/api/v1/znuny/browser/frame" || true)
-          case "$FRAME_ACCESS" in 403|409) ;; *)
-            echo "Unexpected native browser access $FRAME_ACCESS"; exit 1;; esac
-          test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/znuny/browser/frame")" != "200"
-          # Compose v2 returns ':0' with exit code 0 for an exposed-but-
-          # unpublished container port. Only a real nonzero host port fails.
-          WEBDRIVER_PORT=$(docker compose port znuny-browser 4444 2>/dev/null || true)
-          VNC_PORT=$(docker compose port znuny-browser 7900 2>/dev/null || true)
-          case "$WEBDRIVER_PORT" in ""|":0") ;; *)
-            echo "WebDriver unexpectedly published at $WEBDRIVER_PORT"; exit 1;; esac
-          case "$VNC_PORT" in ""|":0") ;; *)
-            echo "VNC unexpectedly published at $VNC_PORT"; exit 1;; esac
+          # Native HTML proxy uses only the existing HTTPS listener.
+          secure -b "$JAR" "$HTTPS/api/v1/znuny/native/status" |
+            python3 -c 'import json,sys;assert json.load(sys.stdin)["enabled"] is False'
+          ! docker compose config --services | grep -qx 'znuny-browser'
           # Znuny personal password uses AES-GCM, never exposed by any settings GET.
           secure -b "$JAR" "$HTTPS/api/v1/znuny/me" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["vaultReady"] is True and d["passwordConfigured"] is False'
           secure -c "$JAR" -b "$JAR" -X PUT "$HTTPS/api/v1/znuny/password" -H "X-CSRF-TOKEN: $T" -H 'Content-Type: application/json' -d '{"password":"CI_ZNUNY_ONLY_DO_NOT_LOG"}' > /dev/null

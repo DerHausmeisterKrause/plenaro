@@ -155,16 +155,6 @@ beforeEach(() => {
         url:'https://tickets.example.org/_plenaro/znuny-bootstrap?token=ci-placeholder'
       })
     };
-    if (path === '/api/v1/znuny/browser/start') return {
-      ok:true,status:200,json:async()=>({ready:true,width:1280,height:800})
-    };
-    if (path.startsWith('/api/v1/znuny/browser/frame')) return {
-      ok:true,status:200,blob:async()=>new Blob(['fake-png'],{type:'image/png'})
-    };
-    if (path === '/api/v1/znuny/browser/input' ||
-        path === '/api/v1/znuny/browser/viewport') return {
-      ok:true,status:204
-    };
     if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/write-check')) return {
       ok:true,status:200,json:async()=>({
         personalLogin:true,ticketGet:true,writeVerified:false,
@@ -465,50 +455,37 @@ describe('Plenaro web shell', () => {
     expect(screen.getByText(/Noch kein Import ausgeführt/)).toBeTruthy();
   });
 
-  it('zeigt die native Znuny-Weboberfläche als serverseitiges Browserbild ohne iframe',async()=>{
-    nativeZnunyReady=true;
+  it('zeigt bei fehlender Proxy-Origin nur die sichere Einrichtungsanleitung',async()=>{
     renderAt('/ticket-system?ticket=77');
-    expect(await screen.findByRole('heading',{name:'Znuny-Weboberfläche'})).toBeTruthy();
-    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,options])=>
-      url==='/api/v1/znuny/browser/start' &&
-      JSON.parse(String(options?.body)).ticketId==='77')).toBe(true));
-    expect(await screen.findByAltText('Znuny-Browserbild (serverseitig gerendert)')).toBeTruthy();
+    expect(await screen.findByRole('heading',{
+      name:'Native Ticketsystem-Einbettung noch nicht eingerichtet'
+    })).toBeTruthy();
+    expect(screen.getByText(/PLENARO_PUBLIC_ORIGIN/)).toBeTruthy();
+    expect(screen.getByText(/PLENARO_ZNUNY_PROXY_ORIGIN/)).toBeTruthy();
     expect(document.querySelector('iframe')).toBeNull();
-    // No redundant manual text-paste field beneath the browser.
-    expect(screen.queryByLabelText('Text in das ausgewählte Znuny-Feld einfügen')).toBeNull();
-    expect(screen.getByRole('link',{name:'Ticketsystem'}).getAttribute('href'))
-      .toBe('/ticket-system');
+    expect(vi.mocked(fetch).mock.calls.some(([url])=>
+      String(url).includes('/api/v1/znuny/native/start'))).toBe(false);
+    expect(vi.mocked(fetch).mock.calls.some(([url])=>
+      String(url).includes('/api/v1/znuny/browser/'))).toBe(false);
   });
 
-  it('nutzt native HTML-Sitzung auf getrennter HTTPS-Origin statt Chromium-Screenshots',async()=>{
+  it('lädt ausschließlich die native HTML-Sitzung auf separater HTTPS-Origin',async()=>{
     nativeProxyEnabled=true;
     renderAt('/ticket-system?ticket=77');
-    const iframe=await screen.findByTitle('Ticketsystem – isolierte, native Weboberfläche');
+    const iframe=await screen.findByTitle(
+      'Ticketsystem – isolierte, native Weboberfläche');
     await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,options])=>
       url==='/api/v1/znuny/native/start' &&
       JSON.parse(String(options?.body)).ticketId==='77')).toBe(true));
     expect(iframe.getAttribute('src')).toMatch(/^https:\/\/tickets\.example\.org\//);
     expect(iframe.getAttribute('sandbox')).toContain('allow-forms');
     expect(iframe.getAttribute('sandbox')).not.toContain('allow-top-navigation');
-    expect(vi.mocked(fetch).mock.calls.some(([url])=>
-      String(url).includes('/api/v1/znuny/browser/start'))).toBe(false);
+    expect(screen.getByRole('heading',{name:'Ticketsystem-Weboberfläche'})).toBeTruthy();
+    expect(screen.queryByRole('button',{name:/Kompatibler Modus/})).toBeNull();
+    expect(screen.queryByAltText(/Browserbild/)).toBeNull();
     expect(screen.queryByLabelText('Text in das ausgewählte Znuny-Feld einfügen')).toBeNull();
-  });
-
-  it('bedient Znuny ausschließlich über Plenaro-Eingabeendpunkte',async()=>{
-    nativeZnunyReady=true;
-    renderAt('/ticket-system?ticket=77');
-    const image=await screen.findByAltText('Znuny-Browserbild (serverseitig gerendert)');
-    await waitFor(()=>expect(image.getAttribute('src')).toBeTruthy());
-    Object.defineProperty(image,'getBoundingClientRect',{
-      configurable:true,value:()=>({left:0,top:0,width:1280,height:800})
-    });
-    fireEvent.click(image,{clientX:320,clientY:160});
-    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,options])=>
-      url==='/api/v1/znuny/browser/input' &&
-      JSON.parse(String(options?.body)).kind==='click')).toBe(true));
-    expect(vi.mocked(fetch).mock.calls.every(([url])=>
-      String(url).startsWith('/') || String(url).startsWith('http://localhost'))).toBe(true);
+    expect(vi.mocked(fetch).mock.calls.some(([url])=>
+      String(url).includes('/api/v1/znuny/browser/'))).toBe(false);
   });
 
   it('zeigt die echten Classic-API-Standardwerte unter Ticketsystem', async () => {
