@@ -168,6 +168,11 @@ public sealed partial class ZnunyNativeProxy
                 Content=new FormUrlEncodedContent(login.Fields)
             };
             request.Headers.Referrer=landingUrl;
+            // Real browser form posts include Origin. Some upstream CSRF
+            // defenses reject a credential POST when that header is absent.
+            // Never copy an Origin provided by the end-user client.
+            request.Headers.TryAddWithoutValidation("Origin",
+                origin.GetLeftPart(UriPartial.Authority));
             request.Headers.TryAddWithoutValidation("Accept","text/html,application/xhtml+xml");
             using var submitted=await client.SendAsync(request,
                 HttpCompletionOption.ResponseHeadersRead,token);
