@@ -85,6 +85,7 @@ builder.Services.AddHttpClient("Plenaro.WebDriver",http=>{
     http.Timeout=TimeSpan.FromSeconds(45);
 });
 builder.Services.AddSingleton<ZnunyRemoteBrowser>();
+builder.Services.AddSingleton<ZnunyNativeProxy>();
 builder.Services.AddSingleton<ZnunyCentralSync>();
 builder.Services.AddHostedService(services => services.GetRequiredService<ZnunyCentralSync>());
 builder.Services.AddDbContext<PlenaroIdentityDbContext>(options => options.UseNpgsql(connectionString));
@@ -430,6 +431,16 @@ if (requireHttps)
     app.UseHsts();
 }
 
+// The proxy subdomain must never serve Plenaro's static frontend, API,
+// identity endpoints or cookies. Intercept all requests on this host first.
+app.Use(async (http,next)=>{
+    var proxy=http.RequestServices.GetRequiredService<ZnunyNativeProxy>();
+    if(proxy.IsProxyHost(http)){
+        await proxy.ServeAsync(http,http.RequestAborted);
+        return;
+    }
+    await next();
+});
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();
@@ -483,6 +494,7 @@ app.MapPlenaroReminders();
 app.MapPlenaroClassicImport();
 app.MapPlenaroZnuny();
 ZnunyRemoteBrowser.Map(app);
+ZnunyNativeProxy.Map(app);
 app.MapPlenaroZnunyCentral();
 app.MapPlenaroDayMarkers();
 app.MapFallbackToFile("index.html");
