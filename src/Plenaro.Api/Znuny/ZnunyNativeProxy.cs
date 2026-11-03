@@ -88,11 +88,22 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
                 new{error="Ungültiger Sicherheitstoken."});}
             if(!proxy.Origins(out var parent,out var external))
                 return Results.Conflict(new{error="Native HTML-Ansicht ist nicht konfiguriert."});
-            if(!ctx.Request.IsHttps ||
-                !string.Equals(ctx.Request.Host.Host,parent.Host,
-                    StringComparison.OrdinalIgnoreCase) ||
-                ctx.Request.Host.Port.GetValueOrDefault(443)!=parent.Port)
-                return Results.BadRequest(new{error="Ungültige Anwendungsadresse."});
+            // A trusted front-door reverse proxy can normalize Host to its
+            // internal upstream name. Browser POSTs still carry the original
+            // public Origin. Verify that exact HTTPS origin instead of
+            // incorrectly rejecting an otherwise authenticated + CSRF-checked
+            // browser request. Never trust arbitrary X-Forwarded-Host headers.
+            if(!ctx.Request.IsHttps)
+                return Results.BadRequest(new{
+                    error="Die Plenaro-Verbindung wird nicht als HTTPS erkannt.",
+                    code="application-https-required"
+                });
+            if(!AllowedStartOrigin(ctx.Request,parent))
+                return Results.BadRequest(new{
+                    error="Die öffentliche Plenaro-Adresse stimmt nicht mit "+
+                        "der konfigurierten Anwendungsadresse überein.",
+                    code="application-origin-mismatch"
+                });
 
             var user=await users.GetUserAsync(ctx.User);
             if(user is null||user.IsDisabled)return Results.Unauthorized();
@@ -123,6 +134,33 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
                 },statusCode:503);
             }
         }).RequireRateLimiting("znuny-native-start");
+    }
+
+    // Distinguish the URL visible in the user's browser from the internal
+    // Host header of a correctly configured reverse proxy. A browser fetch
+    // POST sends Origin; only the exact configured public origin is allowed.
+    // Legacy clients without Origin retain the stricter Host-only behavior.
+    public static bool AllowedStartOrigin(HttpRequest request,Uri expected)
+    {
+        if(!request.IsHttps)return false;
+        if(request.Headers.TryGetValue("Sec-Fetch-Site",out var fetchSite)&&
+            fetchSite.ToString() is not ("same-origin" or "none"))
+            return false;
+        if(request.Headers.TryGetValue("Origin",out var values)){
+            if(values.Count!=1 ||
+                !Uri.TryCreate(values.ToString(),UriKind.Absolute,out var origin))
+                return false;
+            return origin.Scheme==Uri.UriSchemeHttps &&
+                origin.GetLeftPart(UriPartial.Authority).Equals(
+                    expected.GetLeftPart(UriPartial.Authority),
+                    StringComparison.OrdinalIgnoreCase) &&
+                origin.AbsolutePath=="/" &&
+                origin.Query.Length==0 && origin.Fragment.Length==0 &&
+                origin.UserInfo.Length==0;
+        }
+        return request.Host.Host.Equals(expected.Host,
+                StringComparison.OrdinalIgnoreCase) &&
+            request.Host.Port.GetValueOrDefault(443)==expected.Port;
     }
 
     public sealed record StartRequest(string? TicketId,bool Reset=false);

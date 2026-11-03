@@ -339,6 +339,37 @@ try{
     Assert(true,"native auto-login never follows cross-origin authentication redirects");
 }
 
+// The outer HTTPS gateway may send an internal Host value to Plenaro.
+// Browser Origin is still the public URL. All hostnames here are fictitious.
+var expectedPublicOrigin=new Uri("https://portal.example.test");
+var proxiedRequest=new Microsoft.AspNetCore.Http.DefaultHttpContext().Request;
+proxiedRequest.Scheme="https";
+proxiedRequest.Host=new Microsoft.AspNetCore.Http.HostString("gateway.example.test");
+proxiedRequest.Headers["Origin"]="https://portal.example.test";
+proxiedRequest.Headers["Sec-Fetch-Site"]="same-origin";
+Assert(ZnunyNativeProxy.AllowedStartOrigin(proxiedRequest,expectedPublicOrigin),
+    "native bootstrap accepts matching browser Origin through normalized Host");
+proxiedRequest.Headers.Remove("Origin");
+Assert(!ZnunyNativeProxy.AllowedStartOrigin(proxiedRequest,expectedPublicOrigin),
+    "native bootstrap does not blindly trust normalized internal Host");
+proxiedRequest.Host=new Microsoft.AspNetCore.Http.HostString("portal.example.test");
+Assert(ZnunyNativeProxy.AllowedStartOrigin(proxiedRequest,expectedPublicOrigin),
+    "native bootstrap preserves direct same-host clients without Origin");
+proxiedRequest.Headers["Origin"]="https://other.example.test";
+Assert(!ZnunyNativeProxy.AllowedStartOrigin(proxiedRequest,expectedPublicOrigin),
+    "native bootstrap rejects a cross-origin POST even when Host matches");
+proxiedRequest.Headers["Origin"]="null";
+Assert(!ZnunyNativeProxy.AllowedStartOrigin(proxiedRequest,expectedPublicOrigin),
+    "native bootstrap rejects opaque/null browser Origin");
+proxiedRequest.Headers["Origin"]="https://portal.example.test";
+proxiedRequest.Headers["Sec-Fetch-Site"]="cross-site";
+Assert(!ZnunyNativeProxy.AllowedStartOrigin(proxiedRequest,expectedPublicOrigin),
+    "native bootstrap rejects cross-site fetch metadata");
+proxiedRequest.Headers["Sec-Fetch-Site"]="same-origin";
+proxiedRequest.Scheme="http";
+Assert(!ZnunyNativeProxy.AllowedStartOrigin(proxiedRequest,expectedPublicOrigin),
+    "native bootstrap requires verified HTTPS");
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory
