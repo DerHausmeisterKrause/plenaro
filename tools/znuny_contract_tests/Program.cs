@@ -286,6 +286,9 @@ var successfulPosts=0;
 var autoLogin=await RunNativeLogin(request=>{
     if(request.Method==HttpMethod.Post){
         successfulPosts++;
+        Assert(request.Headers.TryGetValues("Origin",out var origins)&&
+            origins.Single()=="https://ticketsystem.example.test",
+            "native login includes upstream-only Origin for CSRF validation");
         var post=new HttpResponseMessage(HttpStatusCode.Found);
         post.Headers.Location=new Uri("/otrs/index.pl?Action=AgentDashboard",UriKind.Relative);
         return post;
