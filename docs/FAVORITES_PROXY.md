@@ -11,7 +11,7 @@ PLENARO_SERVER_NAME=portal.example.org tickets.example.org *.apps.example.org
 PLENARO_FAVORITES_BASE_DOMAIN=apps.example.org
 ```
 
-Zusätzlich Wildcard-DNS und ein vertrauenswürdiges Zertifikat für die App-Domains einrichten. Neue freigegebene Apps erfordern dann keine weitere NGINX-Änderung. Fremde Redirects, direkte Benutzer-URLs und Cross-Origin-Zugriffe bleiben gesperrt. SSO/2FA, WebSockets und komplexe Apps erfordern möglicherweise eigene Integrationen. Reale Host-Abnahme bleibt offen.
+Zusätzlich Wildcard-DNS und ein vertrauenswürdiges Zertifikat für die App-Domains einrichten. Neue freigegebene Apps erfordern dann keine weitere NGINX-Änderung. Fremde Redirects, direkte Benutzer-URLs und Cross-Origin-Zugriffe bleiben gesperrt. SSO/2FA, WebSockets und komplexe Apps erfordern möglicherweise eigene Integrationen. Pro Benutzer wird zunächst genau ein Favorit pro freigegebener Anwendung zugelassen, damit zwei verschiedene Konten nicht denselben Browser-Cookie-Host überschreiben. Reale Host-Abnahme bleibt offen.
 
 ---
 
