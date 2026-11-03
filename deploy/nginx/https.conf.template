@@ -47,6 +47,16 @@ server {
         add_header Strict-Transport-Security "max-age=31536000" always;
     }
 
+    location = /_plenaro/favorite-bootstrap {
+        access_log off;
+        proxy_pass http://web:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Proto https;
+        add_header Referrer-Policy "no-referrer" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
     location / {
         proxy_pass http://web:8080;
         proxy_http_version 1.1;
