@@ -282,6 +282,57 @@ async Task<string> RunNativeLogin(Func<HttpRequestMessage,HttpResponseMessage> r
     await task;
     return task.GetType().GetProperty("Result")!.GetValue(task)!.ToString()!;
 }
+// Some internal gateways use nonstandard Content-Type headers for normal
+// agent HTML. The source body, not just its MIME label, determines whether
+// the initial agent document is usable. All hosts here are fictional.
+foreach(var mime in new[]{
+    "text/plain","application/octet-stream","application/xhtml+xml"
+}){
+    var successful=await RunNativeLogin(request=>{
+        if(request.Method==HttpMethod.Post){
+            var redirect=new HttpResponseMessage(HttpStatusCode.Found);
+            redirect.Headers.Location=new Uri(
+                "/otrs/index.pl?Action=AgentDashboard",UriKind.Relative);
+            return redirect;
+        }
+        if(request.RequestUri?.Query.Contains("AgentDashboard")==true)
+            return new HttpResponseMessage(HttpStatusCode.OK){
+                Content=new StringContent(
+                    "<!doctype html><html><body>Dashboard</body></html>",
+                    Encoding.UTF8,"text/html")
+            };
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent(formHtml,Encoding.UTF8,mime)
+        };
+    });
+    Assert(successful=="Automatic",
+        "native auto-login accepts real HTML labeled "+mime);
+}
+var missingContentType=await RunNativeLogin(request=>{
+    if(request.Method==HttpMethod.Post)return new HttpResponseMessage(
+        HttpStatusCode.NoContent);
+    return new HttpResponseMessage(HttpStatusCode.OK){
+        Content=new ByteArrayContent(Encoding.UTF8.GetBytes(formHtml))
+    };
+});
+Assert(missingContentType=="Automatic",
+    "native auto-login accepts HTML with missing Content-Type");
+
+foreach(var (mime,body,expected) in new[]{
+    ("application/json","{\"error\":\"not a login page\"}","page-json"),
+    ("text/plain","This is not HTML","page-not-html"),
+    ("text/html","","page-empty")
+}){
+    try{
+        await RunNativeLogin(_=>new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent(body,Encoding.UTF8,mime)
+        });
+        throw new Exception("Non-HTML document incorrectly accepted");
+    }catch(InvalidOperationException ex) when(ex.Message==expected){
+        Assert(true,"native login safely rejects non-HTML page: "+expected);
+    }
+}
+
 var successfulPosts=0;
 var autoLogin=await RunNativeLogin(request=>{
     if(request.Method==HttpMethod.Post){
