@@ -56,14 +56,15 @@ Danach:
 ```bash
 cd /opt/plenaro
 git pull --ff-only
-docker compose up -d --build
+docker compose up -d --build --remove-orphans
 docker compose ps
 ```
 
-Wenn die Proxy-Origins nicht konfiguriert sind, ist die bisherige
-serverseitige Chromium-Ansicht weiterhin verfügbar. Bei aktivierter
-nativer Ansicht gibt es im Ticketsystem-Reiter eine Schaltfläche
-`Kompatibler Modus` für einen gezielten Rückfall.
+Ohne die beiden HTTPS-Origins startet **keine** Ticketsystem-Einbettung.
+Plenaro zeigt dann eine konkrete Einrichtungsanleitung. Der vorherige
+Chromium-Screenshot-Modus wurde vollständig aus Frontend, Backend und
+Docker Compose entfernt; es gibt keinen automatischen oder manuellen
+Rückfall auf eine unsichere Einbettung.
 
 ## Authentifizierung und Isolation
 
@@ -97,17 +98,16 @@ Hostnamens nicht lesen.
 
 - Das klassische Znuny-/OTRS-Agenten-Loginformular wird unterstützt.
   Externe SAML/OIDC-Redirects oder individuelle JavaScript-only-SSO-Formulare
-  erfordern eine separate Implementierung; dann vorerst den
-  kompatiblen Chromium-Modus verwenden.
+  erfordern eine separate Implementierung. In diesem Fall zeigt
+  Plenaro eine Fehlermeldung; es gibt keinen Browser-Bildmodus mehr.
 - HTML, JS, CSS, JSON und Redirects mit absoluten Links auf die interne
   Origin werden umgeschrieben. Anwendungen mit dynamisch zusammengesetzten
   Hostnamen, Service Workers, WebSockets oder ungewöhnlichen CSP-Regeln
   können Sonderanpassungen erfordern.
 - Der Proxy liefert binäre Anhänge ohne Text-Umschreibung. In Firefox/Chrome
   kann eine iframe-Sandbox spezielle Popup-/Download-Verhalten begrenzen.
-- Mehrere Benutzer erhalten getrennte Sessions und HTTP-Verbindungen. Der
-  Proxy benötigt keine dauerhaften Chromium-Prozesse, sobald der Fallback
-  entfernt wird.
+- Mehrere Benutzer erhalten getrennte Sessions und HTTP-Verbindungen.
+  Es werden keine dauerhaften Browserprozesse pro Benutzer gestartet.
 - Die Sitzungsliste ist zunächst pro Plenaro-Webcontainer gespeichert.
   Bei mehreren replizierten Webcontainern sind Sticky Sessions oder ein
   gemeinsamer geschützter Session-Store erforderlich.
