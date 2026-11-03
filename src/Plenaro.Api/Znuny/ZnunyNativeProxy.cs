@@ -42,6 +42,13 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
         public HttpClient Client {get;}=client;
         public DateTimeOffset Created {get;}=DateTimeOffset.UtcNow;
         private long _lastUsed=DateTime.UtcNow.Ticks;
+        private long _approvedAt=0;
+        public SemaphoreSlim ApprovalGate {get;}=new(1,1);
+        public bool RecentlyApproved=>
+            DateTime.UtcNow.Ticks-Interlocked.Read(ref _approvedAt)<
+                TimeSpan.FromSeconds(15).Ticks;
+        public void MarkApproved()=>Interlocked.Exchange(ref _approvedAt,
+            DateTime.UtcNow.Ticks);
         public DateTimeOffset LastUsed=>new(Interlocked.Read(ref _lastUsed),TimeSpan.Zero);
         public void Touch()=>Interlocked.Exchange(ref _lastUsed,DateTime.UtcNow.Ticks);
         public bool Expired=>DateTimeOffset.UtcNow-Created>MaxAge ||
@@ -175,13 +182,42 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
             await ctx.Response.WriteAsync("Ticketsystem-Sitzung abgelaufen. Bitte über Plenaro neu öffnen.",ct);
             return;
         }
-        // Each request must belong to the correct isolated user session.
+        // Recheck disabled users / revoked agent approvals while a
+        // proxy tab remains open; revoking Plenaro access stops the proxy.
+        if(!await StillApprovedAsync(session,ctx.RequestServices,ct)){
+            RevokeUser(session.User);
+            ctx.Response.StatusCode=403;return;
+        }
         session.Touch();
         if(ctx.Request.Path.StartsWithSegments("/api/v1",StringComparison.OrdinalIgnoreCase)||
             ctx.Request.Path.StartsWithSegments("/health",StringComparison.OrdinalIgnoreCase)){
             ctx.Response.StatusCode=404;return;
         }
         await ProxyRequestAsync(ctx,session,external,ct);
+    }
+
+    private async Task<bool> StillApprovedAsync(ProxySession session,
+        IServiceProvider services,CancellationToken ct)
+    {
+        if(session.RecentlyApproved)return true;
+        await session.ApprovalGate.WaitAsync(ct);
+        try{
+            if(session.RecentlyApproved)return true;
+            var users=services.GetRequiredService<UserManager<ApplicationUser>>();
+            var user=await users.FindByIdAsync(session.User.ToString());
+            if(user is null||user.IsDisabled)return false;
+            await using var db=new NpgsqlConnection(
+                configuration.GetConnectionString("Plenaro"));
+            await db.OpenAsync(ct);
+            await using var cmd=new NpgsqlCommand("""
+                SELECT EXISTS(SELECT 1 FROM znuny_approved_agent_bindings
+                    WHERE user_id=@user AND agent_id>0)
+                """,db);
+            cmd.Parameters.AddWithValue("user",session.User);
+            if(await cmd.ExecuteScalarAsync(ct) is not true)return false;
+            session.MarkApproved();
+            return true;
+        }finally{session.ApprovalGate.Release();}
     }
 
     private async Task BootstrapAsync(HttpContext ctx,CancellationToken ct)
