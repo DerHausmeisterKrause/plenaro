@@ -302,6 +302,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved, onFavori
   const validSections:SettingsSection[]=['general','planning','import','microsoft',
     'ticket','favorites','security','admin'];
   const requested=params.get('section') as SettingsSection|null;
+  const [appsRevision,setAppsRevision]=useState(0);
   const [section,setSection]=useState<SettingsSection>(
     requested&&validSections.includes(requested)?requested:'general');
   useEffect(()=>{
@@ -354,8 +355,10 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved, onFavori
       </section>
     </>}
     {section === 'ticket' && <><ZnunySettingsPanel admin={admin}/>{admin && <ZnunyCentralAdminPanel/>}</>}
-    {section === 'favorites' && <><FavoriteSettingsPanel onChanged={onFavoritesChanged}/>
-      {admin&&<FavoriteAppsAdminPanel/>}</>}
+    {section === 'favorites' && <><FavoriteSettingsPanel key={appsRevision} onChanged={onFavoritesChanged}/>
+      {admin&&<FavoriteAppsAdminPanel onChanged={()=>{
+        setAppsRevision(v=>v+1);onFavoritesChanged();
+      }}/>}</>}
     {section === 'security' && <>
       <section className="content-card um-account">
         <div className="um-section-title"><ShieldCheck size={20}/><h2>Mein Konto</h2></div>
