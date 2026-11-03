@@ -156,11 +156,14 @@ public sealed partial class ZnunyNativeProxy
             TimeSpan.FromSeconds(1));
     }
 
-    private static async Task<string> ReadLoginHtmlAsync(HttpContent content,
-        CancellationToken ct)
+    private static async Task<string?> ReadLoginHtmlAsync(HttpContent content,
+        CancellationToken ct,bool required=true)
     {
         var bytes=await ReadLimitedAsync(content,MaxHtmlBytes,ct);
-        if(bytes.Length==0)throw new NativeLoginException("page-empty");
+        if(bytes.Length==0){
+            if(required)throw new NativeLoginException("page-empty");
+            return null;
+        }
         Encoding encoding=Encoding.UTF8;
         var charset=content.Headers.ContentType?.CharSet?.Trim('"');
         if(!string.IsNullOrEmpty(charset)){
@@ -174,6 +177,7 @@ public sealed partial class ZnunyNativeProxy
             detectEncodingFromByteOrderMarks:true);
         var html=await reader.ReadToEndAsync(ct);
         if(LooksLikeHtmlDocument(html))return html;
+        if(!required)return null;
         var trimmed=html.AsSpan().TrimStart(' ', '\t', '\r', '\n', '\ufeff');
         if(trimmed.StartsWith("{",StringComparison.Ordinal)||
             trimmed.StartsWith("[",StringComparison.Ordinal)||
@@ -198,7 +202,8 @@ public sealed partial class ZnunyNativeProxy
         using(landing){
             if(!landing.IsSuccessStatusCode)
                 throw new NativeLoginException("page-http");
-            var html=await ReadLoginHtmlAsync(landing.Content,token);
+            var html=await ReadLoginHtmlAsync(landing.Content,token)
+                ?? throw new NativeLoginException("page-not-html");
             var login=FindLoginForm(html,landingUrl,origin,username,password);
             if(login is null)
                 return LoginState.Interactive; // e.g. custom SSO / pre-authenticated portal
@@ -226,8 +231,10 @@ public sealed partial class ZnunyNativeProxy
                 using(result){
                     if(!result.IsSuccessStatusCode)
                         throw new NativeLoginException("login-http");
-                    var page=await ReadLoginHtmlAsync(result.Content,token);
-                    if(FindLoginForm(page,finalUrl,origin,username,password) is not null)
+                    var page=await ReadLoginHtmlAsync(result.Content,token,
+                        required:false);
+                    if(page is not null&&
+                        FindLoginForm(page,finalUrl,origin,username,password) is not null)
                         return LoginState.Interactive;
                 }
                 return LoginState.Automatic;
@@ -237,8 +244,10 @@ public sealed partial class ZnunyNativeProxy
                 return LoginState.Interactive;
             if(!submitted.IsSuccessStatusCode)
                 throw new NativeLoginException("login-http");
-            var submittedPage=await ReadLoginHtmlAsync(submitted.Content,token);
-            if(FindLoginForm(submittedPage,login.Action,origin,username,password) is not null)
+            var submittedPage=await ReadLoginHtmlAsync(submitted.Content,token,
+                required:false);
+            if(submittedPage is not null&&
+                FindLoginForm(submittedPage,login.Action,origin,username,password) is not null)
                 return LoginState.Interactive;
             return LoginState.Automatic;
         }
