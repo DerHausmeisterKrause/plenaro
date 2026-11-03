@@ -4,7 +4,44 @@ using Microsoft.Extensions.Configuration;
 using System.Text;
 using System.Text.Json;
 using Plenaro.Api.Znuny;
+using Plenaro.Api.Favorites;
 using static Plenaro.Api.Znuny.ZnunyEndpoints;
+
+// Favoriten-Wildcard ist zunächst nur eine reservierte, niemals
+// als Plenaro-Login-Host verwendbare Origin.
+Assert(!FavoriteHostGuard.IsUnassignedAlias(
+    "wiki.apps.example.org",null,"https://portal.example.org",
+    "https://tickets.example.org"),"wildcard guard is opt-in");
+Assert(FavoriteHostGuard.IsUnassignedAlias(
+    "wiki.apps.example.org","apps.example.org","https://portal.example.org",
+    "https://tickets.example.org"),"unknown app alias is denied");
+Assert(FavoriteHostGuard.IsUnassignedAlias(
+    "nested.wiki.apps.example.org","apps.example.org",
+    "https://portal.example.org","https://tickets.example.org"),
+    "nested aliases cannot expose Plenaro UI");
+Assert(!FavoriteHostGuard.IsUnassignedAlias(
+    "portal.apps.example.org","apps.example.org",
+    "https://portal.apps.example.org","https://tickets.apps.example.org"),
+    "main application host is unchanged");
+Assert(!FavoriteHostGuard.IsUnassignedAlias(
+    "tickets.apps.example.org","apps.example.org",
+    "https://portal.apps.example.org","https://tickets.apps.example.org"),
+    "native Znuny proxy host is unchanged");
+Assert(!FavoriteHostGuard.IsUnassignedAlias(
+    "127.0.0.1","apps.example.org",
+    "https://portal.example.org","https://tickets.example.org"),
+    "IP-based health check unaffected");
+Assert(!FavoriteHostGuard.IsUnassignedAlias(
+    "unrelated.example.net","apps.example.org",
+    "https://portal.example.org","https://tickets.example.org"),
+    "other domains unaffected by optional guard");
+var invalidFavoritesDomainRejected=false;
+try{
+    FavoriteHostGuard.IsUnassignedAlias("wiki.apps.example.org",
+        "*.apps.example.org","https://portal.example.org",
+        "https://tickets.example.org");
+}catch(InvalidOperationException){invalidFavoritesDomainRejected=true;}
+Assert(invalidFavoritesDomainRejected,"invalid base domains fail closed");
 
 var settings=new ServerSettings(ApiUrl:"https://znuny.test/otrs/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST",
     WebUrl:"https://znuny.test/otrs/index.pl");
