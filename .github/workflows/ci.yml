@@ -35,6 +35,7 @@ jobs:
       - name: Docker smoke test (health, setup, login)
         env:
           POSTGRES_PASSWORD: ci-only-not-for-production
+          PLENARO_FAVORITES_BASE_DOMAIN: apps.example.org
         run: |
           set -euo pipefail
           mkdir -p secrets
@@ -81,6 +82,7 @@ jobs:
           CSRF=$(curl -fsS -c "$COOKIE" -b "$COOKIE" "$API/api/v1/auth/csrf" \
             | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')
           echo 'CI checkpoint: setup and admin login OK'
+          bash tools/favorites_smoke.sh "$API" "$COOKIE" "$CSRF"
           # User management coverage in the existing Docker smoke test (no new job).
           ID=$(curl -fsS -c "$COOKIE" -b "$COOKIE" -X POST "$API/api/v1/admin/users/" -H "X-CSRF-TOKEN: $CSRF" \
             -H 'Content-Type: application/json' \

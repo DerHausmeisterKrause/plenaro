@@ -7,6 +7,8 @@ import { EntraAdminSettings } from './EntraAdminSettings';
 import { DayMarkerBudgetSettings } from './DayMarkersPanel';
 import { ReminderSettingsPanel } from './ReminderSettingsPanel';
 import { ZnunySettingsPanel } from './ZnunySettingsPanel';
+import {FavoriteSettingsPanel,FavoriteAppsAdminPanel} from './FavoritesPage';
+import {useSearchParams} from 'react-router-dom';
 import { ZnunyCentralAdminPanel } from './ZnunyCentralAdminPanel';
 import { ClassicImportPanel } from './ClassicImportPanel';
 import { type PersonalPreferences, type WorkspacePreferences } from './settingsApi';
@@ -288,14 +290,25 @@ function AdminUsers({ currentId }: { currentId: string }) {
   </section>;
 }
 
-type SettingsSection = 'general' | 'planning' | 'import' | 'microsoft' | 'ticket' | 'security' | 'admin';
+type SettingsSection = 'general' | 'planning' | 'import' | 'microsoft' | 'ticket' | 'favorites' | 'security' | 'admin';
 
-export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved }: {
+export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved, onFavoritesChanged }: {
   user: CurrentUser | null | undefined;
   onPersonalSaved: (value: PersonalPreferences) => void;
   onWorkspaceSaved: (value: WorkspacePreferences) => void;
+  onFavoritesChanged: () => void;
 }) {
-  const [section, setSection] = useState<SettingsSection>('general');
+  const [params,setParams]=useSearchParams();
+  const validSections:SettingsSection[]=['general','planning','import','microsoft',
+    'ticket','favorites','security','admin'];
+  const requested=params.get('section') as SettingsSection|null;
+  const [appsRevision,setAppsRevision]=useState(0);
+  const [section,setSection]=useState<SettingsSection>(
+    requested&&validSections.includes(requested)?requested:'general');
+  useEffect(()=>{
+    const candidate=params.get('section') as SettingsSection|null;
+    if(candidate&&validSections.includes(candidate))setSection(candidate);
+  },[params]);
   if (!user) return null;
   const admin = user.roles.includes('Admin');
   const tabs: { key: SettingsSection; label: string }[] = [
@@ -304,6 +317,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved }: {
     { key: 'import', label: 'Datenimport' },
     { key: 'microsoft', label: 'Microsoft 365' },
     { key: 'ticket', label: 'Ticketsystem' },
+    { key: 'favorites', label: 'Favoriten' },
     { key: 'security', label: 'Konto & Sicherheit' },
     ...(admin ? [{ key: 'admin' as const, label: 'Administration' }] : []),
   ];
@@ -318,7 +332,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved }: {
       {tabs.map(tab => <button key={tab.key} type="button"
         className={`classic-settings-tab${section === tab.key ? ' active' : ''}`}
         aria-current={section === tab.key ? 'page' : undefined}
-        onClick={() => setSection(tab.key)}>{tab.label}</button>)}
+        onClick={() => {setSection(tab.key);setParams({section:tab.key});}}>{tab.label}</button>)}
     </nav>
     {section === 'general' && <div className="um-settings-grid">
       <PersonalPreferencesPanel onSaved={onPersonalSaved}/>
@@ -341,6 +355,10 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved }: {
       </section>
     </>}
     {section === 'ticket' && <><ZnunySettingsPanel admin={admin}/>{admin && <ZnunyCentralAdminPanel/>}</>}
+    {section === 'favorites' && <><FavoriteSettingsPanel key={appsRevision} onChanged={onFavoritesChanged}/>
+      {admin&&<FavoriteAppsAdminPanel onChanged={()=>{
+        setAppsRevision(v=>v+1);onFavoritesChanged();
+      }}/>}</>}
     {section === 'security' && <>
       <section className="content-card um-account">
         <div className="um-section-title"><ShieldCheck size={20}/><h2>Mein Konto</h2></div>

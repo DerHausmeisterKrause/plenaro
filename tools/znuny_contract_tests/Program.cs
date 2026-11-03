@@ -43,6 +43,46 @@ try{
 }catch(InvalidOperationException){invalidFavoritesDomainRejected=true;}
 Assert(invalidFavoritesDomainRejected,"invalid base domains fail closed");
 
+// The new wildcard app router is opt-in and never relaxes the
+// established same-origin CSRF gate for the main Plenaro application.
+var favoriteConfig=new ConfigurationBuilder().AddInMemoryCollection(
+    new Dictionary<string,string?>{
+        ["PLENARO_PUBLIC_ORIGIN"]="https://portal.example.org",
+        ["PLENARO_ZNUNY_PROXY_ORIGIN"]="https://tickets.example.org",
+        ["PLENARO_FAVORITES_BASE_DOMAIN"]="apps.example.org",
+        ["Security:RequireHttps"]="true"
+    }).Build();
+var favoriteProxy=new FavoriteProxy(favoriteConfig);
+Assert(favoriteProxy.BaseConfigured,"favorite wildcard app router configured");
+var requestContext=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+requestContext.Request.Scheme="https";
+requestContext.Request.Host=new Microsoft.AspNetCore.Http.HostString("portal.example.org");
+requestContext.Request.Headers["Origin"]="https://portal.example.org";
+requestContext.Request.Headers["Sec-Fetch-Site"]="same-origin";
+Assert(FavoriteProxy.IsTrustedStartOrigin(requestContext.Request,favoriteConfig),
+    "favorite start accepts exact HTTPS browser origin");
+requestContext.Request.Headers["Origin"]="https://untrusted.example.org";
+Assert(!FavoriteProxy.IsTrustedStartOrigin(requestContext.Request,favoriteConfig),
+    "favorite start blocks cross-origin POST");
+requestContext.Request.Headers["Origin"]="https://portal.example.org";
+requestContext.Request.Headers["Sec-Fetch-Site"]="cross-site";
+Assert(!FavoriteProxy.IsTrustedStartOrigin(requestContext.Request,favoriteConfig),
+    "favorite start blocks cross-site metadata");
+requestContext.Request.Headers["Sec-Fetch-Site"]="same-origin";
+requestContext.Request.Scheme="http";
+Assert(!FavoriteProxy.IsTrustedStartOrigin(requestContext.Request,favoriteConfig),
+    "favorite start rejects HTTP");
+requestContext.Request.Scheme="https";
+requestContext.Request.Host=new Microsoft.AspNetCore.Http.HostString("wiki.apps.example.org");
+Assert(favoriteProxy.IsFavoriteHost(requestContext),
+    "approved or unknown app alias stays on isolated app router");
+requestContext.Request.Host=new Microsoft.AspNetCore.Http.HostString("portal.example.org");
+Assert(!favoriteProxy.IsFavoriteHost(requestContext),
+    "main Plenaro origin cannot be intercepted as favorite");
+requestContext.Request.Host=new Microsoft.AspNetCore.Http.HostString("tickets.example.org");
+Assert(!favoriteProxy.IsFavoriteHost(requestContext),
+    "Znuny native origin remains on existing proxy");
+
 var settings=new ServerSettings(ApiUrl:"https://znuny.test/otrs/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST",
     WebUrl:"https://znuny.test/otrs/index.pl");
 
