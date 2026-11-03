@@ -151,7 +151,8 @@ beforeEach(() => {
     if (path.startsWith('/api/v1/znuny/browser/frame')) return {
       ok:true,status:200,blob:async()=>new Blob(['fake-png'],{type:'image/png'})
     };
-    if (path === '/api/v1/znuny/browser/input') return {
+    if (path === '/api/v1/znuny/browser/input' ||
+        path === '/api/v1/znuny/browser/viewport') return {
       ok:true,status:204
     };
     if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/write-check')) return {
