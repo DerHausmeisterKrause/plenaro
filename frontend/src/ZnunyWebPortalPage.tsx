@@ -108,6 +108,8 @@ export function ZnunyWebPortalPage(){
   useEffect(()=>{
     if(!ready)return;
     let active=true;
+    // Older clients and test environments can use the polling fallback.
+    if(typeof EventSource==='undefined')return;
     const source=new EventSource(api+'/stream');
     streamRef.current=source;
     source.addEventListener('frame',(event)=>{
@@ -157,6 +159,8 @@ export function ZnunyWebPortalPage(){
     };
     const schedule=()=>{if(timer!==undefined)window.clearTimeout(timer);
       timer=window.setTimeout(apply,180);};
+    if(typeof ResizeObserver==='undefined'){schedule();return()=>{active=false;
+      if(timer!==undefined)window.clearTimeout(timer);};}
     const observer=new ResizeObserver(schedule);
     observer.observe(surface);
     schedule();
