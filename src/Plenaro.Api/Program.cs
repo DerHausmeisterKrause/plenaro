@@ -45,6 +45,9 @@ var builder = WebApplication.CreateBuilder(
 // ordinary ASP.NET HttpClient diagnostic logs or flood Docker logs on every frame.
 builder.Logging.AddFilter("System.Net.Http.HttpClient.Plenaro.WebDriver",
     LogLevel.Warning);
+// Protect one-time iframe bootstrap query tokens from ordinary request logs.
+builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics",
+    LogLevel.Warning);
 
 var requireHttps = builder.Configuration.GetValue<bool>("Security:RequireHttps");
 var entra = new EntraConfiguration(requireHttps);
