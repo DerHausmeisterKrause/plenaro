@@ -142,8 +142,8 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                    !string.IsNullOrWhiteSpace(favorite.Username))
                     await TryLoginAsync(client,root,favorite.Username,password,ct);
             }
-        }catch(Exception e) when(e is HttpRequestException or
-            InvalidOperationException or TaskCanceledException){
+        }catch(Exception e) when(!ct.IsCancellationRequested &&
+            e is HttpRequestException or InvalidOperationException or TaskCanceledException){
             // A custom login form may be unsupported: the iframe still
             // permits a regular interactive login in the same private session.
         }
