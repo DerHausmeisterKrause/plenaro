@@ -350,6 +350,12 @@ public static class FavoritesEndpoints
             upstream.HostNameType!=UriHostNameType.Dns)return false;
         var domain=config["PLENARO_FAVORITES_BASE_DOMAIN"]?.TrimEnd('.');
         if(string.IsNullOrEmpty(domain))return false;
+        var alias=input.Slug+"."+domain;
+        if(alias.Equals(OriginHost(config["PLENARO_PUBLIC_ORIGIN"]),
+                StringComparison.OrdinalIgnoreCase)||
+            alias.Equals(OriginHost(config["PLENARO_ZNUNY_PROXY_ORIGIN"]),
+                StringComparison.OrdinalIgnoreCase))
+            return false;
         if(upstream.Host.Equals(domain,StringComparison.OrdinalIgnoreCase)||
             upstream.Host.EndsWith("."+domain,StringComparison.OrdinalIgnoreCase)||
             OriginHost(config["PLENARO_PUBLIC_ORIGIN"])==upstream.Host||
