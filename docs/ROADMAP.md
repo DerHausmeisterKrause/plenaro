@@ -673,14 +673,15 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [ ] Native Znuny-Antwortfenster/502-Problem separat abnehmen; durch Hostnamenänderung nicht gelöst
 
 
-### 09.11.2026 – Phase 7: gemeinsamer Favoriten-Pfadhost (neuer PR)
+### 09.11.2026 – Phase 7: gemeinsamer Favoriten-Pfadhost (PR #20 in main)
 
 - [x] WPF-WebShortcut-URL, persönliche Browser-Sessions und bisherige Web-Favoriten wieder geprüft.
 - [x] Opt-in `PLENARO_FAVORITES_PATH_ORIGIN` für `apps-plenaro.example.org/wiki/` implementiert, alte Host-/Template-Varianten bleiben erhalten.
 - [x] Ein gemeinsamer Host mit serverseitiger Pfad-/Sitzungsbindung, Cookie-Path pro Slug, unbekannte URLs 404.
 - [x] Pfad-Prefix bei Bootstrap, Redirect, Upstream, textuellen Links und Formularen berücksichtigt.
 - [x] Path-Routing-Vertragstests und ursprüngliche Favoriten-/Znuny-Tests beibehalten.
-- [ ] Vollständige GitHub-CI verifizieren und vor Deploy kontrolliert reviewen.
+- [x] PR #20 kontrolliert nach main gemergt; .NET/React-Build, Contract-Tests und Docker-Smoke erfolgreich ([Run #42601040551](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42601040551)).
+- [x] React-Frontend-Bootstrap für `/<slug>/_plenaro/favorite-bootstrap` angepasst, anderer Favoriten-Slug wird abgewiesen.
 - [ ] Einmaligen DNS-A-Record, vorgelagerten NGINX-vHost und vorhandenes TLS-Zertifikat am echten Host prüfen.
 - [ ] Wiki-/Cloud-AJAX, Login, HTML/JS, Downloads, CSP/Service Worker und zwei Benutzer im Browser abnehmen.
 - [ ] Sicherheitsentscheidung: Ein Pfadhost teilt dieselbe Browser-Origin über alle Apps; nur vertrauenswürdige Apps zulassen.
