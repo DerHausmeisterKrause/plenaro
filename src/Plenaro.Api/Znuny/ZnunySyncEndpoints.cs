@@ -24,7 +24,7 @@ public static class ZnunySyncEndpoints
         // All direct ticket IDs (articles, attachments, planning, assignments,
         // replies, time bookings) require a live PERSONAL Znuny read check.
         // Owner/agent IDs in the central cache do not imply queue permission.
-        group.AddEndpointFilter(async (context,next) =>
+        reader.AddEndpointFilter(async (context,next) =>
         {
             if(context.HttpContext.Request.RouteValues.TryGetValue(
                 "ticketId",out var routeId) && routeId is not null)
