@@ -625,3 +625,15 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [ ] App-Sonderfälle (SSO/2FA, WebSockets, CSP und Service Worker) nur bei Bedarf implementieren
 - [ ] Legacy-Favoriten (inklusive nur sicherer Konfiguration) kontrolliert migrieren
 
+
+
+### 09.11.2026 – Phase 6: persönliche Znuny-Queue-Rechte erzwingen (PR #15)
+
+- [x] Gemeinsamen Service-Account-Ticketcache nicht mehr als Benutzerberechtigung behandeln
+- [x] Ticketlisten und Agenda auf persönlich autorisierte Znuny-TicketIDs beschränken
+- [x] API-Ticketdetails, Artikel, Anhänge, Planungs-/Schreibaktionen und Native-Deep-Links mit persönlichem TicketGet prüfen
+- [x] Fail closed bei fehlenden Rechten/Session/Timeout; Cacheänderungen invalidieren
+- [x] CI: Backend/Frontend, Znuny-Contract und Docker-Smoke erfolgreich ([Run #42568973461](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42568973461))
+- [ ] Live-Test mit mindestens zwei Queue-Berechtigungsprofilen und direktem Fremd-Ticketzugriff
+- [ ] Laufzeiten / Serverlast bei größeren Ticketmengen messen und Suchstrategie gegebenenfalls skalieren
+
