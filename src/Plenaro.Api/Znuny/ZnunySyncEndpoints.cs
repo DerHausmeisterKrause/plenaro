@@ -217,8 +217,7 @@ public static class ZnunySyncEndpoints
             // Owned/responsible tickets and explicitly tagged/planned
             // segments do NOT depend on a working GenericInterface search.
             // Only the unassigned candidate pool requires queue authorization.
-            var myTickets=view=="new"?
-                Array.Empty<string>():(await visibility.PersonalTicketsAsync(account.Id,ct)).ToArray();
+            var myTickets=(await visibility.PersonalTicketsAsync(account.Id,ct)).ToArray();
             var newQueues=view=="new"?
                 (await visibility.NewQueuesAsync(account.Id,ct)).ToArray():
                 Array.Empty<string>();
