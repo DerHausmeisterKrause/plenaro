@@ -81,6 +81,7 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
         group.MapPost("/start",async(
             StartRequest input,HttpContext ctx,IAntiforgery anti,
             UserManager<ApplicationUser> users,SecretVault vault,
+            ZnunyTicketVisibility visibility,
             ZnunyNativeProxy proxy,ILogger<ZnunyNativeProxy> logger,
             CancellationToken ct)=>{
             try{await anti.ValidateRequestAsync(ctx);}
@@ -110,6 +111,15 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
             if(input.TicketId is { } ticket &&
                 (ticket.Length is <1 or >40||!ticket.All(char.IsAsciiDigit)))
                 return Results.BadRequest(new{error="Ungültige Ticket-ID."});
+            if(input.TicketId is { } selectedTicket){
+                try{
+                    if(!await visibility.CanReadTicketAsync(user.Id,selectedTicket,ct))
+                        return Results.NotFound();
+                }catch(ZnunyTicketVisibility.UnavailableException){
+                    return Results.Problem("Persönliche Znuny-Queue-Rechte "+
+                        "sind nicht überprüfbar.",statusCode:503);
+                }
+            }
             if(!vault.IsConfigured)return Results.Json(new{
                 error="Verschlüsselter Zugangsdaten-Vault ist nicht verfügbar."},
                 statusCode:503);
