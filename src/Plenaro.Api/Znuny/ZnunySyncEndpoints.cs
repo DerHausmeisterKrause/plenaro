@@ -21,6 +21,33 @@ public static class ZnunySyncEndpoints
     {
         var admin=app.MapGroup("/api/v1/admin/znuny").RequireAuthorization("AdminOnly");
         var reader=app.MapGroup("/api/v1/znuny").RequireAuthorization();
+        // All direct ticket IDs (articles, attachments, planning, assignments,
+        // replies, time bookings) require a live PERSONAL Znuny read check.
+        // Owner/agent IDs in the central cache do not imply queue permission.
+        group.AddEndpointFilter(async (context,next) =>
+        {
+            if(context.HttpContext.Request.RouteValues.TryGetValue(
+                "ticketId",out var routeId) && routeId is not null)
+            {
+                var users=context.HttpContext.RequestServices
+                    .GetRequiredService<UserManager<ApplicationUser>>();
+                var account=await users.GetUserAsync(context.HttpContext.User);
+                if(account is null||account.IsDisabled)return Results.Unauthorized();
+                var visibility=context.HttpContext.RequestServices
+                    .GetRequiredService<ZnunyTicketVisibility>();
+                try{
+                    if(!await visibility.CanReadTicketAsync(account.Id,
+                        routeId.ToString()??"",context.HttpContext.RequestAborted))
+                        return Results.NotFound();
+                }catch(ZnunyTicketVisibility.UnavailableException){
+                    return Results.Problem(
+                        "Die persönlichen Znuny-Queue-Rechte konnten nicht geprüft werden.",
+                        statusCode:503);
+                }
+            }
+            return await next(context);
+        });
+
 
         admin.MapGet("/sync", async (ZnunyCentralSync sync,CancellationToken ct) =>
             Results.Ok(await sync.StatusAsync(ct)));
