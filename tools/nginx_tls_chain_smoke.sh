@@ -24,7 +24,7 @@ docker run --rm --entrypoint sh \
   -v "$temp/issuer.crt:/etc/nginx/tls/intermediates.pem:ro" \
   -e PLENARO_HTTPS_ENABLED=true -e PLENARO_SERVER_NAME=portal.example.org \
   nginx:stable-alpine -ec '
-  /etc/plenaro-nginx/entrypoint.sh >/tmp/boot.log 2>&1 &
+  sh /etc/plenaro-nginx/entrypoint.sh >/tmp/boot.log 2>&1 &
   pid=$!
   trap "kill $pid 2>/dev/null || true" EXIT
   tries=0
@@ -46,7 +46,7 @@ docker run --rm --entrypoint sh \
   -v "$temp/leaf.key:/etc/nginx/tls/privkey.pem:ro" \
   -e PLENARO_HTTPS_ENABLED=true -e PLENARO_SERVER_NAME=portal.example.org \
   nginx:stable-alpine -ec '
-  /etc/plenaro-nginx/entrypoint.sh >/tmp/boot.log 2>&1 &
+  sh /etc/plenaro-nginx/entrypoint.sh >/tmp/boot.log 2>&1 &
   pid=$!
   trap "kill $pid 2>/dev/null || true" EXIT
   tries=0
