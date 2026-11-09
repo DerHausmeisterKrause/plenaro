@@ -353,7 +353,7 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
                         t.owner_agent_id IN (0,p.candidate_user_id)) AND
                     (t.responsible_agent_id IS NULL OR
                         t.responsible_agent_id IN (0,p.candidate_user_id))) OR
-                    OR EXISTS(SELECT 1 FROM znuny_ticket_time_entries te WHERE te.user_id=@user AND te.ticket_id=t.ticket_id)
+                    EXISTS(SELECT 1 FROM znuny_ticket_time_entries te WHERE te.user_id=@user AND te.ticket_id=t.ticket_id)
           OR EXISTS(SELECT 1 FROM znuny_ticket_time_bookings tb WHERE tb.user_id=@user AND tb.ticket_id=t.ticket_id)
           OR EXISTS(SELECT 1 FROM znuny_ticket_time_adjustments ta WHERE ta.user_id=@user AND ta.ticket_id=t.ticket_id)
           OR EXISTS(SELECT 1 FROM znuny_ticket_time_corrections tc WHERE tc.user_id=@user AND tc.ticket_id=t.ticket_id)
