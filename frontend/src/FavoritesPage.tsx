@@ -1,4 +1,4 @@
-import {useCallback,useEffect,useState,type FormEvent} from 'react';
+import {useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
 import {Link,useParams} from 'react-router-dom';
 import {ArrowDown,ArrowUp,ExternalLink,Plus,RefreshCw,Save,ShieldCheck,
   Star,Trash2} from 'lucide-react';
@@ -286,11 +286,19 @@ export function FavoritePage(){
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(true);
   const [revision,setRevision]=useState(0);
+  // React.StrictMode mounts effects twice in development. Starting the proxy
+  // twice revokes the first server-side session, so the iframe can be handed
+  // an already invalid single-use bootstrap token. Share ONE in-flight
+  // request across both effect invocations for the same favorite/revision.
+  const startup=useRef<{
+    key:string;promise:Promise<{item:Favorite;url:string}>
+  }|null>(null);
   useEffect(()=>{
     let active=true;
     setLoading(true);setError('');setUrl('');
-    void(async()=>{
-      try{
+    const key=(id??'')+':'+revision;
+    if(startup.current?.key!==key){
+      const promise=(async()=>{
         if(!id)throw new Error('Favorit nicht gefunden.');
         const items=await loadFavorites();
         const item=items.find(x=>x.id===id&&x.enabled);
@@ -301,12 +309,16 @@ export function FavoritePage(){
           destination.origin===window.location.origin||
           destination.pathname!=='/_plenaro/favorite-bootstrap')
           throw new Error('Ungültige Favoriten-Proxy-Adresse.');
-        if(active){setFavorite(item);setUrl(destination.toString());}
-      }catch(e){
-        if(active){setError(e instanceof Error?e.message:'Webseite nicht erreichbar.');
-          setLoading(false);}
-      }
-    })();
+        return {item,url:destination.toString()};
+      })();
+      startup.current={key,promise};
+    }
+    void startup.current.promise.then(({item,url})=>{
+      if(active){setFavorite(item);setUrl(url);}
+    }).catch(e=>{
+      if(active){setError(e instanceof Error?e.message:'Webseite nicht erreichbar.');
+        setLoading(false);}
+    });
     return()=>{active=false;};
   },[id,revision]);
   return <div className="page znuny-web-portal favorite-browser-page">
