@@ -214,14 +214,17 @@ public static class ZnunySyncEndpoints
             var pageSize=Math.Clamp(limit??100,1,100);
             if(page is < 0 or > 1000)return Results.BadRequest(new {error="Ungültige Seite."});
             var skip=(page??0)*pageSize;
-            IReadOnlySet<string> allowed;
-            try {allowed=await visibility.VisibleAsync(account.Id,ct);}
-            catch(ZnunyTicketVisibility.UnavailableException){
-                return Results.Problem("Deine persönlichen Znuny-Queue-Rechte "+
-                    "konnten nicht bestätigt werden. Es werden keine "+
-                    "ungeprüften Tickets angezeigt.",statusCode:503);
-            }
-            if(allowed.Count==0)return Results.Ok(Array.Empty<object>());
+            // Owned/responsible tickets and explicitly tagged/planned
+            // segments do NOT depend on a working GenericInterface search.
+            // Only the unassigned candidate pool requires queue authorization.
+            var myTickets=view=="new"?
+                Array.Empty<string>():(await visibility.PersonalTicketsAsync(account.Id,ct)).ToArray();
+            var newQueues=view=="new"?
+                (await visibility.NewQueuesAsync(account.Id,ct)).ToArray():
+                Array.Empty<string>();
+            if(view=="new" && newQueues.Length==0 ||
+               view!="new" && myTickets.Length==0)
+                return Results.Ok(Array.Empty<object>());
             await using var db=await Open(config,ct);
             var sortColumn=sort switch {
                 "created"=>"t.created_at",
@@ -243,13 +246,12 @@ public static class ZnunySyncEndpoints
                 WHERE (
                     (@view='new' AND p.candidate_user_id IS NOT NULL AND
                       (t.owner_agent_id IS NULL OR t.owner_agent_id IN (0,p.candidate_user_id)) AND
-                      (t.responsible_agent_id IS NULL OR t.responsible_agent_id IN (0,p.candidate_user_id)))
-                    OR (@view<>'new' AND
-                      (t.owner_agent_id=b.agent_id OR t.responsible_agent_id=b.agent_id))
+                      (t.responsible_agent_id IS NULL OR t.responsible_agent_id IN (0,p.candidate_user_id)) AND
+                      t.queue=ANY(@newQueues) AND NOT(t.ticket_id=ANY(@myTickets)))
+                    OR (@view<>'new' AND t.ticket_id=ANY(@myTickets))
                 )
                 AND ((@view='completed' AND lower(t.state_type)='closed')
                   OR (@view<>'completed' AND lower(t.state_type)<>'closed'))
-                AND t.ticket_id=ANY(@authorizedIds)
                 AND (@queue='' OR t.queue=@queue)
                 AND (@state='' OR t.state=@state)
                 -- WPF-style candidate inclusion/exclusion. Split comma,
@@ -285,8 +287,10 @@ public static class ZnunySyncEndpoints
                 LIMIT @max OFFSET @skip
                 """,db);
             cmd.Parameters.AddWithValue("user",account.Id);
-            cmd.Parameters.Add("authorizedIds",NpgsqlTypes.NpgsqlDbType.Array |
-                NpgsqlTypes.NpgsqlDbType.Varchar).Value=allowed.ToArray();
+            cmd.Parameters.Add("myTickets",NpgsqlTypes.NpgsqlDbType.Array |
+                NpgsqlTypes.NpgsqlDbType.Varchar).Value=myTickets;
+            cmd.Parameters.Add("newQueues",NpgsqlTypes.NpgsqlDbType.Array |
+                NpgsqlTypes.NpgsqlDbType.Varchar).Value=newQueues;
             cmd.Parameters.AddWithValue("view",view??"mine");
             // This search is applied only *after* agent authorization in SQL.
             cmd.Parameters.AddWithValue("query",search?.Trim()??"");
