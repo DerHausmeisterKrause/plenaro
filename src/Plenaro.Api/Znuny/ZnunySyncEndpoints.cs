@@ -35,15 +35,9 @@ public static class ZnunySyncEndpoints
                 if(account is null||account.IsDisabled)return Results.Unauthorized();
                 var visibility=context.HttpContext.RequestServices
                     .GetRequiredService<ZnunyTicketVisibility>();
-                try{
-                    if(!await visibility.CanReadTicketAsync(account.Id,
-                        routeId.ToString()??"",context.HttpContext.RequestAborted))
-                        return Results.NotFound();
-                }catch(ZnunyTicketVisibility.UnavailableException){
-                    return Results.Problem(
-                        "Die persönlichen Znuny-Queue-Rechte konnten nicht geprüft werden.",
-                        statusCode:503);
-                }
+                if(!await visibility.CanReadTicketAsync(account.Id,
+                    routeId.ToString()??"",context.HttpContext.RequestAborted))
+                    return Results.NotFound();
             }
             return await next(context);
         });
