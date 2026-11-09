@@ -24,7 +24,15 @@ public static class ZnunyTicketPlanningEndpoints
         WHERE (
           t.owner_agent_id=b.agent_id OR t.responsible_agent_id=b.agent_id OR
           (p.candidate_user_id IS NOT NULL AND (t.owner_agent_id IS NULL OR t.owner_agent_id IN (0,p.candidate_user_id))
-           AND (t.responsible_agent_id IS NULL OR t.responsible_agent_id IN (0,p.candidate_user_id)))
+           AND (t.responsible_agent_id IS NULL OR t.responsible_agent_id IN (0,p.candidate_user_id))) OR
+          EXISTS(SELECT 1 FROM znuny_ticket_segments s
+              WHERE s.ticket_id=t.ticket_id AND
+                (s.user_id=@user OR EXISTS(
+                  SELECT 1 FROM "AspNetUsers" account,
+                    unnest(s.participants) AS participant(email)
+                  WHERE account."Id"=@user AND
+                    account."NormalizedEmail" IS NOT NULL AND
+                    account."NormalizedEmail"=upper(trim(participant.email)))))
         )
         """;
 
