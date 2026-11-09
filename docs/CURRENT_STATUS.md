@@ -173,3 +173,13 @@ Die globale Rechteprüfung aus PR #15 wurde in PR #17 gezielt auf **neue unzugew
 - [ ] Windows-DNS (nur ein A-Record), NGINX, Zertifikat, Host-Header sowie echtes Wiki/Cloud gegenprüfen.
 - [ ] Sicherheit: gemeinsame Origin der Pfad-Favoriten und Einschränkungen bei AJAX/SSO/WebSockets/Service Workern live abnehmen.
 - [ ] WPF-/Web-Parität, offener Znuny-502 und alle bisherigen Phase-1–7-Offenpunkte bleiben offen.
+
+
+## 09.11.2026 – Phase 7: Ressourcen-Rewriting im Pfadhost (PR #21)
+
+- [x] CSS-/JS-/HTML-Rootpfade samt JavaScript-Template-Strings, unquoted HTML-Attributen, srcset-Kandidaten und CSS-url()-Ressourcen erweitert; doppelte Präfixe vermieden.
+- [x] Bekannte CSS/JS/JSON/SVG/WASM-Ressourcen erhalten bei generischem falschem Upstream-MIME den passenden Content-Type für nosniff.
+- [x] /wiki wird auf /wiki/ normalisiert, damit relative Ressourcen in der Anwendung bleiben.
+- [x] PR #21 nach erfolgreichem .NET-/Frontend-Build, Contract-Tests und Docker-Smoke in main gemergt ([Run #42604023749](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42604023749)).
+- [ ] Echte Wiki-Ressourcen im Browser prüfen; bei weiterhin fehlenden Assets die konkrete URL, HTTP-Status und Konsolenfehler (ohne Tokens/Cookies) erfassen.
+- [ ] Komplexe Laufzeit-URLs, externe CDNs, WebSockets, Service Worker und OAuth/SSO sind weiterhin nicht generisch garantiert. Sicherheitsgrenze einer gemeinsamen Browser-Origin bleibt bestehen.
