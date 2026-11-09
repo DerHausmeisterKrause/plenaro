@@ -17,7 +17,7 @@ openssl x509 -req -in "$temp/leaf.csr" -CA "$temp/issuer.crt" \
   -out "$temp/leaf.crt" >/dev/null 2>&1
 openssl verify -CAfile "$temp/issuer.crt" "$temp/leaf.crt" | grep -q OK
 
-docker run --rm --entrypoint sh \
+docker run --rm --add-host web:127.0.0.1 --entrypoint sh \
   -v "$root/deploy/nginx:/etc/plenaro-nginx:ro" \
   -v "$temp/leaf.crt:/etc/nginx/tls/fullchain.pem:ro" \
   -v "$temp/leaf.key:/etc/nginx/tls/privkey.pem:ro" \
@@ -40,7 +40,7 @@ docker run --rm --entrypoint sh \
 
 # Existing fullchain setup remains unchanged when no separate chain is mounted.
 cat "$temp/leaf.crt" "$temp/issuer.crt" > "$temp/existing-fullchain.pem"
-docker run --rm --entrypoint sh \
+docker run --rm --add-host web:127.0.0.1 --entrypoint sh \
   -v "$root/deploy/nginx:/etc/plenaro-nginx:ro" \
   -v "$temp/existing-fullchain.pem:/etc/nginx/tls/fullchain.pem:ro" \
   -v "$temp/leaf.key:/etc/nginx/tls/privkey.pem:ro" \
