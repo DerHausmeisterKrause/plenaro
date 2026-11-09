@@ -241,6 +241,15 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/42/workspace")" = "200"
           docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "DELETE FROM znuny_ticket_segments WHERE id='11111111-1111-4111-8111-111111111111'"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/42/workspace")" = "404"
+          # An actually worked ticket remains in completed history even
+          # after its Znuny owner changes. No unowned/no-history leaks.
+          docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "INSERT INTO znuny_ticket_time_entries(id,user_id,ticket_id,started_at,ended_at) SELECT '22222222-2222-4222-8222-222222222222',b.user_id,'42','2026-10-30 09:00:00+00','2026-10-30 09:15:00+00' FROM znuny_approved_agent_bindings b WHERE b.agent_id=77"
+          docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "UPDATE znuny_cached_tickets SET state='closed successful',state_type='closed' WHERE ticket_id='42'"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=completed" | python3 -c 'import json,sys;assert set(x["ticketId"] for x in json.load(sys.stdin))=={"42","81"}'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/42/workspace")" = "200"
+          docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "DELETE FROM znuny_ticket_time_entries WHERE id='22222222-2222-4222-8222-222222222222'"
+          docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "UPDATE znuny_cached_tickets SET state='open',state_type='open' WHERE ticket_id='42'"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/42/workspace")" = "404"
           echo 'CI checkpoint: personal owner, responsible, completed, exact-email tagging and queue-only new tasks'
           # Admin-approved agent bindings remain authoritative, and cannot be
           # changed via the user's own profile or an arbitrary browser ID.
