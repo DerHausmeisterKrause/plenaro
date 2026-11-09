@@ -168,7 +168,8 @@ Die globale Rechteprüfung aus PR #15 wurde in PR #17 gezielt auf **neue unzugew
 - [x] `PLENARO_FAVORITES_PATH_ORIGIN=https://apps-plenaro.example.org` als opt-in und rückwärtskompatible Route.
 - [x] Host-Isolation von Plenaro-Login und Znuny, Cookie-Pfad pro Favorit, serverseitige Rechte unverändert.
 - [x] Pfad-Präfix für Bootstrap, GET/POST-Upstream und Umleitungen implementiert; Vertragstests ergänzt.
-- [ ] PR-CI und Review / Rollback vor produktiver Freigabe.
+- [x] Frontend prüft den pfadgebundenen Bootstrap `/<slug>/_plenaro/favorite-bootstrap` auf die aktive Favoriten-ID/Slug, fremde Slugs werden abgelehnt.
+- [x] PR #20 in main gemergt; CI inklusive Frontend-Regressions- und Docker-Smoke-Tests erfolgreich ([Run #42601040551](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42601040551)).
 - [ ] Windows-DNS (nur ein A-Record), NGINX, Zertifikat, Host-Header sowie echtes Wiki/Cloud gegenprüfen.
 - [ ] Sicherheit: gemeinsame Origin der Pfad-Favoriten und Einschränkungen bei AJAX/SSO/WebSockets/Service Workern live abnehmen.
 - [ ] WPF-/Web-Parität, offener Znuny-502 und alle bisherigen Phase-1–7-Offenpunkte bleiben offen.
