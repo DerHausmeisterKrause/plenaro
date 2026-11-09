@@ -150,13 +150,14 @@ Die globale Rechteprüfung aus PR #15 wurde in PR #17 gezielt auf **neue unzugew
 - [ ] Bei korrektem Alias-Health, aber fehlerhaftem Bootstrap: HTTP-Status des frischen Einmal-Links prüfen; danach Wiki-Aufruf/Anmeldung und Cookies untersuchen. **Niemals den Token in Issues oder Logs teilen.**
 
 
-## 09.11.2026 – Phase 7: rückwärtskompatible Alias-URL-Vorlage (neuer PR)
+## 09.11.2026 – Phase 7: rückwärtskompatible Alias-URL-Vorlage (PR #19 in main)
 
 - [x] Optionale Vorlage `PLENARO_FAVORITES_HOST_TEMPLATE={slug}-plenaro.example.org` implementiert; Standard bleibt unverändert.
 - [x] Alte `slug.apps.example.org`-Favoriten bleiben bei gesetzter Base-Domain verfügbar; keine DB-/Credential-Migration.
 - [x] Host-Sperre, Admin-App-Freigabe, Bootstrap, Link-Rewriting und tokenfreier Healthcheck für beide Hostformen abgedeckt.
+- [x] Compose gibt PLENARO_FAVORITES_HOST_TEMPLATE an den Webcontainer weiter; im Docker-Smoke geprüft.
 - [x] Contract-Tests für Alt-/Neu-Aliasse, Host-Isolation und fehlerhafte Templates ergänzt.
-- [x] PR #19: Backend/Frontend, Contract-Tests und Docker-Smoke erfolgreich ([CI #42587987825](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42587987825)).
+- [x] PR #19 nach erfolgreichem Build, Contract-Tests und Docker-Smoke in main gemergt ([CI #42589498554](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42589498554)).
 - [ ] Echten Livehost mit Zertifikat, DNS, beiden Proxy-Layern und zwei Benutzern abnehmen.
 - [ ] Betrieb: `PLENARO_SERVER_NAME`, DNS-Wildcard und vorgeschalteten NGINX nur **einmal** für den Alias-Bereich konfigurieren.
 - [ ] Offene Phase-6-/Znuny-Punkte bleiben unverändert, insbesondere 502/Antwort-Formulare.
