@@ -103,6 +103,9 @@ public sealed partial class FavoriteProxy
             TimeSpan.FromSeconds(1));
     }
 
+    // Rewrite only URL-shaped root paths. A shared path-host cannot serve
+    // /assets/... directly: every request must remain under /<slug>/.
+    // Keep protocol-relative CDN URLs and already-prefixed URLs unchanged.
     private static string Rewrite(string source,Uri upstream,Uri external,
         string pathPrefix="")
     {
@@ -117,27 +120,88 @@ public sealed partial class FavoriteProxy
                 "//"+external.Authority+pathPrefix,
                 StringComparison.OrdinalIgnoreCase);
         if(pathPrefix.Length==0)return result;
-        // Only URL-like quoted root paths and CSS url(/...) are rewritten.
-        // Protocol-relative URLs (//...) and already-prefixed paths are left.
-        var escaped=Regex.Escape(pathPrefix);
+        var prefix=Regex.Escape(pathPrefix.TrimStart('/'));
+        // HTML attributes, CSS strings, JS imports/fetch and template strings.
+        // Check delimiter boundaries so /wiki, /wiki/, /wiki?x and /wiki#id
+        // never acquire a second prefix.
+        const string boundary=@"(?:[/""'\x60?#\s)>]|$)";
         result=Regex.Replace(result,
-            @"(?<quote>[""'])/(?!/|"+escaped[1..]+@"(?:/|[""']))",
+            @"(?<quote>[""'\x60])/(?!/|"+prefix+boundary+@")",
             match=>match.Groups["quote"].Value+pathPrefix+"/",
             RegexOptions.CultureInvariant,TimeSpan.FromSeconds(1));
+        // CSS url(/font.woff2), including unquoted and whitespace variants.
         return Regex.Replace(result,
-            @"(?<url>url\(\s*[""']?)/(?!/|"+escaped[1..]+@"/)",
+            @"(?<url>url\(\s*[""']?)/(?!/|"+prefix+boundary+@")",
             match=>match.Groups["url"].Value+pathPrefix+"/",
             RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,
             TimeSpan.FromSeconds(1));
+    }
+
+    // Unquoted HTML attributes and secondary srcset candidates are not
+    // covered by the text/JS/CSS string rules above. Limit these rules to
+    // HTML; never rewrite arbitrary JS identifiers or binary responses.
+    private static string RewriteHtmlResources(string source,string pathPrefix)
+    {
+        if(pathPrefix.Length==0)return source;
+        var prefix=Regex.Escape(pathPrefix.TrimStart('/'));
+        const string boundary=@"(?:[/""'\x60?#\s)>]|$)";
+        var result=Regex.Replace(source,
+            @"(?<attr>\b(?:href|src|action|poster|data-src|data-href|xlink:href)\s*=\s*)/(?!/|"+
+                prefix+boundary+@")(?<path>[^\s>""'\x60]*)",
+            m=>m.Groups["attr"].Value+pathPrefix+"/"+m.Groups["path"].Value,
+            RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,
+            TimeSpan.FromSeconds(1));
+        return Regex.Replace(result,
+            @"(?<attr>\bsrcset\s*=\s*)(?<q>[""'])(?<values>.*?)\k<q>",
+            m=>{
+                var candidates=Regex.Replace(m.Groups["values"].Value,
+                    @"(?<start>^|,\s*)/(?!/|"+prefix+boundary+@")",
+                    x=>x.Groups["start"].Value+pathPrefix+"/",
+                    RegexOptions.CultureInvariant,TimeSpan.FromSeconds(1));
+                return m.Groups["attr"].Value+m.Groups["q"].Value+
+                    candidates+m.Groups["q"].Value;
+            },RegexOptions.IgnoreCase|RegexOptions.Singleline|
+              RegexOptions.CultureInvariant,TimeSpan.FromSeconds(1));
     }
 
     private static bool RewriteMime(MediaTypeHeaderValue? type)
     {
         var media=type?.MediaType??"";
         return media.StartsWith("text/",StringComparison.OrdinalIgnoreCase)||
-            media is "application/javascript" or "application/x-javascript" or
-                "application/json" or "application/xml" or
-                "application/xhtml+xml" or "image/svg+xml";
+            media.Equals("application/javascript",StringComparison.OrdinalIgnoreCase)||
+            media.Equals("application/x-javascript",StringComparison.OrdinalIgnoreCase)||
+            media.Equals("application/ecmascript",StringComparison.OrdinalIgnoreCase)||
+            media.Equals("application/x-ecmascript",StringComparison.OrdinalIgnoreCase)||
+            media.Equals("application/json",StringComparison.OrdinalIgnoreCase)||
+            media.Equals("application/xml",StringComparison.OrdinalIgnoreCase)||
+            media.Equals("application/xhtml+xml",StringComparison.OrdinalIgnoreCase)||
+            media.Equals("image/svg+xml",StringComparison.OrdinalIgnoreCase)||
+            media.EndsWith("+json",StringComparison.OrdinalIgnoreCase)||
+            media.EndsWith("+xml",StringComparison.OrdinalIgnoreCase);
+    }
+
+    // The upstream might incorrectly label styles/scripts as text/plain or
+    // octet-stream. With X-Content-Type-Options: nosniff this blocks assets.
+    // Correct only well-known URL extensions; never guess unknown payloads.
+    private static string? CorrectAssetMediaType(string appPath,
+        MediaTypeHeaderValue? actual)
+    {
+        var media=actual?.MediaType;
+        if(!string.IsNullOrWhiteSpace(media) &&
+            !media.Equals("text/plain",StringComparison.OrdinalIgnoreCase) &&
+            !media.Equals("application/octet-stream",StringComparison.OrdinalIgnoreCase) &&
+            !media.Equals("binary/octet-stream",StringComparison.OrdinalIgnoreCase))
+            return null;
+        var extension=Path.GetExtension(appPath).ToLowerInvariant();
+        return extension switch {
+            ".css"=>"text/css",
+            ".js" or ".mjs"=>"text/javascript",
+            ".json"=>"application/json",
+            ".webmanifest"=>"application/manifest+json",
+            ".svg"=>"image/svg+xml",
+            ".wasm"=>"application/wasm",
+            _=>null
+        };
     }
 
     private static bool Navigation(HttpRequest request)
@@ -276,7 +340,10 @@ public sealed partial class FavoriteProxy
                 ctx.Response.Headers.ContentRange=range.ToString();
             if(res.Headers.TryGetValues("Accept-Ranges",out var ranges))
                 ctx.Response.Headers["Accept-Ranges"]=string.Join(",",ranges);
-            var mime=res.Content.Headers.ContentType;
+            var originalMime=res.Content.Headers.ContentType;
+            var correctedMime=CorrectAssetMediaType(appPath,originalMime);
+            var mime=correctedMime is not null
+                ? MediaTypeHeaderValue.Parse(correctedMime):originalMime;
             if(mime is not null)ctx.Response.ContentType=mime.ToString();
             if(HttpMethods.IsHead(method)||res.StatusCode is
                 HttpStatusCode.NotModified or HttpStatusCode.NoContent)
@@ -304,6 +371,13 @@ public sealed partial class FavoriteProxy
                     await ctx.Response.Body.WriteAsync(bytes,ct);return;
                 }
                 var transformed=Rewrite(html,session.Upstream,external,pathPrefix);
+                var mediaType=mime?.MediaType;
+                if(pathPrefix.Length>0 &&
+                    (mediaType is not null &&
+                     (mediaType.Equals("text/html",StringComparison.OrdinalIgnoreCase)||
+                      mediaType.Equals("application/xhtml+xml",StringComparison.OrdinalIgnoreCase))||
+                     sniff&&LooksLikeHtml(html)))
+                    transformed=RewriteHtmlResources(transformed,pathPrefix);
                 await ctx.Response.Body.WriteAsync(encoding.GetBytes(transformed),ct);
             }else{
                 await res.Content.CopyToAsync(ctx.Response.Body,ct);
