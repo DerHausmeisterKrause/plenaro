@@ -114,3 +114,17 @@ Dies ist die aktuelle Arbeitsliste. Die ausführliche [Roadmap](ROADMAP.md) enth
 - [x] Echte POST-Dokumentnavigationen können HTML korrekt auch bei fehlerhaftem upstream MIME-Typ anzeigen; AJAX/JSON-POST und Downloads bleiben unverändert.
 - [x] Frontend- und Znuny-Regressionstests sowie vollständige GitHub-CI/Docker-Smoke erfolgreich: [PR #14](https://github.com/DerHausmeisterKrause/plenaro/pull/14), [CI #41654613158](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/41654613158).
 - [ ] Echten Antwort-Dialog, Notiz, Weiterleiten, Zuweisung und POST-Formular im Zielsystem live prüfen. Gegebenenfalls Browser-Popup-Freigabe und F12-Konsole/Netzwerk überprüfen.
+
+
+## 09.11.2026 – Security-Fix: Queue- und Ticketrechte (Phase 6, PR #15)
+
+- [x] Ursache bestätigt: zentraler technischer Znuny-Sync brachte alle Queues in einen Cache; Besitzer-/Kandidaten-ID genügte zuvor als Browser-Sichtbarkeitsregel.
+- [x] Ticketlisten und Wochenplan-Agenda autorisieren nun per persönlicher Agenten-Session und Znuny TicketSearch; nur die Schnittmenge freigegebener Ticket-IDs wird ausgeliefert.
+- [x] Direkte Ticket-ID-API inklusive Artikel, Anhänge, Planung und Ticketaktionen sowie native Ticket-Deep-Links zusätzlich durch persönlichen TicketGet abgesichert; keine Weitergabe über den globalen Service-Account.
+- [x] Bei fehlender persönlicher Authentifizierung, nicht prüfbarem TicketSearch oder Zeitüberschreitung: 503 statt ungeprüfter Ticketfreigabe. Kein approved agent / keine eigenen Cachekandidaten: leere Liste.
+- [x] Sichtbarkeit für maximal 60 Sekunden zwischengespeichert; Passwort-, Konto-/Konfigurationsänderungen invalidieren den Cache; direkte Ticket-Zugriffe prüfen live.
+- [x] CI bestanden: Backend/Frontend, Znuny-Vertragstests und Docker-Smoke ([PR #15](https://github.com/DerHausmeisterKrause/plenaro/pull/15), [CI #42568973461](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42568973461)).
+- [ ] **Live-Abnahme:** zwei Agenten mit unterschiedlichen Queue-Berechtigungen vergleichen, direkte Fremd-Ticket-IDs/Artikel testen, Queue-Wechsel und Rollenentzug prüfen.
+- [ ] **Performance-Abnahme:** große Ticketmengen und Laufzeit der persönlichen TicketSearch kontrollieren; bei hohen Laufzeiten gezielt optimieren, ohne Rechtefilter aufzuweichen.
+
+Nach Deployment benötigt jeder Benutzer eine gültige persönliche Znuny-API-Anmeldung; sonst werden bewusst keine zentral gesyncten Tickets als Ersatz angezeigt. Ticketdaten müssen nach Rechte-Änderungen auch im Browser neu geladen werden. Live-Abnahme: [Issue #16](https://github.com/DerHausmeisterKrause/plenaro/issues/16).
