@@ -139,3 +139,12 @@ Die globale Rechteprüfung aus PR #15 wurde in PR #17 gezielt auf **neue unzugew
 - [x] Docker-Smoke testet den Fallback, Segment-Teilnehmer, eigene/verantwortete Tickets und historische Bearbeitung; Build/Contract/CI erfolgreich ([PR #17](https://github.com/DerHausmeisterKrause/plenaro/pull/17), [CI #42573584221](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42573584221)).
 - [ ] Live mit zwei verschieden berechtigten Znuny-Agenten testen, besonders neue Tickets aus freigegebener vs. fremder Queue.
 - [ ] Größere Queuelisten/zahlreiche TicketGet-Proben unter realer Last testen; maximal 60 Sekunden Queue-Proof-Cache und 35 Sekunden Gesamtbudget dokumentieren.
+
+
+## 09.11.2026 – Favoriten-Bootstrap und Wildcard-Routing-Diagnose (Phase 7, PR #18)
+
+- [x] React.StrictMode-Mount kann nicht mehr zwei konkurrierende einmalige Favoriten-Bootstraps starten; explizites Neuverbinden erstellt weiterhin neue Sitzung.
+- [x] Tokenfreier Routing-Probe `/_plenaro/favorite-health` für App-Subdomains integriert; gibt ausschließlich `plenaro-favorite-proxy-ready` zurück, wenn Host/HTTPS-Weiterleitung beim richtigen Proxy ankommt.
+- [x] Regressionstests für StrictMode (nur ein Start), Neuverbinden und HTTPS-Proxy-Routing; GitHub-CI inklusive Docker erfolgreich ([PR #18](https://github.com/DerHausmeisterKrause/plenaro/pull/18), [Run #42576527912](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42576527912)).
+- [ ] Live-Alias der vorgeschalteten NGINX und Windows-DNS mittels `curl -i https://wiki.apps.example.org/_plenaro/favorite-health` abnehmen.
+- [ ] Bei korrektem Alias-Health, aber fehlerhaftem Bootstrap: HTTP-Status des frischen Einmal-Links prüfen; danach Wiki-Aufruf/Anmeldung und Cookies untersuchen. **Niemals den Token in Issues oder Logs teilen.**
