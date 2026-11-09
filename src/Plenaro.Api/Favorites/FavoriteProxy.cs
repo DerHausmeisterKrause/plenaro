@@ -21,6 +21,9 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
 {
     private const string CookieName="Plenaro.FavoriteProxy";
     private const string BootstrapPath="/_plenaro/favorite-bootstrap";
+    // Token-free route that verifies the full DNS -> outer NGINX ->
+    // Plenaro NGINX -> ASP.NET Host/header forwarding chain.
+    private const string DiagnosticPath="/_plenaro/favorite-health";
     private const int MaxTextBytes=6*1024*1024;
     private static readonly TimeSpan MaxAge=TimeSpan.FromHours(2);
     private static readonly TimeSpan MaxIdle=TimeSpan.FromMinutes(20);
@@ -187,6 +190,19 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             "form-action 'self'; base-uri 'self'; object-src 'none'; "+
             "frame-ancestors "+configuration["PLENARO_PUBLIC_ORIGIN"];
         ctx.Response.Headers.CacheControl="private,no-store";
+        if(ctx.Request.Path==DiagnosticPath){
+            if(!HttpMethods.IsGet(ctx.Request.Method)&&
+                !HttpMethods.IsHead(ctx.Request.Method)){
+                ctx.Response.StatusCode=405;return;
+            }
+            // No user, app identifier, credentials or one-time token is
+            // disclosed. A distinct body prevents an outer reverse proxy's
+            // fallback Plenaro login (HTTP 200) from passing this probe.
+            ctx.Response.ContentType="text/plain; charset=utf-8";
+            if(HttpMethods.IsGet(ctx.Request.Method))
+                await ctx.Response.WriteAsync("plenaro-favorite-proxy-ready",ct);
+            return;
+        }
         if(ctx.Request.Path==BootstrapPath){
             await BootstrapAsync(ctx,slug,ct);return;
         }

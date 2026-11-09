@@ -1,3 +1,49 @@
+## Troubleshooting: Favorit-iframe erreicht Bootstrap nicht (PR #18)
+
+Seit PR #18 lässt sich der komplette **öffentliche** Alias-Routingweg
+ohne Benutzerkonto, Wiki-Passwort oder einmaligen Sitzungstoken prüfen:
+
+```sh
+curl -i https://wiki.apps.example.org/_plenaro/favorite-health
+```
+
+**Erwartet:** HTTP `200` und exakt `plenaro-favorite-proxy-ready`
+als Antworttext. Der Diagnose-Endpunkt enthält keine persönlichen Daten
+und funktioniert auch für noch nicht als App freigegebene Slugs, damit
+reine DNS-/NGINX-Fehler unabhängig von Datenbank-Freigaben erkennbar sind.
+
+- DNS/TCP/TLS-Fehler: Windows-DNS-Wildcard, Routing, Port 443 und
+  Browser-Zertifikat der vorgeschalteten NGINX kontrollieren.
+- NGINX `502`: Upstream-Verbindung von der vorgeschalteten NGINX zum
+  Plenaro-Docker-Host einschließlich Host/TLS prüfen.
+- `404`, `426` oder statt Prüfsignatur die Plenaro-HTML-Oberfläche:
+  **beide** Proxy-Stufen müssen den Original-`Host` weiterleiten.
+  Außerdem `X-Forwarded-Proto: https` setzen und im Plenaro-Container
+  `PLENARO_FAVORITES_BASE_DOMAIN=apps.example.org` überprüfen.
+- Korrekte Prüfsignatur, aber Bootstrap `401`: über die
+  **Plenaro-Favoriten-Navigation** einen neuen einmaligen Link erzeugen;
+  Links verfallen nach 45 Sekunden und sind nur einmal verwendbar.
+  Niemals echte Bootstrap-Tokens in öffentliche Tickets/Logs kopieren.
+- Korrekte Prüfsignatur, aber Bootstrap `403`: freigegebene
+  App, aktiven Favoriten und persönliche Benutzerberechtigung prüfen.
+- Bootstrap `302` auf den eingestellten Startpfad: Routing und
+  Sitzungseinrichtung funktionieren; dann erst das eigentliche
+  Upstream-Wiki/HTML/AJAX untersuchen.
+
+**Besonderheit:** Die Einstellung `PLENARO_SERVER_NAME` ist eine
+Liste mit Hauptdomain, Znuny-Domain und `*.apps.example.org`.
+Das Wildcard-Zertifikat deckt nur eine Subdomain-Ebene ab. Falls
+eine vorgeschaltete NGINX vorhanden ist, benötigt sie ebenfalls
+einen passenden Wildcard-vHost, der auf **Plenaro** weiterleitet
+und den `Host` (z. B. `wiki.apps.example.org`) beibehält.
+
+React.StrictMode kann im Entwicklungsmodus Effekte doppelt ausführen.
+Die neue Favoriten-Startlogik nutzt für denselben Favoriten/Verbindungsversuch
+dieselbe Start-Promise und verhindert so konkurrierende Einmal-Tokens.
+Das allein löst keine DNS-/NGINX-Fehlkonfiguration in Produktivumgebungen.
+
+---
+
 ## Neue Funktion (PR #12)
 
 Administratoren können unter Einstellungen → Favoriten freigegebene HTTPS-Anwendungen anlegen, auf Subdomain-Slugs zuordnen und allen oder ausgewählten Benutzern gestatten. Ein Benutzer kann daraus Favoriten erstellen, umbenennen, sortieren und im Plenaro-Reiter öffnen. Benutzername/Passwort sind optional und bleiben serverseitig verschlüsselt. Automatisches Login unterstützt nur übliche HTML-POST-Formulare; ansonsten ist eine interaktive Anmeldung erforderlich.
