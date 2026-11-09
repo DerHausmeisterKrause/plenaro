@@ -43,6 +43,19 @@ public sealed class ZnunyTicketVisibility(
             JOIN "AspNetUsers" account ON account."Id"=b.user_id
             WHERE t.owner_agent_id=b.agent_id
                OR t.responsible_agent_id=b.agent_id
+               -- A previously handled/closed ticket is still relevant to
+               -- this user even after owner/responsible has been reassigned.
+               OR EXISTS(SELECT 1 FROM znuny_ticket_time_entries e
+                   WHERE e.user_id=@user AND e.ticket_id=t.ticket_id)
+               OR EXISTS(SELECT 1 FROM znuny_ticket_time_bookings bkg
+                   WHERE bkg.user_id=@user AND bkg.ticket_id=t.ticket_id)
+               OR EXISTS(SELECT 1 FROM znuny_ticket_time_adjustments adj
+                   WHERE adj.user_id=@user AND adj.ticket_id=t.ticket_id)
+               OR EXISTS(SELECT 1 FROM znuny_ticket_time_corrections corr
+                   WHERE corr.user_id=@user AND corr.ticket_id=t.ticket_id)
+               OR EXISTS(SELECT 1 FROM znuny_ticket_workspaces w
+                   WHERE w.user_id=@user AND w.ticket_id=t.ticket_id AND
+                       (w.description<>'' OR w.ticket_url<>''))
                OR EXISTS (
                    SELECT 1 FROM znuny_ticket_segments s
                    WHERE s.ticket_id=t.ticket_id AND
