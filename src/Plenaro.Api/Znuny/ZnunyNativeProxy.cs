@@ -112,13 +112,8 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
                 (ticket.Length is <1 or >40||!ticket.All(char.IsAsciiDigit)))
                 return Results.BadRequest(new{error="Ungültige Ticket-ID."});
             if(input.TicketId is { } selectedTicket){
-                try{
-                    if(!await visibility.CanReadTicketAsync(user.Id,selectedTicket,ct))
-                        return Results.NotFound();
-                }catch(ZnunyTicketVisibility.UnavailableException){
-                    return Results.Problem("Persönliche Znuny-Queue-Rechte "+
-                        "sind nicht überprüfbar.",statusCode:503);
-                }
+                if(!await visibility.CanReadTicketAsync(user.Id,selectedTicket,ct))
+                    return Results.NotFound();
             }
             if(!vault.IsConfigured)return Results.Json(new{
                 error="Verschlüsselter Zugangsdaten-Vault ist nicht verfügbar."},
@@ -357,7 +352,20 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
                     (t.owner_agent_id IS NULL OR
                         t.owner_agent_id IN (0,p.candidate_user_id)) AND
                     (t.responsible_agent_id IS NULL OR
-                        t.responsible_agent_id IN (0,p.candidate_user_id))),false)
+                        t.responsible_agent_id IN (0,p.candidate_user_id))) OR
+                    EXISTS(SELECT 1 FROM znuny_ticket_time_entries te WHERE te.user_id=@user AND te.ticket_id=t.ticket_id)
+                         OR EXISTS(SELECT 1 FROM znuny_ticket_time_bookings tb WHERE tb.user_id=@user AND tb.ticket_id=t.ticket_id)
+                         OR EXISTS(SELECT 1 FROM znuny_ticket_time_adjustments ta WHERE ta.user_id=@user AND ta.ticket_id=t.ticket_id)
+                         OR EXISTS(SELECT 1 FROM znuny_ticket_time_corrections tc WHERE tc.user_id=@user AND tc.ticket_id=t.ticket_id)
+                         OR EXISTS(SELECT 1 FROM znuny_ticket_workspaces tw WHERE tw.user_id=@user AND tw.ticket_id=t.ticket_id AND (tw.description<>'' OR tw.ticket_url<>''))
+                    OR EXISTS(SELECT 1 FROM znuny_ticket_segments s
+                      WHERE s.ticket_id=t.ticket_id AND (
+                        s.user_id=@user OR
+                        EXISTS(SELECT 1 FROM "AspNetUsers" account,
+                            unnest(s.participants) AS participant(email)
+                          WHERE account."Id"=@user
+                            AND account."NormalizedEmail" IS NOT NULL
+                            AND account."NormalizedEmail"=upper(trim(participant.email))))),false)
                 FROM znuny_cached_tickets t
                 CROSS JOIN znuny_user_settings p
                 WHERE t.ticket_id=@ticket AND p.user_id=@user
