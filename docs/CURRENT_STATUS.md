@@ -127,4 +127,15 @@ Dies ist die aktuelle Arbeitsliste. Die ausführliche [Roadmap](ROADMAP.md) enth
 - [ ] **Live-Abnahme:** zwei Agenten mit unterschiedlichen Queue-Berechtigungen vergleichen, direkte Fremd-Ticket-IDs/Artikel testen, Queue-Wechsel und Rollenentzug prüfen.
 - [ ] **Performance-Abnahme:** große Ticketmengen und Laufzeit der persönlichen TicketSearch kontrollieren; bei hohen Laufzeiten gezielt optimieren, ohne Rechtefilter aufzuweichen.
 
-Nach Deployment benötigt jeder Benutzer eine gültige persönliche Znuny-API-Anmeldung; sonst werden bewusst keine zentral gesyncten Tickets als Ersatz angezeigt. Ticketdaten müssen nach Rechte-Änderungen auch im Browser neu geladen werden. Live-Abnahme: [Issue #16](https://github.com/DerHausmeisterKrause/plenaro/issues/16).
+Die globale Rechteprüfung aus PR #15 wurde in PR #17 gezielt auf **neue unzugewiesene Tickets** begrenzt. Eigene/zugewiesene und geplante oder historisch bearbeitete Aufgaben dürfen ohne persönliche API-Rechteabfrage angezeigt werden. Live-Abnahme: [Issue #16](https://github.com/DerHausmeisterKrause/plenaro/issues/16).
+
+## 09.11.2026 – Korrigierte Aufgabenrechte nach Nutzerfeedback (Phase 6, PR #17)
+
+- [x] **Aktuelle Aufgaben:** Besitzer, Verantwortlicher, persönliche Planung und exakt auf lokales Konto passende Segment-Teilnehmer werden angezeigt – ohne störende globale TicketSearch-/Queue-503.
+- [x] **Erledigte Aufgaben:** eigener Besitz, Verantwortung, Segmentbeteiligung oder nachgewiesene frühere Plenaro-Bearbeitung (Notizen, Zeiten, Buchungen) erlaubt die Anzeige; nicht pauschal alle geschlossenen Tickets.
+- [x] **Heute / Wochenplanung:** eigene Segmente und Segmente mit der persönlichen Teilnehmer-E-Mail sichtbar.
+- [x] **Neue Aufgaben:** Queue-Leserechte allein über den persönlichen Znuny-Agenten nachgewiesen. Pro Kandidaten-Queue wird ein unzugewiesenes Ticket mit persönlichem TicketGet geprüft; nicht belegte Queues bleiben verborgen. Bei defekter/mangelnder API-Anmeldung leere neue Aufgaben statt globalem HTTP 503 oder Freigabe aller Queues.
+- [x] Ticket-ID-Endpunkte, Native-Deep-Links und lokale Planungs-/Detailrechte an diese Trennung angepasst.
+- [x] Docker-Smoke testet den Fallback, Segment-Teilnehmer, eigene/verantwortete Tickets und historische Bearbeitung; Build/Contract/CI erfolgreich ([PR #17](https://github.com/DerHausmeisterKrause/plenaro/pull/17), [CI #42573584221](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42573584221)).
+- [ ] Live mit zwei verschieden berechtigten Znuny-Agenten testen, besonders neue Tickets aus freigegebener vs. fremder Queue.
+- [ ] Größere Queuelisten/zahlreiche TicketGet-Proben unter realer Last testen; maximal 60 Sekunden Queue-Proof-Cache und 35 Sekunden Gesamtbudget dokumentieren.
