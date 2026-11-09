@@ -305,9 +305,17 @@ export function FavoritePage(){
         if(!item)throw new Error('Favorit nicht vorhanden oder deaktiviert.');
         const result=await startFavorite(id);
         const destination=new URL(result.url);
+        // The dedicated-host proxy uses /_plenaro/favorite-bootstrap.
+        // A shared favorites host instead needs /<approved-slug>/_plenaro/...
+        // Only allow the currently selected favorite's exact slug, never an
+        // arbitrary path returned from the start endpoint.
+        const legacyBootstrap=destination.pathname==='/_plenaro/favorite-bootstrap';
+        const sharedBootstrap=destination.pathname===
+          '/'+item.slug+'/_plenaro/favorite-bootstrap';
         if(destination.protocol!=='https:'||
           destination.origin===window.location.origin||
-          destination.pathname!=='/_plenaro/favorite-bootstrap')
+          destination.username!==''||destination.password!==''||
+          (!legacyBootstrap&&!sharedBootstrap))
           throw new Error('Ungültige Favoriten-Proxy-Adresse.');
         return {item,url:destination.toString()};
       })();
