@@ -47,6 +47,27 @@ describe('Favorite iframe bootstrap',()=>{
     expect(mocks.loadFavorites).toHaveBeenCalledTimes(1);
   });
 
+  it('accepts the shared path-host bootstrap for the selected favorite',async()=>{
+    mocks.startFavorite.mockResolvedValue({
+      url:'https://apps-plenaro.example.org/wiki/_plenaro/favorite-bootstrap?token=example-test',
+    });
+    renderStrictFavorite();
+    const frame=await screen.findByTitle('Wiki');
+    expect((frame as HTMLIFrameElement).src).toContain(
+      '/wiki/_plenaro/favorite-bootstrap?token=example-test');
+    expect(screen.queryByRole('alert')).toBeNull();
+    await waitFor(()=>expect(mocks.startFavorite).toHaveBeenCalledTimes(1));
+  });
+
+  it('rejects a bootstrap path for another favorite on the shared host',async()=>{
+    mocks.startFavorite.mockResolvedValue({
+      url:'https://apps-plenaro.example.org/cloud/_plenaro/favorite-bootstrap?token=example-test',
+    });
+    renderStrictFavorite();
+    expect(await screen.findByText('Ungültige Favoriten-Proxy-Adresse.')).toBeTruthy();
+    expect(screen.queryByTitle('Wiki')).toBeNull();
+  });
+
   it('starts a new session only on an explicit reconnect',async()=>{
     renderStrictFavorite();
     const frame=await screen.findByTitle('Wiki');

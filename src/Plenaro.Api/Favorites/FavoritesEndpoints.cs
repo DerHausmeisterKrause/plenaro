@@ -357,7 +357,12 @@ public static class FavoritesEndpoints
             upstream.HostNameType!=UriHostNameType.Dns)return false;
         var domain=config["PLENARO_FAVORITES_BASE_DOMAIN"]?.Trim().TrimEnd('.');
         var template=config["PLENARO_FAVORITES_HOST_TEMPLATE"];
-        var origin=FavoriteHostNames.PreferredOrigin(input.Slug,domain,template);
+        var shared=FavoritePathRouting.SharedOrigin(
+            config["PLENARO_FAVORITES_PATH_ORIGIN"],
+            config["PLENARO_PUBLIC_ORIGIN"],config["PLENARO_ZNUNY_PROXY_ORIGIN"]);
+        var origin=shared is not null
+            ? FavoritePathRouting.AppOrigin(shared,input.Slug)
+            : FavoriteHostNames.PreferredOrigin(input.Slug,domain,template);
         if(origin is null)return false;
         var main=OriginHost(config["PLENARO_PUBLIC_ORIGIN"]);
         var znuny=OriginHost(config["PLENARO_ZNUNY_PROXY_ORIGIN"]);
@@ -374,6 +379,7 @@ public static class FavoritesEndpoints
         if((!string.IsNullOrEmpty(domain) &&
                 upstream.Host.Equals(domain,StringComparison.OrdinalIgnoreCase))||
             FavoriteHostNames.IsReservedHost(upstream.Host,domain,template)||
+            (shared is not null && upstream.Host.Equals(shared.Host,StringComparison.OrdinalIgnoreCase))||
             upstream.Host.Equals(main,StringComparison.OrdinalIgnoreCase)||
             upstream.Host.Equals(znuny,StringComparison.OrdinalIgnoreCase))
             return false;

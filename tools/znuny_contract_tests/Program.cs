@@ -211,6 +211,100 @@ Assert(favoriteProbe.Response.StatusCode==404,
  Assert(malformedRequest.Response.StatusCode==404,
      "malformed aliases return 404 instead of Plenaro UI");
 
+
+// One *explicit* DNS name for every app path, with legacy aliases preserved.
+// A shared browser origin is weaker isolation than per-app origins: path cookie
+// scoping is a defense-in-depth measure, not a cross-app security boundary.
+var pathOnlyConfig=new ConfigurationBuilder().AddInMemoryCollection(
+    new Dictionary<string,string?>{
+        ["PLENARO_PUBLIC_ORIGIN"]="https://portal.example.org",
+        ["PLENARO_ZNUNY_PROXY_ORIGIN"]="https://tickets.example.org",
+        ["PLENARO_FAVORITES_PATH_ORIGIN"]="https://apps-plenaro.example.org",
+        ["Security:RequireHttps"]="true"
+    }).Build();
+var sharedProxy=new FavoriteProxy(pathOnlyConfig);
+Assert(sharedProxy.BaseConfigured,"path-host router is opt-in without subdomain wildcard");
+Assert(FavoritePathRouting.SharedOrigin("https://apps-plenaro.example.org",
+    "https://portal.example.org","https://tickets.example.org")?.Host==
+    "apps-plenaro.example.org","shared path host is distinct from login");
+Assert(FavoritePathRouting.TrySplitPath("/wiki/api/search",out var pathSlug,
+    out var upstreamRest) && pathSlug=="wiki" && upstreamRest=="/api/search",
+    "path router strips only approved first segment");
+Assert(FavoritePathRouting.TrySplitPath("/wiki",out var rootSlug,
+    out var rootRest) && rootSlug=="wiki" && rootRest=="/",
+    "app root without trailing slash is recognized");
+Assert(!FavoritePathRouting.TrySplitPath("/api/v1/users",out _,out _) &&
+    !FavoritePathRouting.TrySplitPath("/_plenaro/favorite-bootstrap",out _,out _) &&
+    !FavoritePathRouting.TrySplitPath("/../../etc",out _,out _),
+    "reserved, malformed and traversing roots cannot become a favorite");
+Assert(FavoritePathRouting.CookiePath("wiki")=="/wiki" &&
+    FavoritePathRouting.AppPath("wiki","/index.php")=="/wiki/index.php",
+    "per-app cookie path and navigation paths are stable");
+foreach(var invalid in new[]{
+    "http://apps-plenaro.example.org","https://portal.example.org",
+    "https://tickets.example.org","https://apps-plenaro.example.org/x",
+    "https://apps-plenaro.example.org:8443"})
+{
+    var rejected=false;
+    try{FavoritePathRouting.SharedOrigin(invalid,
+        "https://portal.example.org","https://tickets.example.org");}
+    catch(InvalidOperationException){rejected=true;}
+    Assert(rejected,"invalid or shared primary login origin fails closed");
+}
+var sharedProbe=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+sharedProbe.Request.Method="GET";
+sharedProbe.Request.Scheme="https";
+sharedProbe.Request.Host=new Microsoft.AspNetCore.Http.HostString(
+    "apps-plenaro.example.org");
+sharedProbe.Request.Path="/_plenaro/favorite-health";
+Assert(sharedProxy.IsFavoriteHost(sharedProbe),
+    "path host intercepted before Plenaro static/identity middleware");
+using(var body=new MemoryStream())
+{
+    sharedProbe.Response.Body=body;
+    await sharedProxy.ServeAsync(sharedProbe,CancellationToken.None);
+    Assert(sharedProbe.Response.StatusCode==200 &&
+        Encoding.UTF8.GetString(body.ToArray())=="plenaro-favorite-proxy-ready",
+        "single path host passes tokenless DNS/Nginx/TLS health probe");
+}
+sharedProbe.Request.Path="/";
+await sharedProxy.ServeAsync(sharedProbe,CancellationToken.None);
+Assert(sharedProbe.Response.StatusCode==404,
+    "shared host root never exposes Plenaro login");
+sharedProbe.Request.Path="/api/v1/users";
+await sharedProxy.ServeAsync(sharedProbe,CancellationToken.None);
+Assert(sharedProbe.Response.StatusCode==404,
+    "shared host does not expose Plenaro APIs");
+sharedProbe.Request.Path="/wiki/css/site.css";
+await sharedProxy.ServeAsync(sharedProbe,CancellationToken.None);
+Assert(sharedProbe.Response.StatusCode==401,
+    "path resource requires independent valid favorite cookie");
+sharedProbe.Request.Path="/cloud/_plenaro/favorite-bootstrap";
+await sharedProxy.ServeAsync(sharedProbe,CancellationToken.None);
+Assert(sharedProbe.Response.StatusCode==401,
+    "another favorite cannot bootstrap without one-time session token");
+var rewriteMethod=typeof(FavoriteProxy).GetMethod("Rewrite",
+    BindingFlags.NonPublic|BindingFlags.Static)!;
+var rewrite=(string)rewriteMethod.Invoke(null,new object[]{
+    "<a href=\"/wiki-page\">Wiki</a><script src=\"/bundle.js\"></script>"+
+    "<form action=\"/login\"></form><img src=\"//cdn.example.org/pic\">"+
+    "https://wiki.example.org/help",
+    new Uri("https://wiki.example.org/"),
+    new Uri("https://apps-plenaro.example.org/wiki/"),"/wiki"})!;
+Assert(rewrite.Contains("href=\"/wiki/wiki-page\"") &&
+    rewrite.Contains("src=\"/wiki/bundle.js\"") &&
+    rewrite.Contains("action=\"/wiki/login\"") &&
+    rewrite.Contains("src=\"//cdn.example.org/pic\"") &&
+    rewrite.Contains("https://apps-plenaro.example.org/wiki/help"),
+    "path-prefixed resource rewriting preserves protocol-relative external URLs");
+var plainRewrite=(string)rewriteMethod.Invoke(null,new object[]{
+    "<a href=\"/docs\">docs</a> https://wiki.example.org/help",
+    new Uri("https://wiki.example.org/"),
+    new Uri("https://wiki-plenaro.example.org/"),""})!;
+Assert(plainRewrite.Contains("href=\"/docs\"") &&
+    plainRewrite.Contains("https://wiki-plenaro.example.org/help"),
+    "existing subdomain proxy response stays unchanged");
+
 // Znuny article bodies are nested iframes: every ancestor must satisfy
 // frame-ancestors. Parent Plenaro plus the proxy's own origin are permitted,
 // without allowing unrelated websites or disabling framing protection.

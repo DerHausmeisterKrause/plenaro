@@ -1,3 +1,66 @@
+## Ein Host für alle Favoriten (optional, Phase 7)
+
+Für eine Umgebung ohne Wildcard-DNS lässt sich jeder freigegebene Favorit
+unter **einem** zusätzlichen HTTPS-Namen als Unterpfad betreiben:
+`https://apps-plenaro.example.org/wiki/`,
+`https://apps-plenaro.example.org/cloud/`.
+
+Lokale `.env` (Plenaro/Native-Znuny bleiben unverändert):
+
+```dotenv
+PLENARO_FAVORITES_PATH_ORIGIN=https://apps-plenaro.example.org
+PLENARO_SERVER_NAME=portal.example.org tickets.example.org apps-plenaro.example.org
+# Optional vorhandene Alias-Varianten parallel behalten:
+# PLENARO_FAVORITES_HOST_TEMPLATE={slug}-plenaro.example.org
+# PLENARO_FAVORITES_BASE_DOMAIN=apps.example.org
+```
+
+`compose.yaml` gibt die neue Einstellung an die API weiter. Das neue
+Pfadschema hat für neu gestartete Favoriten Vorrang; alte gespeicherte
+Favoriten/Benutzer-ACL/Vault-Zugangsdaten bleiben erhalten, keine DB-Migration.
+Bisherige Aliasse können parallel für alte Lesezeichen verwendet werden,
+wenn ihr DNS/TLS-Routing bestehen bleibt.
+
+**DNS:** Genau ein expliziter A-Record `apps-plenaro.example.org`, der auf
+die **vorgeschaltete** NGINX zeigt; kein globales `*.example.org` nötig.
+
+**TLS:** Zertifikat für `apps-plenaro.example.org` (z. B.
+`*.example.org`). Die vorgeschaltete NGINX braucht **einmalig** einen vHost
+oder eine Erweiterung des bestehenden vHosts für diesen einen Host.
+`proxy_set_header Host $host;` sowie `X-Forwarded-Proto https` müssen
+durch beide Proxy-Ebenen korrekt sein. Die bisherige HTTPS-Upstream-CA-Prüfung
+bleibt aktiviert; `proxy_ssl_name` muss weiterhin zum Plenaro-Upstream
+passen. Nicht den DNS-A-Record auf den eigentlichen Wiki-Server setzen.
+
+**Probetest ohne Benutzer-Token:**
+
+```sh
+curl -i https://apps-plenaro.example.org/_plenaro/favorite-health
+```
+
+Erwartet HTTP 200 mit `plenaro-favorite-proxy-ready`. Unbekannte Pfade
+liefern 404, ungültige/abgelaufene Favorit-Sitzungen 401.
+
+**Sicherheit und Grenzen:** Der gemeinsame Host ist vom Plenaro-Login und
+vom nativen Znuny-Proxy getrennt. Jeder Favorit bekommt weiterhin einen
+eigenen serverseitigen Cookie-Jar und eine eigene DB-Freigabeprüfung.
+Das Browser-Cookie wird unter `/<slug>` statt `/` gesetzt. Das ist **keine
+Origin-Isolation zwischen Wiki, Cloud und anderen Favoriten**: JavaScript
+eines kompromittierten Favoriten kann Same-Origin-Anfragen an die anderen
+Pfade senden; Cookie-Path verhindert das nicht. Daher **nur vertrauenswürdige
+Anwendungen mit vergleichbarem Sicherheitsniveau** zusammen betreiben.
+Für untrusted Anwendungen bleiben dedizierte Favoriten-Subdomains nötig.
+
+Pfad-Rewriting unterstützt absolute Upstream-Links, typische HTML-/JS-
+Rootpfade, CSS-URLs und Upstream-Redirects. Nicht vollständig kompatibel
+sind u. a. hart kodierte Service-Worker-Scope, WebSockets, OAuth/SSO mit
+festen Callback-URLs oder komplexe JS-Router. Live-Test mit dem tatsächlichen
+Wiki (Assets, Login, AJAX, Downloads, POST) sowie zwei Benutzern ist
+**Pflicht vor einem produktiven Umstieg**. Ein Containerneustart setzt
+die bisher nur im RAM liegenden Favoriten-Sessions zurück.
+
+---
+
 ## Neu: einlagige App-Aliasse mit bestehenden Wildcard-Zertifikaten (Phase 7)
 
 Für ein Zertifikat `*.example.org` können freigegebene Favoriten jetzt
