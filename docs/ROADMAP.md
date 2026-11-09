@@ -665,7 +665,7 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [x] Alte `slug.apps.example.org`-Adressen bleiben parallel routbar, falls die Base-Domain gesetzt bleibt
 - [x] Host-Guard, URL-Aufbau, Admin-Validierung und Diagnose auf beide Hostformate angepasst
 - [x] Regressionstests für DNS-Alias, alte Favoriten, fehlerhafte Hosts und ungültige Templates ergänzt
-- [ ] GitHub-CI (.NET/React/Contract/Docker) prüfen und erst dann PR übernehmen
+- [x] GitHub-CI: .NET/React-Build, Favoriten-/Znuny-Contract-Tests und Docker-Smoke erfolgreich ([PR #19](https://github.com/DerHausmeisterKrause/plenaro/pull/19), [Run #42587987825](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42587987825)); Übernahme in main noch offen
 - [ ] Lokale Windows-DNS-/Wildcard-TLS-/vorgeschaltete-NGINX-Konfiguration einmalig anpassen
 - [ ] Neue Wiki-Alias-Healthprobe und parallelen Realbrowser-/ACL-Test durchführen
 - [ ] Native Znuny-Antwortfenster/502-Problem separat abnehmen; durch Hostnamenänderung nicht gelöst
