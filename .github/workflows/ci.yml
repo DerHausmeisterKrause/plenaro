@@ -32,6 +32,8 @@ jobs:
           npm run build
       - name: Znuny REST write contract (mocked; no real emails)
         run: dotnet run --project tools/znuny_contract_tests/ZnunyContractTests.csproj -c Release
+      - name: NGINX fullchain and intermediate PEM smoke test
+        run: bash tools/nginx_tls_chain_smoke.sh
       - name: Docker smoke test (health, setup, login)
         env:
           POSTGRES_PASSWORD: ci-only-not-for-production

@@ -20,7 +20,7 @@ server {
     server_tokens off;
     client_max_body_size 10m;
 
-    ssl_certificate /etc/nginx/tls/fullchain.pem;
+    ssl_certificate ${PLENARO_TLS_EFFECTIVE_CERT};
     ssl_certificate_key /etc/nginx/tls/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_session_cache shared:PLENARO:10m;

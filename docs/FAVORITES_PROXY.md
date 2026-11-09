@@ -1,3 +1,45 @@
+## 502 nach Docker-Neustart: TLS-Zertifikatskette prüfen
+
+Wenn der direkte Healthcheck am Docker-Port **nur mit curl -k** HTTP 200 liefert,
+die vorgelagerte NGINX mit proxy_ssl_verify on aber 502 antwortet, liegt das
+Problem **vor dem Favoriten-CSS/JS-Proxy**. Ein Git-Rollback behebt keine
+fehlende Zertifikatskette oder falsche CA-Konfiguration.
+
+Prüfung **ohne -k** (Beispiel-IP aus TEST-NET-1):
+
+```sh
+curl -v --resolve portal.example.org:8443:192.0.2.10 \
+  https://portal.example.org:8443/_plenaro/favorite-health
+openssl s_client -connect 192.0.2.10:8443 \
+  -servername portal.example.org -verify_return_error \
+  -CAfile /etc/ssl/certs/ca-certificates.crt </dev/null
+```
+
+curl -k bestätigt nur HTTP-Routing, nicht die TLS-Vertrauenswürdigkeit.
+Bei Fehler 20 (unable to get local issuer) die vollständige Kette im
+Docker-NGINX bereitstellen: zuerst Leaf, dann die nötigen Intermediates.
+Insbesondere neue öffentliche CA-Hierarchien benötigen teils mehrere
+Zwischenzertifikate. Keinen privaten Schlüssel in die Kette kopieren.
+
+Zwei Varianten in der **lokalen** .env:
+
+```dotenv
+# Bevorzugt: CERT_PATH enthält bereits die vollständige Kette
+PLENARO_TLS_CERT_PATH=/etc/ssl/plenaro/fullchain.pem
+# Falls CERT_PATH nur das Leaf enthält, zusätzlich:
+# PLENARO_TLS_CHAIN_PATH=/etc/ssl/plenaro/intermediates.pem
+```
+
+Mit PLENARO_TLS_CHAIN_PATH bindet Compose die PEM-Datei read-only ein;
+der Container-NGINX kombiniert Leaf und Intermediates. Ohne den Parameter
+bleibt ein vorhandenes vollständiges CERT_PATH unverändert.
+
+Danach docker compose up -d --force-recreate nginx und ohne -k testen.
+Bleibt 502, aktuelle äußere NGINX-Logs ansehen (.log statt alte .log.1).
+Auch untrusted Root-CA, falscher SNI-Name oder ein anderer Upstream können
+die Verbindung verhindern. proxy_ssl_verify nicht dauerhaft deaktivieren.
+
+---
 ## Ein Host für alle Favoriten (optional, Phase 7)
 
 Für eine Umgebung ohne Wildcard-DNS lässt sich jeder freigegebene Favorit
