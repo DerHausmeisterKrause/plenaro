@@ -686,3 +686,13 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [ ] Wiki-/Cloud-AJAX, Login, HTML/JS, Downloads, CSP/Service Worker und zwei Benutzer im Browser abnehmen.
 - [ ] Sicherheitsentscheidung: Ein Pfadhost teilt dieselbe Browser-Origin über alle Apps; nur vertrauenswürdige Apps zulassen.
 - [ ] Bereits offene Phase-6-Punkte inklusive Znuny-502 und Antwort-Dialog bleiben bestehen.
+
+
+### 09.11.2026 – Phase 7: CSS/JS und Ressourcen auf dem gemeinsamen Pfadhost (PR #21)
+
+- [x] HTML-Ressourcen einschließlich unquoted src/href/action und srcset-Kandidaten auf /<slug>/ präfixieren.
+- [x] JS-Fetch-/Import-Template-Strings und CSS-url()/Import-Pfade umschreiben; kein doppeltes /<slug>/.
+- [x] MIME-Korrektur bekannter Asset-Endungen bei text/plain/octet-stream sowie /<slug>-Rootredirect.
+- [x] Regressionstests und vollständige CI bestanden; PR #21 in main gemergt ([Run #42604023749](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42604023749)).
+- [ ] Echtes Wiki im Browser auf CSS/JS/AJAX/Bilder/Downloads und zwei Benutzer prüfen; spezifische 404/CSP/CORS-Fehler nachziehen.
+- [ ] Grenzen für Drittanbieter-CDN, WebSockets, OAuth und Service Worker beachten; keine generelle App-Isolation durch Pfad.
