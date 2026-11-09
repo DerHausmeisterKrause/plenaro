@@ -273,3 +273,21 @@ Bei Änderungen an der `.env` ist wie bisher ein Neustart mit
 später ein Administrator eine **neue freigegebene App** in Plenaro
 anlegt, soll dafür weder eine Änderung der NGINX-Konfiguration noch
 ein Neustart notwendig sein.
+
+
+### Verbesserte CSS-/JS-Ressourcen (PR #21)
+
+Seit PR #21 wird der gemeinsame Pfadhost auch bei unquoted HTML-src/href,
+mehreren srcset-Kandidaten, CSS-url()-Pfaden und JS-Template-Strings unter
+/<slug>/ umgeschrieben. Bekannte CSS/JS/JSON/SVG/Manifest/WASM-Endungen
+werden korrigiert, wenn der Upstream sie irrtümlich als text/plain oder
+application/octet-stream ausliefert; die nosniff-Sicherheitsregel bleibt
+aktiv. Ein Aufruf von /wiki ohne Slash führt mit 307 nach /wiki/.
+
+Bei weiterhin fehlenden Ressourcen in Entwicklerwerkzeugen (Network) prüfen:
+angefragte URL, HTTP-Status, Content-Type, CSP/CORS-Meldung und eventuelle
+Weiterleitung auf den originalen Upstream. Niemals Session-Cookies oder
+Bootstrap-Token teilen. Ein gemeinsamer Pfadhost kann nicht beliebige
+Drittanbieter-CDNs, WebSockets, Service Worker oder OAuth-Callbacks einer
+fremden App automatisch kompatibel machen. Der serverseitige Cookie-Jar
+isoliert keine beliebigen JavaScript-Anwendungen auf derselben Browser-Origin.
