@@ -85,6 +85,13 @@ services:
         read_only: true
         bind:
           create_host_path: false
+      # Optional intermediate CA chain if PLENARO_TLS_CERT_PATH is leaf-only.
+      - type: bind
+        source: ${PLENARO_TLS_CHAIN_PATH:-/dev/null}
+        target: /etc/nginx/tls/intermediates.pem
+        read_only: true
+        bind:
+          create_host_path: false
       - type: bind
         source: ${PLENARO_TLS_KEY_PATH:-/dev/null}
         target: /etc/nginx/tls/privkey.pem
