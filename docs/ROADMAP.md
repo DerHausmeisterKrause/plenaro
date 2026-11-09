@@ -637,3 +637,14 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [ ] Live-Test mit mindestens zwei Queue-Berechtigungsprofilen und direktem Fremd-Ticketzugriff
 - [ ] Laufzeiten / Serverlast bei größeren Ticketmengen messen und Suchstrategie gegebenenfalls skalieren
 
+
+### 09.11.2026 – Phase 6: eigene/segmentierte Tickets ohne Queue-API-Failure (PR #17)
+
+- [x] Besitzer- und Verantwortlichen-Tickets ohne persönliche globale TicketSearch weiterhin sichtbar
+- [x] Segmentierte oder via Teilnehmer-E-Mail getaggte Tickets in Aufgabenansichten und Heute/Agenda sichtbar
+- [x] Erledigte Aufgaben bei persönlicher Historie (Notiz, Zeitbuchung, Segment) weiterhin sichtbar
+- [x] Nur unzugewiesene **Neue Aufgaben** anhand der individuellen Znuny-Queue-Leserechte herausgeben
+- [x] Fehlende Znuny-API-Berechtigungsbestätigung zeigt keine fremden neuen Tickets, blockiert aber keine eigenen Aufgaben
+- [x] Ticket-ID-Routen, Planung und Native-Znuny-Proxy entsprechend nachgezogen
+- [x] CI: Build/Contract und Docker-Smoke bestanden ([PR #17](https://github.com/DerHausmeisterKrause/plenaro/pull/17), [Run #42573584221](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42573584221))
+- [ ] Echte Queue-Rollen in Znuny/OTRS auf dem Zielhost vergleichen; Performance bei vielen Queues und Ticketdetails prüfen
