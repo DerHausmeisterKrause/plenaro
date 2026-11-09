@@ -58,12 +58,9 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         configuration.GetValue<bool>("Security:RequireHttps") &&
         Uri.TryCreate(configuration["PLENARO_PUBLIC_ORIGIN"],UriKind.Absolute,out var parent) &&
         parent.Scheme==Uri.UriSchemeHttps &&
-        !string.IsNullOrWhiteSpace(BaseDomain) &&
-        Uri.CheckHostName(BaseDomain)==UriHostNameType.Dns &&
-        BaseDomain.Contains('.');
-
-    private string BaseDomain=>
-        (configuration["PLENARO_FAVORITES_BASE_DOMAIN"]??"").Trim().TrimEnd('.').ToLowerInvariant();
+        FavoriteHostNames.PreferredOrigin("wiki",
+            configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
+            configuration["PLENARO_FAVORITES_HOST_TEMPLATE"]) is not null;
 
     // The caller uses this before app cookies/auth/UI/static middleware.
     // An unknown alias still belongs to this isolated router and yields 404.
@@ -71,7 +68,8 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         FavoriteHostGuard.IsUnassignedAlias(ctx.Request.Host.Host,
             configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
             configuration["PLENARO_PUBLIC_ORIGIN"],
-            configuration["PLENARO_ZNUNY_PROXY_ORIGIN"]);
+            configuration["PLENARO_ZNUNY_PROXY_ORIGIN"],
+            configuration["PLENARO_FAVORITES_HOST_TEMPLATE"]);
 
     public static bool IsTrustedStartOrigin(HttpRequest request,IConfiguration config)
     {
@@ -106,9 +104,18 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
 
     private Uri? ProxyOrigin(string slug)
     {
-        if(!BaseConfigured||!Regex.IsMatch(slug,"^[a-z][a-z0-9-]{1,39}$"))
-            return null;
-        return new Uri("https://"+slug+"."+BaseDomain);
+        if(!BaseConfigured)return null;
+        var alias=FavoriteHostNames.PreferredOrigin(slug,
+            configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
+            configuration["PLENARO_FAVORITES_HOST_TEMPLATE"]);
+        if(alias is null)return null;
+        // A changed template must never turn an app alias into the primary
+        // application or native Znuny login origin.
+        foreach(var key in new[]{"PLENARO_PUBLIC_ORIGIN","PLENARO_ZNUNY_PROXY_ORIGIN"})
+            if(Uri.TryCreate(configuration[key],UriKind.Absolute,out var reserved) &&
+                alias.Host.Equals(reserved.Host,StringComparison.OrdinalIgnoreCase))
+                return null;
+        return alias;
     }
 
     public async Task<string> StartAsync(Guid user,FavoritesEndpoints.FavoriteInfo favorite,
@@ -171,14 +178,15 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             ctx.Response.StatusCode=404;return;
         }
         var host=ctx.Request.Host.Host.ToLowerInvariant();
-        var suffix="."+BaseDomain;
-        if(!host.EndsWith(suffix,StringComparison.Ordinal)||
-            !Regex.IsMatch(host[..^suffix.Length],"^[a-z][a-z0-9-]{1,39}$")){
+        if(!FavoriteHostNames.TryGetSlug(host,
+            configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
+            configuration["PLENARO_FAVORITES_HOST_TEMPLATE"],out var slug)){
             ctx.Response.StatusCode=404;return;
         }
-        var slug=host[..^suffix.Length];
-        var external=ProxyOrigin(slug);
-        if(external is null){ctx.Response.StatusCode=404;return;}
+        // For legacy URLs, rewrite links back to the ACTUAL request origin;
+        // never send an authenticated legacy iframe to the new hostname.
+        var external=new Uri("https://"+host);
+        if(ProxyOrigin(slug) is null){ctx.Response.StatusCode=404;return;}
         ctx.Response.Headers["X-Content-Type-Options"]="nosniff";
         ctx.Response.Headers["Referrer-Policy"]="no-referrer";
         ctx.Response.Headers["Content-Security-Policy"]=

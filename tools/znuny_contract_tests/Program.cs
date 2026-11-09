@@ -109,6 +109,108 @@ await favoriteProxy.ServeAsync(favoriteProbe,CancellationToken.None);
 Assert(favoriteProbe.Response.StatusCode==404,
     "favorite wildcard health is unavailable via plaintext");
 
+
+ // The new single-level wildcard aliases coexist with the original
+ // slug.base-domain URLs. Classic bookmark IDs, ACLs and sessions stay intact.
+ var templateOnly=new ConfigurationBuilder().AddInMemoryCollection(
+     new Dictionary<string,string?>{
+         ["PLENARO_PUBLIC_ORIGIN"]="https://portal.example.org",
+         ["PLENARO_ZNUNY_PROXY_ORIGIN"]="https://tickets.example.org",
+         ["PLENARO_FAVORITES_HOST_TEMPLATE"]="{slug}-plenaro.example.org",
+         ["Security:RequireHttps"]="true"
+     }).Build();
+ var templatedProxy=new FavoriteProxy(templateOnly);
+ Assert(templatedProxy.BaseConfigured,
+     "single-level template can run without legacy base domain");
+ Assert(FavoriteHostNames.PreferredOrigin("wiki",null,
+     "{slug}-plenaro.example.org")?.AbsoluteUri=="https://wiki-plenaro.example.org/",
+     "new favorites start on one-level TLS wildcard-compatible host");
+ Assert(FavoriteHostNames.PreferredOrigin("wiki","apps.example.org",
+     null)?.AbsoluteUri=="https://wiki.apps.example.org/",
+     "legacy favorites keep original generated URLs without template");
+ Assert(FavoriteHostNames.TryGetSlug("wiki-plenaro.example.org",null,
+     "{slug}-plenaro.example.org",out var newSlug) && newSlug=="wiki",
+     "template alias resolves original favorite slug");
+ Assert(FavoriteHostNames.TryGetSlug("wiki.apps.example.org",
+     "apps.example.org","{slug}-plenaro.example.org",out var oldSlug) &&
+     oldSlug=="wiki","legacy aliases remain routable when template enabled");
+ Assert(FavoriteHostGuard.IsUnassignedAlias("wiki-plenaro.example.org",null,
+     "https://portal.example.org","https://tickets.example.org",
+     "{slug}-plenaro.example.org"),"new aliases isolated from Plenaro login");
+ Assert(FavoriteHostGuard.IsUnassignedAlias("a.b-plenaro.example.org",null,
+     "https://portal.example.org","https://tickets.example.org",
+     "{slug}-plenaro.example.org"),"malformed deep aliases are still isolated");
+ Assert(!FavoriteHostGuard.IsUnassignedAlias("portal.example.org",null,
+     "https://portal.example.org","https://tickets.example.org",
+     "{slug}-plenaro.example.org"),"primary Plenaro host never intercepted");
+ Assert(!FavoriteHostGuard.IsUnassignedAlias("tickets.example.org",null,
+     "https://portal.example.org","https://tickets.example.org",
+     "{slug}-plenaro.example.org"),"Znuny host never intercepted");
+ Assert(!FavoriteHostGuard.IsUnassignedAlias("unrelated.example.org",null,
+     "https://portal.example.org","https://tickets.example.org",
+     "{slug}-plenaro.example.org"),"unrelated hosts remain unchanged");
+ foreach(var invalid in new[]{"https://{slug}-plenaro.example.org",
+     "*.{slug}.example.org","{slug}.example.org/{slug}",
+     "{slug}-plenaro.example.org:443"})
+ {
+     var rejected=false;
+     try{FavoriteHostNames.PreferredOrigin("wiki",null,invalid);}
+     catch(InvalidOperationException){rejected=true;}
+     Assert(rejected,"invalid hostname templates are rejected");
+ }
+ var templatedRequest=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+ templatedRequest.Request.Method="GET";
+ templatedRequest.Request.Scheme="https";
+ templatedRequest.Request.Host=new Microsoft.AspNetCore.Http.HostString(
+     "wiki-plenaro.example.org");
+ templatedRequest.Request.Path="/_plenaro/favorite-health";
+ using(var body=new MemoryStream())
+ {
+     templatedRequest.Response.Body=body;
+     Assert(templatedProxy.IsFavoriteHost(templatedRequest),
+         "template alias is handled before identity/static files");
+     await templatedProxy.ServeAsync(templatedRequest,CancellationToken.None);
+     Assert(templatedRequest.Response.StatusCode==200 &&
+         Encoding.UTF8.GetString(body.ToArray())=="plenaro-favorite-proxy-ready",
+         "templated host exposes diagnostic without app credentials");
+ }
+ var legacyAndNew=new ConfigurationBuilder().AddInMemoryCollection(
+     new Dictionary<string,string?>{
+         ["PLENARO_PUBLIC_ORIGIN"]="https://portal.example.org",
+         ["PLENARO_ZNUNY_PROXY_ORIGIN"]="https://tickets.example.org",
+         ["PLENARO_FAVORITES_BASE_DOMAIN"]="apps.example.org",
+         ["PLENARO_FAVORITES_HOST_TEMPLATE"]="{slug}-plenaro.example.org",
+         ["Security:RequireHttps"]="true"
+     }).Build();
+ var bothProxy=new FavoriteProxy(legacyAndNew);
+ var legacyRequest=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+ legacyRequest.Request.Method="GET";
+ legacyRequest.Request.Scheme="https";
+ legacyRequest.Request.Host=new Microsoft.AspNetCore.Http.HostString(
+     "wiki.apps.example.org");
+ legacyRequest.Request.Path="/_plenaro/favorite-health";
+ using(var body=new MemoryStream())
+ {
+     legacyRequest.Response.Body=body;
+     Assert(bothProxy.IsFavoriteHost(legacyRequest),
+         "legacy alias still enters favorite proxy after migration");
+     await bothProxy.ServeAsync(legacyRequest,CancellationToken.None);
+     Assert(legacyRequest.Response.StatusCode==200 &&
+         Encoding.UTF8.GetString(body.ToArray())=="plenaro-favorite-proxy-ready",
+         "legacy favorite host stays accessible when template configured");
+ }
+ var malformedRequest=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+ malformedRequest.Request.Method="GET";
+ malformedRequest.Request.Scheme="https";
+ malformedRequest.Request.Host=new Microsoft.AspNetCore.Http.HostString(
+     "a.b-plenaro.example.org");
+ malformedRequest.Request.Path="/_plenaro/favorite-health";
+ Assert(templatedProxy.IsFavoriteHost(malformedRequest),
+     "malformed alias is intercepted, never falls through");
+ await templatedProxy.ServeAsync(malformedRequest,CancellationToken.None);
+ Assert(malformedRequest.Response.StatusCode==404,
+     "malformed aliases return 404 instead of Plenaro UI");
+
 // Znuny article bodies are nested iframes: every ancestor must satisfy
 // frame-ancestors. Parent Plenaro plus the proxy's own origin are permitted,
 // without allowing unrelated websites or disabling framing protection.

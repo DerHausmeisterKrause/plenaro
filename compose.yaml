@@ -34,6 +34,7 @@ services:
       PLENARO_PUBLIC_ORIGIN: "${PLENARO_PUBLIC_ORIGIN:-}"
       PLENARO_ZNUNY_PROXY_ORIGIN: "${PLENARO_ZNUNY_PROXY_ORIGIN:-}"
       PLENARO_FAVORITES_BASE_DOMAIN: "${PLENARO_FAVORITES_BASE_DOMAIN:-}"
+      PLENARO_FAVORITES_HOST_TEMPLATE: "${PLENARO_FAVORITES_HOST_TEMPLATE:-}"
       # CA file is merged with the public OS CA bundle at container startup.
       # Default /dev/null means "no extra CA", preserving existing installs.
     depends_on:

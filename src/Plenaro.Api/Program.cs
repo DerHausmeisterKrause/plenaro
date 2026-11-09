@@ -436,7 +436,8 @@ app.Use(async (http,next)=>{
         http.Request.Host.Host,
         cfg["PLENARO_FAVORITES_BASE_DOMAIN"],
         cfg["PLENARO_PUBLIC_ORIGIN"],
-        cfg["PLENARO_ZNUNY_PROXY_ORIGIN"])){
+        cfg["PLENARO_ZNUNY_PROXY_ORIGIN"],
+        cfg["PLENARO_FAVORITES_HOST_TEMPLATE"])){
         http.Response.StatusCode=StatusCodes.Status404NotFound;
         http.Response.Headers.CacheControl="no-store";
         http.Response.Headers["X-Content-Type-Options"]="nosniff";

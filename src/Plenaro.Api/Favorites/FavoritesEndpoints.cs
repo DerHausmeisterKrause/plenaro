@@ -355,18 +355,27 @@ public static class FavoritesEndpoints
             upstream.UserInfo.Length>0||upstream.Query.Length>0||
             upstream.Fragment.Length>0||upstream.AbsolutePath!="/"||
             upstream.HostNameType!=UriHostNameType.Dns)return false;
-        var domain=config["PLENARO_FAVORITES_BASE_DOMAIN"]?.TrimEnd('.');
-        if(string.IsNullOrEmpty(domain))return false;
-        var alias=input.Slug+"."+domain;
-        if(alias.Equals(OriginHost(config["PLENARO_PUBLIC_ORIGIN"]),
-                StringComparison.OrdinalIgnoreCase)||
-            alias.Equals(OriginHost(config["PLENARO_ZNUNY_PROXY_ORIGIN"]),
-                StringComparison.OrdinalIgnoreCase))
+        var domain=config["PLENARO_FAVORITES_BASE_DOMAIN"]?.Trim().TrimEnd('.');
+        var template=config["PLENARO_FAVORITES_HOST_TEMPLATE"];
+        var origin=FavoriteHostNames.PreferredOrigin(input.Slug,domain,template);
+        if(origin is null)return false;
+        var main=OriginHost(config["PLENARO_PUBLIC_ORIGIN"]);
+        var znuny=OriginHost(config["PLENARO_ZNUNY_PROXY_ORIGIN"]);
+        // Reject collisions for BOTH new and old aliases during migration.
+        if(origin.Host.Equals(main,StringComparison.OrdinalIgnoreCase)||
+            origin.Host.Equals(znuny,StringComparison.OrdinalIgnoreCase)||
+            (!string.IsNullOrEmpty(domain) &&
+                (input.Slug+"."+domain).Equals(main,StringComparison.OrdinalIgnoreCase))||
+            (!string.IsNullOrEmpty(domain) &&
+                (input.Slug+"."+domain).Equals(znuny,StringComparison.OrdinalIgnoreCase)))
             return false;
-        if(upstream.Host.Equals(domain,StringComparison.OrdinalIgnoreCase)||
-            upstream.Host.EndsWith("."+domain,StringComparison.OrdinalIgnoreCase)||
-            OriginHost(config["PLENARO_PUBLIC_ORIGIN"])==upstream.Host||
-            OriginHost(config["PLENARO_ZNUNY_PROXY_ORIGIN"])==upstream.Host)
+        // Reject self-proxying through either alias family (and the main
+        // app or Znuny) so administrators cannot create recursive proxies.
+        if((!string.IsNullOrEmpty(domain) &&
+                upstream.Host.Equals(domain,StringComparison.OrdinalIgnoreCase))||
+            FavoriteHostNames.IsReservedHost(upstream.Host,domain,template)||
+            upstream.Host.Equals(main,StringComparison.OrdinalIgnoreCase)||
+            upstream.Host.Equals(znuny,StringComparison.OrdinalIgnoreCase))
             return false;
         if(input.AllowedUsers is { Length: >1000 })return false;
         return true;
