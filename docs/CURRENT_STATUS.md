@@ -156,6 +156,7 @@ Die globale Rechteprüfung aus PR #15 wurde in PR #17 gezielt auf **neue unzugew
 - [x] Alte `slug.apps.example.org`-Favoriten bleiben bei gesetzter Base-Domain verfügbar; keine DB-/Credential-Migration.
 - [x] Host-Sperre, Admin-App-Freigabe, Bootstrap, Link-Rewriting und tokenfreier Healthcheck für beide Hostformen abgedeckt.
 - [x] Contract-Tests für Alt-/Neu-Aliasse, Host-Isolation und fehlerhafte Templates ergänzt.
-- [ ] PR-CI und echten Livehost mit Zertifikat, DNS, beiden Proxy-Layern und zwei Benutzern abnehmen.
+- [x] PR #19: Backend/Frontend, Contract-Tests und Docker-Smoke erfolgreich ([CI #42587987825](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42587987825)).
+- [ ] Echten Livehost mit Zertifikat, DNS, beiden Proxy-Layern und zwei Benutzern abnehmen.
 - [ ] Betrieb: `PLENARO_SERVER_NAME`, DNS-Wildcard und vorgeschalteten NGINX nur **einmal** für den Alias-Bereich konfigurieren.
 - [ ] Offene Phase-6-/Znuny-Punkte bleiben unverändert, insbesondere 502/Antwort-Formulare.
