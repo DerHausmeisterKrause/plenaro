@@ -219,23 +219,29 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/native/start" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"ticketId":null}')" = "409"
           echo 'CI checkpoint: native HTML proxy enforces local authentication, CSRF and separate HTTPS origin'
           docker compose exec -T database psql -U plenaro -d plenaro -c "INSERT INTO znuny_cached_tickets(ticket_id,ticket_number,title,queue,state,state_type,owner_agent_id,responsible_agent_id,created_at,changed_at) VALUES ('42','2026#42','Nur Admin','Admin','open','open',42,NULL,'2026-01-01','2026-01-02'),('77','2016#77','Altes offenes User-Ticket','IT','open','open',77,NULL,'2016-01-01','2026-01-02'),('78','2026#78','Anderer Mitarbeiter verantwortlich','IT','new','new',77,42,'2026-01-03','2026-01-04'),('79','2026#79','Standard OTRS User','IT','new','new',1,NULL,'2026-01-03','2026-01-04'),('80','2026#80','Ohne Besitzer','IT','new','new',NULL,NULL,'2026-01-03','2026-01-04'),('81','2026#81','Erledigtes User-Ticket','IT','closed successful','closed',77,NULL,'2026-01-03','2026-01-04')"
-          # SECURITY REGRESSION: the old local owner/candidate-only tests
-          # exposed cached tickets without any proof of the user's queue rights.
-          # No real Znuny agent session and no personal vault are configured
-          # in this offline smoke test. Never substitute the central sync user.
-          for VIEW in mine new completed; do
-            test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=$VIEW")" = "503"
-          done
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" "$API/api/v1/znuny/tickets?view=mine")" = "503"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/77/workspace")" = "503"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/77/articles")" = "503"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/79/segments")" = "503"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/agenda?date=2026-10-31")" = "503"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/tickets/77/time/start" -H "X-CSRF-TOKEN: $USER_CSRF")" = "503"
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/tickets/77/reply" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"body":"Must not send"}')" = "503"
+          # New policy: owner/responsible and explicitly planned/tagged
+          # tickets remain available even when no personal GenericInterface
+          # session is configured; ONLY the unassigned candidate pool needs
+          # positive per-queue proof and fails closed to an EMPTY list.
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=mine" | python3 -c 'import json,sys;assert set(x["ticketId"] for x in json.load(sys.stdin))=={"77","78"}'
+          curl -fsS -b "$COOKIE" "$API/api/v1/znuny/tickets?view=mine" | python3 -c 'import json,sys;assert set(x["ticketId"] for x in json.load(sys.stdin))=={"42","78"}'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=completed" | python3 -c 'import json,sys;assert [x["ticketId"] for x in json.load(sys.stdin)]==["81"]'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=new" | python3 -c 'import json,sys;assert json.load(sys.stdin)==[]'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/77/workspace" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["description"]==""'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/42/workspace")" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/79/segments")" = "404"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/agenda?date=2026-10-31" | python3 -c 'import json,sys;assert json.load(sys.stdin)==[]'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/tickets/79/reply" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"body":"Never send"}')" = "404"
           test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/znuny/tickets/77/articles")" = "401"
-          echo 'CI checkpoint: shared cache never bypasses personal Znuny rights'
-
+          # A segment participant is matched to the exact local account
+          # email, never a partial name or arbitrary URL query argument.
+          docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "INSERT INTO znuny_ticket_segments(id,user_id,ticket_id,starts_at,ends_at,note,participants) SELECT '11111111-1111-4111-8111-111111111111',b.user_id,'42','2026-10-31 09:00:00+00','2026-10-31 09:30:00+00','Tag only',ARRAY['USER@EXAMPLE.INVALID']::text[] FROM znuny_approved_agent_bindings b WHERE b.agent_id=42"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=mine" | python3 -c 'import json,sys;assert set(x["ticketId"] for x in json.load(sys.stdin))=={"42","77","78"}'
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/agenda?date=2026-10-31" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert len(d)==1 and d[0]["ticketId"]=="42"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/42/workspace")" = "200"
+          docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "DELETE FROM znuny_ticket_segments WHERE id='11111111-1111-4111-8111-111111111111'"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/42/workspace")" = "404"
+          echo 'CI checkpoint: personal owner, responsible, completed, exact-email tagging and queue-only new tasks'
           # Admin-approved agent bindings remain authoritative, and cannot be
           # changed via the user's own profile or an arbitrary browser ID.
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/znuny/me" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"username":"user-agent","candidateUserId":9}')" = "400"
@@ -252,7 +258,7 @@ jobs:
           USER_CSRF=$(curl -fsS -c "$USER_COOKIE" -b "$USER_COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
           test "$(curl -s -o /dev/null -w '%{http_code}' -c "$USER_COOKIE" -b "$USER_COOKIE" -X POST "$API/api/v1/auth/login" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"email":"user@example.invalid","password":"CiUserPassword123!"}')" = "204"
           USER_CSRF=$(curl -fsS -c "$USER_COOKIE" -b "$USER_COOKIE" "$API/api/v1/auth/csrf" | python3 -c 'import json,sys;print(json.load(sys.stdin)["token"])')
-          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets")" = "503"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=mine" | python3 -c 'import json,sys;assert set(x["ticketId"] for x in json.load(sys.stdin))=={"77","78"}'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/admin/znuny/sync/reset" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"confirmation":"ZNUNY CACHE ZURUECKSETZEN"}')" = "403"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/admin/znuny/sync/reset" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"confirmation":"ZNUNY CACHE ZURUECKSETZEN"}')" = "204"
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets" | python3 -c 'import json,sys;assert json.load(sys.stdin)==[]'
