@@ -243,6 +243,16 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         if(!pathMode&&ctx.Request.Path==DiagnosticPath){
             await FavoriteHealthAsync(ctx,ct);return;
         }
+        // /wiki without its trailing slash makes relative links resolve at
+        // the SHARED origin root (/assets.css) instead of /wiki/assets.css.
+        // Canonicalize only safe navigations, preserving query parameters.
+        if(pathMode && ctx.Request.Path.Value=="/"+slug &&
+            (HttpMethods.IsGet(ctx.Request.Method)||
+             HttpMethods.IsHead(ctx.Request.Method))){
+            ctx.Response.StatusCode=StatusCodes.Status307TemporaryRedirect;
+            ctx.Response.Headers.Location="/"+slug+"/"+ctx.Request.QueryString;
+            return;
+        }
         if(appPath==BootstrapPath){
             await BootstrapAsync(ctx,slug,pathMode,ct);return;
         }

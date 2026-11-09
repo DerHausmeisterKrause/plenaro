@@ -305,6 +305,69 @@ Assert(plainRewrite.Contains("href=\"/docs\"") &&
     plainRewrite.Contains("https://wiki-plenaro.example.org/help"),
     "existing subdomain proxy response stays unchanged");
 
+// Shared path-host assets: rewrite root-relative HTML/CSS/JS URLs while
+// leaving already-prefixed routes and external protocol-relative URLs alone.
+var htmlResourcesMethod=typeof(FavoriteProxy).GetMethod("RewriteHtmlResources",
+    BindingFlags.NonPublic|BindingFlags.Static)!;
+var htmlAssets="<link href=/assets/site.css><script src=/js/app.js></script>"+
+    "<img srcset=\"/one.png 1x, /two.png 2x, //cdn.example.org/three.png 3x, /wiki/keep.png 4x\">";
+var htmlAbsolute=(string)rewriteMethod.Invoke(null,new object[]{
+    htmlAssets,new Uri("https://old.example.org/"),
+    new Uri("https://apps-plenaro.example.org/wiki/"),"/wiki"})!;
+var htmlFixed=(string)htmlResourcesMethod.Invoke(null,
+    new object[]{htmlAbsolute,"/wiki"})!;
+Assert(htmlFixed.Contains("href=/wiki/assets/site.css") &&
+    htmlFixed.Contains("src=/wiki/js/app.js") &&
+    htmlFixed.Contains("/wiki/one.png 1x, /wiki/two.png 2x") &&
+    htmlFixed.Contains("//cdn.example.org/three.png 3x") &&
+    htmlFixed.Contains("/wiki/keep.png 4x") &&
+    !htmlFixed.Contains("/wiki/wiki/keep.png"),
+    "unquoted HTML assets and every srcset candidate stay within the app");
+var cssText="@import \"/theme.css\"; .a{background:url(/img/bg.svg)}"+
+    ".b{mask:url('/wiki/keep.svg')}";
+var cssFixed=(string)rewriteMethod.Invoke(null,new object[]{
+    cssText,new Uri("https://old.example.org/"),
+    new Uri("https://apps-plenaro.example.org/wiki/"),"/wiki"})!;
+Assert(cssFixed.Contains("\"/wiki/theme.css\"") &&
+    cssFixed.Contains("url(/wiki/img/bg.svg)") &&
+    cssFixed.Contains("url('/wiki/keep.svg')") &&
+    !cssFixed.Contains("/wiki/wiki/keep.svg"),
+    "CSS imports, fonts and unquoted URL() roots are prefixed exactly once");
+var jsText="fetch(`/api/search`);import('/chunks/view.mjs');"+
+    "const already='/wiki/assets/site.css';";
+var jsFixed=(string)rewriteMethod.Invoke(null,new object[]{
+    jsText,new Uri("https://old.example.org/"),
+    new Uri("https://apps-plenaro.example.org/wiki/"),"/wiki"})!;
+Assert(jsFixed.Contains("fetch(`/wiki/api/search`)") &&
+    jsFixed.Contains("import('/wiki/chunks/view.mjs')") &&
+    jsFixed.Contains("'/wiki/assets/site.css'") &&
+    !jsFixed.Contains("/wiki/wiki/assets"),
+    "JS template literals, dynamic chunks and existing app paths stay valid");
+var correctMimeMethod=typeof(FavoriteProxy).GetMethod("CorrectAssetMediaType",
+    BindingFlags.NonPublic|BindingFlags.Static)!;
+string? CorrectMime(string path,string? mime)=>
+    correctMimeMethod.Invoke(null,new object?[]{
+        path,mime is null?null:
+            new System.Net.Http.Headers.MediaTypeHeaderValue(mime)}) as string;
+Assert(CorrectMime("/assets/site.css","application/octet-stream")=="text/css" &&
+    CorrectMime("/js/app.mjs","text/plain")=="text/javascript" &&
+    CorrectMime("/js/app.js",null)=="text/javascript" &&
+    CorrectMime("/fonts/cache.wasm","application/octet-stream")=="application/wasm" &&
+    CorrectMime("/img/photo.png","application/octet-stream") is null &&
+    CorrectMime("/css/site.css","text/css") is null,
+    "X-Content-Type-Options nosniff can serve CSS/JS with generic upstream MIME");
+var slashRoot=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+slashRoot.Request.Method="GET";
+slashRoot.Request.Scheme="https";
+slashRoot.Request.Host=new Microsoft.AspNetCore.Http.HostString(
+    "apps-plenaro.example.org");
+slashRoot.Request.Path="/wiki";
+slashRoot.Request.QueryString=new Microsoft.AspNetCore.Http.QueryString("?page=2");
+await sharedProxy.ServeAsync(slashRoot,CancellationToken.None);
+Assert(slashRoot.Response.StatusCode==307 &&
+    slashRoot.Response.Headers.Location.ToString()=="/wiki/?page=2",
+    "shared app root canonicalized to /wiki/ so relative CSS/JS resolve within app");
+
 // Znuny article bodies are nested iframes: every ancestor must satisfy
 // frame-ancestors. Parent Plenaro plus the proxy's own origin are permitted,
 // without allowing unrelated websites or disabling framing protection.
