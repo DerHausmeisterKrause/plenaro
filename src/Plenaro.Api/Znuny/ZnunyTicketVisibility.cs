@@ -85,7 +85,6 @@ public sealed class ZnunyTicketVisibility(
             // Remove expired positive privileges BEFORE asking the remote
             // system; a timeout must never resurrect the prior snapshot.
             Invalidate(user);
-            if(!vault.IsConfigured)throw new UnavailableException();
             await using var db=new NpgsqlConnection(
                 config.GetConnectionString("Plenaro"));
             await db.OpenAsync(ct);
@@ -132,7 +131,8 @@ public sealed class ZnunyTicketVisibility(
                     2000,1,1,0,0,0,TimeSpan.Zero);
             }
             if(string.IsNullOrWhiteSpace(username) || minCreated is null ||
-                maxCreated is null)throw new UnavailableException();
+                maxCreated is null || !vault.IsConfigured)
+                throw new UnavailableException();
             var password=await vault.GetForIntegrationAsync("user",user,
                 "znuny.password",ct);
             if(string.IsNullOrEmpty(password))throw new UnavailableException();
