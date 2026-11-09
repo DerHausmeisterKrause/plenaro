@@ -671,3 +671,17 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [ ] Lokale Windows-DNS-/Wildcard-TLS-/vorgeschaltete-NGINX-Konfiguration einmalig anpassen
 - [ ] Neue Wiki-Alias-Healthprobe und parallelen Realbrowser-/ACL-Test durchführen
 - [ ] Native Znuny-Antwortfenster/502-Problem separat abnehmen; durch Hostnamenänderung nicht gelöst
+
+
+### 09.11.2026 – Phase 7: gemeinsamer Favoriten-Pfadhost (neuer PR)
+
+- [x] WPF-WebShortcut-URL, persönliche Browser-Sessions und bisherige Web-Favoriten wieder geprüft.
+- [x] Opt-in `PLENARO_FAVORITES_PATH_ORIGIN` für `apps-plenaro.example.org/wiki/` implementiert, alte Host-/Template-Varianten bleiben erhalten.
+- [x] Ein gemeinsamer Host mit serverseitiger Pfad-/Sitzungsbindung, Cookie-Path pro Slug, unbekannte URLs 404.
+- [x] Pfad-Prefix bei Bootstrap, Redirect, Upstream, textuellen Links und Formularen berücksichtigt.
+- [x] Path-Routing-Vertragstests und ursprüngliche Favoriten-/Znuny-Tests beibehalten.
+- [ ] Vollständige GitHub-CI verifizieren und vor Deploy kontrolliert reviewen.
+- [ ] Einmaligen DNS-A-Record, vorgelagerten NGINX-vHost und vorhandenes TLS-Zertifikat am echten Host prüfen.
+- [ ] Wiki-/Cloud-AJAX, Login, HTML/JS, Downloads, CSP/Service Worker und zwei Benutzer im Browser abnehmen.
+- [ ] Sicherheitsentscheidung: Ein Pfadhost teilt dieselbe Browser-Origin über alle Apps; nur vertrauenswürdige Apps zulassen.
+- [ ] Bereits offene Phase-6-Punkte inklusive Znuny-502 und Antwort-Dialog bleiben bestehen.

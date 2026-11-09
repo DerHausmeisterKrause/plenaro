@@ -161,3 +161,14 @@ Die globale Rechteprüfung aus PR #15 wurde in PR #17 gezielt auf **neue unzugew
 - [ ] Echten Livehost mit Zertifikat, DNS, beiden Proxy-Layern und zwei Benutzern abnehmen.
 - [ ] Betrieb: `PLENARO_SERVER_NAME`, DNS-Wildcard und vorgeschalteten NGINX nur **einmal** für den Alias-Bereich konfigurieren.
 - [ ] Offene Phase-6-/Znuny-Punkte bleiben unverändert, insbesondere 502/Antwort-Formulare.
+
+
+## 09.11.2026 – Phase 7: optionaler Pfadhost für Favoriten
+
+- [x] `PLENARO_FAVORITES_PATH_ORIGIN=https://apps-plenaro.example.org` als opt-in und rückwärtskompatible Route.
+- [x] Host-Isolation von Plenaro-Login und Znuny, Cookie-Pfad pro Favorit, serverseitige Rechte unverändert.
+- [x] Pfad-Präfix für Bootstrap, GET/POST-Upstream und Umleitungen implementiert; Vertragstests ergänzt.
+- [ ] PR-CI und Review / Rollback vor produktiver Freigabe.
+- [ ] Windows-DNS (nur ein A-Record), NGINX, Zertifikat, Host-Header sowie echtes Wiki/Cloud gegenprüfen.
+- [ ] Sicherheit: gemeinsame Origin der Pfad-Favoriten und Einschränkungen bei AJAX/SSO/WebSockets/Service Workern live abnehmen.
+- [ ] WPF-/Web-Parität, offener Znuny-502 und alle bisherigen Phase-1–7-Offenpunkte bleiben offen.

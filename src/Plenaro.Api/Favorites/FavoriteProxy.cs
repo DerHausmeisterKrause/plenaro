@@ -58,13 +58,21 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         configuration.GetValue<bool>("Security:RequireHttps") &&
         Uri.TryCreate(configuration["PLENARO_PUBLIC_ORIGIN"],UriKind.Absolute,out var parent) &&
         parent.Scheme==Uri.UriSchemeHttps &&
-        FavoriteHostNames.PreferredOrigin("wiki",
+        (FavoritePathRouting.SharedOrigin(
+            configuration["PLENARO_FAVORITES_PATH_ORIGIN"],
+            configuration["PLENARO_PUBLIC_ORIGIN"],
+            configuration["PLENARO_ZNUNY_PROXY_ORIGIN"]) is not null ||
+         FavoriteHostNames.PreferredOrigin("wiki",
             configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
-            configuration["PLENARO_FAVORITES_HOST_TEMPLATE"]) is not null;
+            configuration["PLENARO_FAVORITES_HOST_TEMPLATE"]) is not null);
 
     // The caller uses this before app cookies/auth/UI/static middleware.
     // An unknown alias still belongs to this isolated router and yields 404.
     public bool IsFavoriteHost(HttpContext ctx)=>
+        FavoritePathRouting.IsSharedHost(ctx.Request.Host.Host,
+            configuration["PLENARO_FAVORITES_PATH_ORIGIN"],
+            configuration["PLENARO_PUBLIC_ORIGIN"],
+            configuration["PLENARO_ZNUNY_PROXY_ORIGIN"]) ||
         FavoriteHostGuard.IsUnassignedAlias(ctx.Request.Host.Host,
             configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
             configuration["PLENARO_PUBLIC_ORIGIN"],
@@ -105,6 +113,12 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
     private Uri? ProxyOrigin(string slug)
     {
         if(!BaseConfigured)return null;
+        if(!FavoriteHostNames.ValidSlug(slug))return null;
+        var shared=FavoritePathRouting.SharedOrigin(
+            configuration["PLENARO_FAVORITES_PATH_ORIGIN"],
+            configuration["PLENARO_PUBLIC_ORIGIN"],
+            configuration["PLENARO_ZNUNY_PROXY_ORIGIN"]);
+        if(shared is not null)return FavoritePathRouting.AppOrigin(shared,slug);
         var alias=FavoriteHostNames.PreferredOrigin(slug,
             configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
             configuration["PLENARO_FAVORITES_HOST_TEMPLATE"]);
@@ -166,11 +180,22 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         _sessions[key]=session;
         _users[(user,favorite.Id)]=key;
         var token=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        _pending[token]=new(key,favorite.Slug,favorite.Path,
+        var shared=IsPathHost(external.Host);
+        var landing=shared
+            ? FavoritePathRouting.AppPath(favorite.Slug,favorite.Path)
+            : favorite.Path;
+        _pending[token]=new(key,favorite.Slug,landing,
             DateTimeOffset.UtcNow.AddSeconds(45));
-        return external.GetLeftPart(UriPartial.Authority)+BootstrapPath+
-            "?token="+Uri.EscapeDataString(token);
+        var bootstrap=shared
+            ? new Uri(external,"_plenaro/favorite-bootstrap")
+            : new Uri(external,BootstrapPath);
+        return bootstrap.AbsoluteUri+"?token="+Uri.EscapeDataString(token);
     }
+
+    private bool IsPathHost(string host)=>FavoritePathRouting.IsSharedHost(host,
+        configuration["PLENARO_FAVORITES_PATH_ORIGIN"],
+        configuration["PLENARO_PUBLIC_ORIGIN"],
+        configuration["PLENARO_ZNUNY_PROXY_ORIGIN"]);
 
     public async Task ServeAsync(HttpContext ctx,CancellationToken ct)
     {
@@ -178,14 +203,31 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             ctx.Response.StatusCode=404;return;
         }
         var host=ctx.Request.Host.Host.ToLowerInvariant();
-        if(!FavoriteHostNames.TryGetSlug(host,
-            configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
-            configuration["PLENARO_FAVORITES_HOST_TEMPLATE"],out var slug)){
-            ctx.Response.StatusCode=404;return;
+        var pathMode=IsPathHost(host);
+        string slug;
+        string appPath;
+        // The shared host has only a health probe and explicit /slug/ routes.
+        // It must never show the primary Plenaro login/API on unknown paths.
+        if(pathMode){
+            if(ctx.Request.Path==DiagnosticPath){
+                await FavoriteHealthAsync(ctx,ct);return;
+            }
+            if(!FavoritePathRouting.TrySplitPath(ctx.Request.Path.Value,
+                out slug,out appPath)){
+                ctx.Response.StatusCode=404;return;
+            }
+        }else{
+            if(!FavoriteHostNames.TryGetSlug(host,
+                configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
+                configuration["PLENARO_FAVORITES_HOST_TEMPLATE"],out slug)){
+                ctx.Response.StatusCode=404;return;
+            }
+            appPath=ctx.Request.Path.Value??"/";
         }
-        // For legacy URLs, rewrite links back to the ACTUAL request origin;
-        // never send an authenticated legacy iframe to the new hostname.
-        var external=new Uri("https://"+host);
+        // Preserve the actual legacy alias, but prefix resource links when
+        // routing multiple favorites under the shared host.
+        var external=new Uri("https://"+host+
+            (pathMode?FavoritePathRouting.CookiePath(slug)+"/":"/"));
         if(ProxyOrigin(slug) is null){ctx.Response.StatusCode=404;return;}
         ctx.Response.Headers["X-Content-Type-Options"]="nosniff";
         ctx.Response.Headers["Referrer-Policy"]="no-referrer";
@@ -198,21 +240,11 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             "form-action 'self'; base-uri 'self'; object-src 'none'; "+
             "frame-ancestors "+configuration["PLENARO_PUBLIC_ORIGIN"];
         ctx.Response.Headers.CacheControl="private,no-store";
-        if(ctx.Request.Path==DiagnosticPath){
-            if(!HttpMethods.IsGet(ctx.Request.Method)&&
-                !HttpMethods.IsHead(ctx.Request.Method)){
-                ctx.Response.StatusCode=405;return;
-            }
-            // No user, app identifier, credentials or one-time token is
-            // disclosed. A distinct body prevents an outer reverse proxy's
-            // fallback Plenaro login (HTTP 200) from passing this probe.
-            ctx.Response.ContentType="text/plain; charset=utf-8";
-            if(HttpMethods.IsGet(ctx.Request.Method))
-                await ctx.Response.WriteAsync("plenaro-favorite-proxy-ready",ct);
-            return;
+        if(!pathMode&&ctx.Request.Path==DiagnosticPath){
+            await FavoriteHealthAsync(ctx,ct);return;
         }
-        if(ctx.Request.Path==BootstrapPath){
-            await BootstrapAsync(ctx,slug,ct);return;
+        if(appPath==BootstrapPath){
+            await BootstrapAsync(ctx,slug,pathMode,ct);return;
         }
         if(!ctx.Request.Cookies.TryGetValue(CookieName,out var key)||
             !_sessions.TryGetValue(key,out var session)||
@@ -230,11 +262,23 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         // The app proxy host never enters the normal Plenaro route pipeline.
         // /api and /health belong to the approved upstream app here, while
         // reserved bootstrap paths must never be forwarded.
-        if(ctx.Request.Path.StartsWithSegments("/_plenaro",StringComparison.OrdinalIgnoreCase)){
+        if(appPath.StartsWith("/_plenaro",StringComparison.OrdinalIgnoreCase)){
             ctx.Response.StatusCode=404;return;
         }
         session.Touch();
-        await ForwardAsync(ctx,session,external,ct);
+        await ForwardAsync(ctx,session,external,appPath,
+            pathMode?FavoritePathRouting.CookiePath(slug):"",ct);
+    }
+
+    private static async Task FavoriteHealthAsync(HttpContext ctx,CancellationToken ct)
+    {
+        if(!HttpMethods.IsGet(ctx.Request.Method)&&
+            !HttpMethods.IsHead(ctx.Request.Method)){
+            ctx.Response.StatusCode=405;return;
+        }
+        ctx.Response.ContentType="text/plain; charset=utf-8";
+        if(HttpMethods.IsGet(ctx.Request.Method))
+            await ctx.Response.WriteAsync("plenaro-favorite-proxy-ready",ct);
     }
 
     private async Task<bool> StillApprovedAsync(HttpContext ctx,
@@ -264,7 +308,8 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         return await cmd.ExecuteScalarAsync(ct) is true;
     }
 
-    private async Task BootstrapAsync(HttpContext ctx,string slug,CancellationToken ct)
+    private async Task BootstrapAsync(HttpContext ctx,string slug,
+        bool pathMode,CancellationToken ct)
     {
         if(!HttpMethods.IsGet(ctx.Request.Method)||
             !ctx.Request.Query.TryGetValue("token",out var token)||
@@ -279,7 +324,9 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         }
         ctx.Response.Cookies.Append(CookieName,pending.SessionId,new CookieOptions{
             HttpOnly=true,Secure=true,SameSite=SameSiteMode.Strict,
-            IsEssential=true,Path="/",MaxAge=MaxAge
+            IsEssential=true,
+            Path=pathMode?FavoritePathRouting.CookiePath(slug):"/",
+            MaxAge=MaxAge
         });
         ctx.Response.Redirect(pending.Target);
     }

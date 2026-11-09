@@ -103,17 +103,32 @@ public sealed partial class FavoriteProxy
             TimeSpan.FromSeconds(1));
     }
 
-    private static string Rewrite(string source,Uri upstream,Uri external)
+    private static string Rewrite(string source,Uri upstream,Uri external,
+        string pathPrefix="")
     {
         var from=upstream.GetLeftPart(UriPartial.Authority);
-        var to=external.GetLeftPart(UriPartial.Authority);
-        return source.Replace(from,to,StringComparison.OrdinalIgnoreCase)
+        var to=external.GetLeftPart(UriPartial.Authority)+pathPrefix;
+        var result=source.Replace(from,to,StringComparison.OrdinalIgnoreCase)
             .Replace(from.Replace("/","\\/"),to.Replace("/","\\/"),
                 StringComparison.OrdinalIgnoreCase)
             .Replace(Uri.EscapeDataString(from),Uri.EscapeDataString(to),
                 StringComparison.OrdinalIgnoreCase)
-            .Replace("//"+upstream.Authority,"//"+external.Authority,
+            .Replace("//"+upstream.Authority,
+                "//"+external.Authority+pathPrefix,
                 StringComparison.OrdinalIgnoreCase);
+        if(pathPrefix.Length==0)return result;
+        // Only URL-like quoted root paths and CSS url(/...) are rewritten.
+        // Protocol-relative URLs (//...) and already-prefixed paths are left.
+        var escaped=Regex.Escape(pathPrefix);
+        result=Regex.Replace(result,
+            @"(?<quote>[""'])/(?!/|"+escaped[1..]+@"(?:/|[""']))",
+            match=>match.Groups["quote"].Value+pathPrefix+"/",
+            RegexOptions.CultureInvariant,TimeSpan.FromSeconds(1));
+        return Regex.Replace(result,
+            @"(?<url>url\(\s*[""']?)/(?!/|"+escaped[1..]+@"/)",
+            match=>match.Groups["url"].Value+pathPrefix+"/",
+            RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,
+            TimeSpan.FromSeconds(1));
     }
 
     private static bool RewriteMime(MediaTypeHeaderValue? type)
@@ -134,7 +149,8 @@ public sealed partial class FavoriteProxy
                 .Contains("text/html",StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool AllowedMutation(HttpRequest request,Uri external)
+    private static bool AllowedMutation(HttpRequest request,Uri external,
+        string pathPrefix)
     {
         if(HttpMethods.IsGet(request.Method)||HttpMethods.IsHead(request.Method))
             return true;
@@ -145,7 +161,9 @@ public sealed partial class FavoriteProxy
             site.ToString() is not ("same-origin" or "none"))return false;
         if(request.Headers.TryGetValue("Referer",out var referer)&&
             Uri.TryCreate(referer.ToString(),UriKind.Absolute,out var value)&&
-            !SameUpstream(external,value))return false;
+            (!SameUpstream(external,value)||
+             (pathPrefix.Length>0&&!value.AbsolutePath.StartsWith(
+                pathPrefix+"/",StringComparison.Ordinal))))return false;
         return true;
     }
 
@@ -198,14 +216,14 @@ public sealed partial class FavoriteProxy
     }
 
     private async Task ForwardAsync(HttpContext ctx,ProxySession session,
-        Uri external,CancellationToken ct)
+        Uri external,string appPath,string pathPrefix,CancellationToken ct)
     {
         var method=ctx.Request.Method;
         if(method is not ("GET" or "HEAD" or "POST" or "PUT" or "PATCH" or "DELETE")||
-            !AllowedMutation(ctx.Request,external)){
+            !AllowedMutation(ctx.Request,external,pathPrefix)){
             ctx.Response.StatusCode=403;return;
         }
-        var target=new Uri(session.Upstream,ctx.Request.Path.ToUriComponent()+
+        var target=new Uri(session.Upstream,appPath+
             ctx.Request.QueryString.ToUriComponent());
         if(!SameUpstream(session.Upstream,target)){
             ctx.Response.StatusCode=403;return;
@@ -234,7 +252,10 @@ public sealed partial class FavoriteProxy
         if(ctx.Request.Headers.TryGetValue("Referer",out var refValue)&&
            Uri.TryCreate(refValue.ToString(),UriKind.Absolute,out var from)&&
            SameUpstream(external,from)){
-            req.Headers.Referrer=new Uri(session.Upstream,from.PathAndQuery);
+            var refPath=pathPrefix.Length>0
+                ? from.AbsolutePath[pathPrefix.Length..] : from.AbsolutePath;
+            req.Headers.Referrer=new Uri(session.Upstream,
+                (refPath.Length==0?"/":refPath)+from.Query);
         }
         try{
             using var res=await session.Client.SendAsync(req,
@@ -246,7 +267,7 @@ public sealed partial class FavoriteProxy
                     ctx.Response.StatusCode=502;return;
                 }
                 ctx.Response.Headers.Location=external.GetLeftPart(
-                    UriPartial.Authority)+redirect.PathAndQuery;
+                    UriPartial.Authority)+pathPrefix+redirect.PathAndQuery;
             }
             var disposition=res.Content.Headers.ContentDisposition;
             if(disposition is not null)
@@ -282,7 +303,7 @@ public sealed partial class FavoriteProxy
                 else if(binarySniff){
                     await ctx.Response.Body.WriteAsync(bytes,ct);return;
                 }
-                var transformed=Rewrite(html,session.Upstream,external);
+                var transformed=Rewrite(html,session.Upstream,external,pathPrefix);
                 await ctx.Response.Body.WriteAsync(encoding.GetBytes(transformed),ct);
             }else{
                 await res.Content.CopyToAsync(ctx.Response.Body,ct);
