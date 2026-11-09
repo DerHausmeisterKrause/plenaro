@@ -25,12 +25,50 @@ neuen Favoriten ist dann **keine** weitere vHost-Änderung nötig.
 Wenn ein vorhandener NGINX bereits einen passenden vHost für diesen
 Wildcard-Bereich hat, keine zweite TLS-Konfiguration anlegen.
 
+**NGINX-Priorität beachten:** Ein bereits vorhandener vHost mit
+`server_name *.example.org` hat **Vorrang** vor einer neuen
+`server_name ~...-plenaro\\.example\\.org## Neu: einlagige App-Aliasse mit bestehenden Wildcard-Zertifikaten (Phase 7)
+
+Für ein Zertifikat `*.example.org` können freigegebene Favoriten jetzt
+`wiki-plenaro.example.org` statt `wiki.plenaro.example.org` verwenden.
+Die neue Einstellung ist **optional**; ohne sie verhält sich Plenaro
+genauso wie bisher. Beides kann während einer Migration parallel laufen:
+
+```dotenv
+PLENARO_PUBLIC_ORIGIN=https://portal.example.org
+PLENARO_ZNUNY_PROXY_ORIGIN=https://tickets.example.org
+PLENARO_FAVORITES_HOST_TEMPLATE={slug}-plenaro.example.org
+# Optional für vorhandene Bookmarks: PLENARO_FAVORITES_BASE_DOMAIN=apps.example.org
+# Freigabe des Hostnamens in der Plenaro-NGINX:
+PLENARO_SERVER_NAME=portal.example.org tickets.example.org ~^[a-z][a-z0-9-]+-plenaro\.example\.org$
+```
+
+Einmalig erforderlich: Wildcard-DNS auf den **vorgeschalteten NGINX**,
+passendes Zertifikat `*.example.org`, und ein **gemeinsamer** vHost
+oder passendes Regex-`server_name`, der für alle App-Aliasse auf
+Plenaro weiterleitet. `Host` muss unverändert durch **beide** Proxies,
+`X-Forwarded-Proto` als `https` an die Plenaro-API gelangen.
+Die vorgeschaltete NGINX kann die Alias-Namen z. B. einmalig über
+`~^[a-z][a-z0-9-]+-plenaro\.example\.org$` routen; für jeden
+neuen Favoriten ist dann **keine** weitere vHost-Änderung nötig.
+Wenn ein vorhandener NGINX bereits einen passenden vHost für diesen
+Wildcard-Bereich hat, keine zweite TLS-Konfiguration anlegen.
+
+-Regex in einem anderen vHost.
+In diesem Fall muss die einmalige Alias-Weiche im bestehenden
+Wildcard-vHost integriert werden (andere Dienste unverändert lassen);
+eine separate Regex allein würde nicht greifen. Vor dem Reload
+`nginx -t` und `nginx -T` kontrollieren.
+
 Die App-Ziele bleiben weiterhin explizit von Admins freigegeben und
 sind benutzergebunden. Unbekannte/fehlerhafte Hostnamen erhalten 404;
 Znuny und Plenaro-Login bleiben getrennt. Für alte `slug.apps.example.org`
-Links bleibt `PLENARO_FAVORITES_BASE_DOMAIN` gesetzt. Alte Sessions
-bleiben auf ihrer ursprünglichen Origin; neue Bootstrap-Links verwenden
-die neue Vorlage. **Kein Datenbank-Migrationsskript erforderlich.**
+Links bleibt `PLENARO_FAVORITES_BASE_DOMAIN` gesetzt. Legacy-Anfragen
+behalten beim Link-Rewriting ihren alten Host; neue Bootstrap-Links nutzen
+die neue Vorlage. **Nach einem Containerneustart müssen persönliche
+Proxy-Sitzungen neu gestartet werden**, da sie bislang im Arbeitsspeicher
+liegen. Favoriten, Freigaben und Vault-Zugänge bleiben gespeichert.
+**Kein Datenbank-Migrationsskript erforderlich.**
 
 Test nach DNS/TLS/NGINX-Umstellung:
 ```sh
