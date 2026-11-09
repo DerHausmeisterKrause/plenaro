@@ -658,14 +658,16 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [ ] Live-Probe auf dem Zielhost und Wiki-HTML/Anmeldeablauf abnehmen; ggf. NGINX/Wildcard-TLS korrigieren
 
 
-### 09.11.2026 – Phase 7: einlagige Favoriten-Hostnamen (neuer PR)
+### 09.11.2026 – Phase 7: einlagige Favoriten-Hostnamen (PR #19 in main)
 
 - [x] WPF-WebShortcut-ID, URL, Browserprofile und persönliche Sessions gegen Web-Favoriten geprüft
 - [x] Optionale `PLENARO_FAVORITES_HOST_TEMPLATE` für `{slug}-plenaro.example.org` implementiert
 - [x] Alte `slug.apps.example.org`-Adressen bleiben parallel routbar, falls die Base-Domain gesetzt bleibt
 - [x] Host-Guard, URL-Aufbau, Admin-Validierung und Diagnose auf beide Hostformate angepasst
+- [x] Docker Compose leitet die neue Host-Vorlage aus .env an ASP.NET weiter; CI prüft die Übergabe
+- [x] Beschädigte doppelte NGINX-Dokumentation korrigiert
 - [x] Regressionstests für DNS-Alias, alte Favoriten, fehlerhafte Hosts und ungültige Templates ergänzt
-- [x] GitHub-CI: .NET/React-Build, Favoriten-/Znuny-Contract-Tests und Docker-Smoke erfolgreich ([PR #19](https://github.com/DerHausmeisterKrause/plenaro/pull/19), [Run #42587987825](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42587987825)); Übernahme in main noch offen
+- [x] GitHub-CI: .NET/React-Build, Favoriten-/Znuny-Contract-Tests und Docker-Smoke erfolgreich ([PR #19](https://github.com/DerHausmeisterKrause/plenaro/pull/19), [Run #42589498554](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42589498554)); in main gemergt
 - [ ] Lokale Windows-DNS-/Wildcard-TLS-/vorgeschaltete-NGINX-Konfiguration einmalig anpassen
 - [ ] Neue Wiki-Alias-Healthprobe und parallelen Realbrowser-/ACL-Test durchführen
 - [ ] Native Znuny-Antwortfenster/502-Problem separat abnehmen; durch Hostnamenänderung nicht gelöst
