@@ -696,3 +696,12 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [x] Regressionstests und vollständige CI bestanden; PR #21 in main gemergt ([Run #42604023749](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42604023749)).
 - [ ] Echtes Wiki im Browser auf CSS/JS/AJAX/Bilder/Downloads und zwei Benutzer prüfen; spezifische 404/CSP/CORS-Fehler nachziehen.
 - [ ] Grenzen für Drittanbieter-CDN, WebSockets, OAuth und Service Worker beachten; keine generelle App-Isolation durch Pfad.
+
+
+### 09.11.2026 – Phase 7: HTTPS-Chain gegen äußeren NGINX-502 (PR #22 in main)
+
+- [x] Optionales PEM-Intermediate-Bundle per PLENARO_TLS_CHAIN_PATH eingeführt, Leaf/Chain im Docker-NGINX kombiniert und bei Leaf-only gewarnt.
+- [x] Kompatibilität mit vorhandenem Fullchain-PEM durch gesonderten NGINX-Container-Test geprüft.
+- [x] CI insgesamt erfolgreich ([Run #42623296351](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42623296351)); PR #22 in main gemergt.
+- [ ] Lokale Zertifikatskette in Host-.env ergänzen oder PLENARO_TLS_CERT_PATH auf echtes fullchain.pem stellen, Docker-NGINX neu erstellen; strikt ohne -k verifizieren.
+- [ ] Realen Favoriten im Browser (CSS, JS, AJAX) erneut prüfen und verbleibende Fehler separat behandeln.
