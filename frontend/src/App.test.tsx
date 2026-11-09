@@ -603,8 +603,8 @@ describe('Plenaro web shell', () => {
     renderAt('/settings');
     expect(await screen.findByRole('heading', { name: 'Persönliche Einstellungen' })).toBeTruthy();
     expect(await screen.findByRole('heading', { name: 'Instanzeinstellungen' })).toBeTruthy();
-    expect(screen.getByLabelText('Darstellung')).toBeTruthy();
-    expect(screen.getByLabelText('Instanzname')).toBeTruthy();
+    expect(await screen.findByLabelText('Darstellung')).toBeTruthy();
+    expect(await screen.findByLabelText('Instanzname')).toBeTruthy();
   });
 
   it('sortiert Kontingente, Microsoft und Verwaltung in passende Einstellungskategorien', async () => {
