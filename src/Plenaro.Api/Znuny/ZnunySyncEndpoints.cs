@@ -169,6 +169,7 @@ public static class ZnunySyncEndpoints
 
         reader.MapGet("/tickets",async(HttpContext http,
             UserManager<ApplicationUser> users,IConfiguration config,
+            ZnunyTicketVisibility visibility,
             string? view,string? search,string? queue,string? state,
             string? sort,string? direction,int? limit,int? page,CancellationToken ct) =>
         {
@@ -186,6 +187,14 @@ public static class ZnunySyncEndpoints
             var pageSize=Math.Clamp(limit??100,1,100);
             if(page is < 0 or > 1000)return Results.BadRequest(new {error="Ungültige Seite."});
             var skip=(page??0)*pageSize;
+            IReadOnlySet<string> allowed;
+            try {allowed=await visibility.VisibleAsync(account.Id,ct);}
+            catch(ZnunyTicketVisibility.UnavailableException){
+                return Results.Problem("Deine persönlichen Znuny-Queue-Rechte "+
+                    "konnten nicht bestätigt werden. Es werden keine "+
+                    "ungeprüften Tickets angezeigt.",statusCode:503);
+            }
+            if(allowed.Count==0)return Results.Ok(Array.Empty<object>());
             await using var db=await Open(config,ct);
             var sortColumn=sort switch {
                 "created"=>"t.created_at",
@@ -213,6 +222,7 @@ public static class ZnunySyncEndpoints
                 )
                 AND ((@view='completed' AND lower(t.state_type)='closed')
                   OR (@view<>'completed' AND lower(t.state_type)<>'closed'))
+                AND t.ticket_id=ANY(@authorizedIds)
                 AND (@queue='' OR t.queue=@queue)
                 AND (@state='' OR t.state=@state)
                 -- WPF-style candidate inclusion/exclusion. Split comma,
@@ -248,6 +258,8 @@ public static class ZnunySyncEndpoints
                 LIMIT @max OFFSET @skip
                 """,db);
             cmd.Parameters.AddWithValue("user",account.Id);
+            cmd.Parameters.Add("authorizedIds",NpgsqlTypes.NpgsqlDbType.Array |
+                NpgsqlTypes.NpgsqlDbType.Varchar).Value=allowed.ToArray();
             cmd.Parameters.AddWithValue("view",view??"mine");
             // This search is applied only *after* agent authorization in SQL.
             cmd.Parameters.AddWithValue("query",search?.Trim()??"");
