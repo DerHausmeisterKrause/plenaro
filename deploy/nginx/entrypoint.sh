@@ -16,7 +16,7 @@ case "${PLENARO_HTTPS_ENABLED:-false}" in
         echo >&2 "Plenaro TLS: PLENARO_TLS_CHAIN_PATH must contain PEM intermediate certificates."
         exit 1
       fi
-      { cat /etc/nginx/tls/fullchain.pem; printf '\\n'; cat /etc/nginx/tls/intermediates.pem; } > /tmp/plenaro-fullchain.pem
+      { cat /etc/nginx/tls/fullchain.pem; printf '\n'; cat /etc/nginx/tls/intermediates.pem; } > /tmp/plenaro-fullchain.pem
       PLENARO_TLS_EFFECTIVE_CERT=/tmp/plenaro-fullchain.pem
     fi
     cert_count=$(grep -c -- '-----BEGIN CERTIFICATE-----' "$PLENARO_TLS_EFFECTIVE_CERT" || true)
