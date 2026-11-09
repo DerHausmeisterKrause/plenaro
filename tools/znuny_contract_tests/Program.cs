@@ -83,6 +83,32 @@ requestContext.Request.Host=new Microsoft.AspNetCore.Http.HostString("tickets.ex
 Assert(!favoriteProxy.IsFavoriteHost(requestContext),
     "Znuny native origin remains on existing proxy");
 
+// A token-free probe must positively identify that the complete
+// wildcard/Host/HTTPS routing chain reached the FAVORITE proxy (not Plenaro).
+var favoriteProbe=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+favoriteProbe.Request.Method="GET";
+favoriteProbe.Request.Scheme="https";
+favoriteProbe.Request.Host=new Microsoft.AspNetCore.Http.HostString(
+    "wiki.apps.example.org");
+favoriteProbe.Request.Path="/_plenaro/favorite-health";
+using var favoriteProbeBody=new MemoryStream();
+favoriteProbe.Response.Body=favoriteProbeBody;
+await favoriteProxy.ServeAsync(favoriteProbe,CancellationToken.None);
+Assert(favoriteProbe.Response.StatusCode==200 &&
+    Encoding.UTF8.GetString(favoriteProbeBody.ToArray())==
+        "plenaro-favorite-proxy-ready",
+    "favorite wildcard health confirms correct proxy routing without token");
+favoriteProbe.Request.Method="POST";
+favoriteProbeBody.SetLength(0);
+await favoriteProxy.ServeAsync(favoriteProbe,CancellationToken.None);
+Assert(favoriteProbe.Response.StatusCode==405,
+    "favorite wildcard health is read-only");
+favoriteProbe.Request.Method="GET";
+favoriteProbe.Request.Scheme="http";
+await favoriteProxy.ServeAsync(favoriteProbe,CancellationToken.None);
+Assert(favoriteProbe.Response.StatusCode==404,
+    "favorite wildcard health is unavailable via plaintext");
+
 // Znuny article bodies are nested iframes: every ancestor must satisfy
 // frame-ancestors. Parent Plenaro plus the proxy's own origin are permitted,
 // without allowing unrelated websites or disabling framing protection.
