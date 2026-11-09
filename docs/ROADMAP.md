@@ -648,3 +648,11 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [x] Ticket-ID-Routen, Planung und Native-Znuny-Proxy entsprechend nachgezogen
 - [x] CI: Build/Contract und Docker-Smoke bestanden ([PR #17](https://github.com/DerHausmeisterKrause/plenaro/pull/17), [Run #42573584221](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42573584221))
 - [ ] Echte Queue-Rollen in Znuny/OTRS auf dem Zielhost vergleichen; Performance bei vielen Queues und Ticketdetails prüfen
+
+
+### 09.11.2026 – Phase 7: Favoriten-Bootstrap zuverlässiger (PR #18)
+
+- [x] Double-Mount-Race beim Favoriten-Start durch pro Favorit/Revision geteilte Start-Promise beseitigt
+- [x] Tokenfreier Alias-Health-Check zur Prüfung von DNS, vorgelagerter NGINX, Docker-NGINX und Backend
+- [x] Browser- und Backend-Regressionstests; vollständige GitHub-CI bestanden ([Run #42576527912](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42576527912))
+- [ ] Live-Probe auf dem Zielhost und Wiki-HTML/Anmeldeablauf abnehmen; ggf. NGINX/Wildcard-TLS korrigieren
