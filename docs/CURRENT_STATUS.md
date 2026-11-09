@@ -183,3 +183,13 @@ Die globale Rechteprüfung aus PR #15 wurde in PR #17 gezielt auf **neue unzugew
 - [x] PR #21 nach erfolgreichem .NET-/Frontend-Build, Contract-Tests und Docker-Smoke in main gemergt ([Run #42604023749](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42604023749)).
 - [ ] Echte Wiki-Ressourcen im Browser prüfen; bei weiterhin fehlenden Assets die konkrete URL, HTTP-Status und Konsolenfehler (ohne Tokens/Cookies) erfassen.
 - [ ] Komplexe Laufzeit-URLs, externe CDNs, WebSockets, Service Worker und OAuth/SSO sind weiterhin nicht generisch garantiert. Sicherheitsgrenze einer gemeinsamen Browser-Origin bleibt bestehen.
+
+
+## 09.11.2026 – Phase 7: HTTPS-Upstream-Zertifikatskette (PR #22 in main)
+
+- [x] Docker-NGINX unterstützt optional PLENARO_TLS_CHAIN_PATH zusätzlich zu PLENARO_TLS_CERT_PATH (Leaf + Intermediates, nur bei gesetzter Datei).
+- [x] Bestehendes Fullchain-Deployment bleibt unverändert; Warnung bei Leaf-only-Zertifikatsdateien.
+- [x] Test beider Zertifikats-Varianten im echten NGINX-Container, .NET-/Frontend-/Znuny-Tests und Docker-Smoke erfolgreich ([Run #42623296351](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42623296351)).
+- [x] PR #22 nach main gemergt; Diagnoseverfahren für TLS-Fehler 20 dokumentiert.
+- [ ] **Betrieb:** tatsächliche Host-.env auf vollständige Chain verweisen lassen, erneuten Docker-NGINX-Start durchführen, Curl ohne -k auf Port 8443 und auf äußeren HTTPS-Host testen.
+- [ ] Echte Wiki-/Favoriten-Browsersitzung und CSS/JS nach Behebung des 502 testen.
