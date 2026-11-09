@@ -10,32 +10,19 @@ namespace Plenaro.Api.Favorites;
 public static class FavoriteHostGuard
 {
     public static bool IsUnassignedAlias(
-        string requestHost,string? baseDomain,string? plenaroOrigin,string? znunyOrigin)
+        string requestHost,string? baseDomain,string? plenaroOrigin,string? znunyOrigin,
+        string? hostTemplate=null)
     {
-        if(string.IsNullOrWhiteSpace(baseDomain))return false;
-        var suffix=baseDomain.Trim().TrimEnd('.');
-        if(suffix.Length<4||!suffix.Contains('.')||
-            Uri.CheckHostName(suffix)!=UriHostNameType.Dns||
-            suffix.Contains('*'))
-            throw new InvalidOperationException(
-                "PLENARO_FAVORITES_BASE_DOMAIN muss eine gültige DNS-Domain sein.");
-
         var host=requestHost.TrimEnd('.');
-        // Only aliases below the configured base domain are affected. This
-        // preserves local IP / healthcheck access and the current deployment.
-        if(!host.EndsWith("."+suffix,StringComparison.OrdinalIgnoreCase))
-            return false;
-
-        // The primary Plenaro origin is trusted independently; Znuny's
-        // dedicated proxy is intercepted before this guard in Program.cs.
+        // The application and native Znuny origins must not be intercepted.
+        // The generic wildcard router only owns configured alias families.
         if(MatchesOrigin(host,plenaroOrigin)||
             MatchesOrigin(host,znunyOrigin))
             return false;
 
-        // Includes unconfigured first-level aliases and deeper names. A
-        // wildcard NGINX server_name can match several levels, whereas a
-        // one-level wildcard TLS certificate normally does not.
-        return true;
+        // Includes malformed/deep aliases: they receive 404 in FavoriteProxy
+        // instead of accidentally falling through to Plenaro login or APIs.
+        return FavoriteHostNames.IsReservedHost(host,baseDomain,hostTemplate);
     }
 
     private static bool MatchesOrigin(string host,string? origin)=>

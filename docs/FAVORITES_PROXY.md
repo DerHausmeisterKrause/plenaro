@@ -1,3 +1,50 @@
+## Neu: einlagige App-Aliasse mit bestehenden Wildcard-Zertifikaten (Phase 7)
+
+Für ein Zertifikat `*.example.org` können freigegebene Favoriten jetzt
+`wiki-plenaro.example.org` statt `wiki.plenaro.example.org` verwenden.
+Die neue Einstellung ist **optional**; ohne sie verhält sich Plenaro
+genauso wie bisher. Beides kann während einer Migration parallel laufen:
+
+```dotenv
+PLENARO_PUBLIC_ORIGIN=https://portal.example.org
+PLENARO_ZNUNY_PROXY_ORIGIN=https://tickets.example.org
+PLENARO_FAVORITES_HOST_TEMPLATE={slug}-plenaro.example.org
+# Optional für vorhandene Bookmarks: PLENARO_FAVORITES_BASE_DOMAIN=apps.example.org
+# Freigabe des Hostnamens in der Plenaro-NGINX:
+PLENARO_SERVER_NAME=portal.example.org tickets.example.org ~^[a-z][a-z0-9-]+-plenaro\\.example\\.org$
+```
+
+Einmalig erforderlich: Wildcard-DNS auf den **vorgeschalteten NGINX**,
+passendes Zertifikat `*.example.org`, und ein **gemeinsamer** vHost
+oder passendes Regex-`server_name`, der für alle App-Aliasse auf
+Plenaro weiterleitet. `Host` muss unverändert durch **beide** Proxies,
+`X-Forwarded-Proto` als `https` an die Plenaro-API gelangen.
+Die vorgeschaltete NGINX kann die Alias-Namen z. B. einmalig über
+`~^[a-z][a-z0-9-]+-plenaro\\.example\\.org$` routen; für jeden
+neuen Favoriten ist dann **keine** weitere vHost-Änderung nötig.
+Wenn ein vorhandener NGINX bereits einen passenden vHost für diesen
+Wildcard-Bereich hat, keine zweite TLS-Konfiguration anlegen.
+
+Die App-Ziele bleiben weiterhin explizit von Admins freigegeben und
+sind benutzergebunden. Unbekannte/fehlerhafte Hostnamen erhalten 404;
+Znuny und Plenaro-Login bleiben getrennt. Für alte `slug.apps.example.org`
+Links bleibt `PLENARO_FAVORITES_BASE_DOMAIN` gesetzt. Alte Sessions
+bleiben auf ihrer ursprünglichen Origin; neue Bootstrap-Links verwenden
+die neue Vorlage. **Kein Datenbank-Migrationsskript erforderlich.**
+
+Test nach DNS/TLS/NGINX-Umstellung:
+```sh
+curl -i https://wiki-plenaro.example.org/_plenaro/favorite-health
+```
+Erwartet: `200`, Antworttext `plenaro-favorite-proxy-ready`.
+Nicht mit einem echten Bootstrap-Einmal-Token testen.
+
+**Wichtig:** In der öffentlichen Repository-Dokumentation ausschließlich
+Beispieldomains verwenden; tatsächliche interne Domains, Zertifikatpfade
+und Secrets gehören nur in die lokale `.env` und den lokalen NGINX.
+
+---
+
 ## Troubleshooting: Favorit-iframe erreicht Bootstrap nicht (PR #18)
 
 Seit PR #18 lässt sich der komplette **öffentliche** Alias-Routingweg

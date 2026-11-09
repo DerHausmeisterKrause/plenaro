@@ -656,3 +656,16 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [x] Tokenfreier Alias-Health-Check zur Prüfung von DNS, vorgelagerter NGINX, Docker-NGINX und Backend
 - [x] Browser- und Backend-Regressionstests; vollständige GitHub-CI bestanden ([Run #42576527912](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42576527912))
 - [ ] Live-Probe auf dem Zielhost und Wiki-HTML/Anmeldeablauf abnehmen; ggf. NGINX/Wildcard-TLS korrigieren
+
+
+### 09.11.2026 – Phase 7: einlagige Favoriten-Hostnamen (neuer PR)
+
+- [x] WPF-WebShortcut-ID, URL, Browserprofile und persönliche Sessions gegen Web-Favoriten geprüft
+- [x] Optionale `PLENARO_FAVORITES_HOST_TEMPLATE` für `{slug}-plenaro.example.org` implementiert
+- [x] Alte `slug.apps.example.org`-Adressen bleiben parallel routbar, falls die Base-Domain gesetzt bleibt
+- [x] Host-Guard, URL-Aufbau, Admin-Validierung und Diagnose auf beide Hostformate angepasst
+- [x] Regressionstests für DNS-Alias, alte Favoriten, fehlerhafte Hosts und ungültige Templates ergänzt
+- [ ] GitHub-CI (.NET/React/Contract/Docker) prüfen und erst dann PR übernehmen
+- [ ] Lokale Windows-DNS-/Wildcard-TLS-/vorgeschaltete-NGINX-Konfiguration einmalig anpassen
+- [ ] Neue Wiki-Alias-Healthprobe und parallelen Realbrowser-/ACL-Test durchführen
+- [ ] Native Znuny-Antwortfenster/502-Problem separat abnehmen; durch Hostnamenänderung nicht gelöst
