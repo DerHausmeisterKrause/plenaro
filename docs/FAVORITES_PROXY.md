@@ -25,40 +25,13 @@ neuen Favoriten ist dann **keine** weitere vHost-Änderung nötig.
 Wenn ein vorhandener NGINX bereits einen passenden vHost für diesen
 Wildcard-Bereich hat, keine zweite TLS-Konfiguration anlegen.
 
-**NGINX-Priorität beachten:** Ein bereits vorhandener vHost mit
-`server_name *.example.org` hat **Vorrang** vor einer neuen
-`server_name ~...-plenaro\\.example\\.org## Neu: einlagige App-Aliasse mit bestehenden Wildcard-Zertifikaten (Phase 7)
-
-Für ein Zertifikat `*.example.org` können freigegebene Favoriten jetzt
-`wiki-plenaro.example.org` statt `wiki.plenaro.example.org` verwenden.
-Die neue Einstellung ist **optional**; ohne sie verhält sich Plenaro
-genauso wie bisher. Beides kann während einer Migration parallel laufen:
-
-```dotenv
-PLENARO_PUBLIC_ORIGIN=https://portal.example.org
-PLENARO_ZNUNY_PROXY_ORIGIN=https://tickets.example.org
-PLENARO_FAVORITES_HOST_TEMPLATE={slug}-plenaro.example.org
-# Optional für vorhandene Bookmarks: PLENARO_FAVORITES_BASE_DOMAIN=apps.example.org
-# Freigabe des Hostnamens in der Plenaro-NGINX:
-PLENARO_SERVER_NAME=portal.example.org tickets.example.org ~^[a-z][a-z0-9-]+-plenaro\.example\.org$
-```
-
-Einmalig erforderlich: Wildcard-DNS auf den **vorgeschalteten NGINX**,
-passendes Zertifikat `*.example.org`, und ein **gemeinsamer** vHost
-oder passendes Regex-`server_name`, der für alle App-Aliasse auf
-Plenaro weiterleitet. `Host` muss unverändert durch **beide** Proxies,
-`X-Forwarded-Proto` als `https` an die Plenaro-API gelangen.
-Die vorgeschaltete NGINX kann die Alias-Namen z. B. einmalig über
-`~^[a-z][a-z0-9-]+-plenaro\.example\.org$` routen; für jeden
-neuen Favoriten ist dann **keine** weitere vHost-Änderung nötig.
-Wenn ein vorhandener NGINX bereits einen passenden vHost für diesen
-Wildcard-Bereich hat, keine zweite TLS-Konfiguration anlegen.
-
--Regex in einem anderen vHost.
-In diesem Fall muss die einmalige Alias-Weiche im bestehenden
-Wildcard-vHost integriert werden (andere Dienste unverändert lassen);
-eine separate Regex allein würde nicht greifen. Vor dem Reload
-`nginx -t` und `nginx -T` kontrollieren.
+**NGINX-Priorität beachten:** Ein vorhandener vHost mit
+`server_name *.example.org` hat Vorrang vor einem Regex-`server_name`
+für `*-plenaro.example.org`. Falls auf derselben NGINX bereits andere
+Anwendungen unter `*.example.org` liegen, nicht einfach einen zweiten
+Regex-vHost anlegen: Die Alias-Weiche muss im tatsächlich ausgewählten
+Wildcard-vHost erfolgen, ohne bestehende Dienste zu beeinträchtigen.
+Vor dem Neuladen mit `nginx -t` und `nginx -T` prüfen.
 
 Die App-Ziele bleiben weiterhin explizit von Admins freigegeben und
 sind benutzergebunden. Unbekannte/fehlerhafte Hostnamen erhalten 404;
