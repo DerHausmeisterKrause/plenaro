@@ -11,7 +11,7 @@ PLENARO_ZNUNY_PROXY_ORIGIN=https://tickets.example.org
 PLENARO_FAVORITES_HOST_TEMPLATE={slug}-plenaro.example.org
 # Optional für vorhandene Bookmarks: PLENARO_FAVORITES_BASE_DOMAIN=apps.example.org
 # Freigabe des Hostnamens in der Plenaro-NGINX:
-PLENARO_SERVER_NAME=portal.example.org tickets.example.org ~^[a-z][a-z0-9-]+-plenaro\\.example\\.org$
+PLENARO_SERVER_NAME=portal.example.org tickets.example.org ~^[a-z][a-z0-9-]+-plenaro\.example\.org$
 ```
 
 Einmalig erforderlich: Wildcard-DNS auf den **vorgeschalteten NGINX**,
@@ -20,7 +20,7 @@ oder passendes Regex-`server_name`, der für alle App-Aliasse auf
 Plenaro weiterleitet. `Host` muss unverändert durch **beide** Proxies,
 `X-Forwarded-Proto` als `https` an die Plenaro-API gelangen.
 Die vorgeschaltete NGINX kann die Alias-Namen z. B. einmalig über
-`~^[a-z][a-z0-9-]+-plenaro\\.example\\.org$` routen; für jeden
+`~^[a-z][a-z0-9-]+-plenaro\.example\.org$` routen; für jeden
 neuen Favoriten ist dann **keine** weitere vHost-Änderung nötig.
 Wenn ein vorhandener NGINX bereits einen passenden vHost für diesen
 Wildcard-Bereich hat, keine zweite TLS-Konfiguration anlegen.
