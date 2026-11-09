@@ -21,6 +21,33 @@ public static class ZnunySyncEndpoints
     {
         var admin=app.MapGroup("/api/v1/admin/znuny").RequireAuthorization("AdminOnly");
         var reader=app.MapGroup("/api/v1/znuny").RequireAuthorization();
+        // All direct ticket IDs (articles, attachments, planning, assignments,
+        // replies, time bookings) require a live PERSONAL Znuny read check.
+        // Owner/agent IDs in the central cache do not imply queue permission.
+        reader.AddEndpointFilter(async (context,next) =>
+        {
+            if(context.HttpContext.Request.RouteValues.TryGetValue(
+                "ticketId",out var routeId) && routeId is not null)
+            {
+                var users=context.HttpContext.RequestServices
+                    .GetRequiredService<UserManager<ApplicationUser>>();
+                var account=await users.GetUserAsync(context.HttpContext.User);
+                if(account is null||account.IsDisabled)return Results.Unauthorized();
+                var visibility=context.HttpContext.RequestServices
+                    .GetRequiredService<ZnunyTicketVisibility>();
+                try{
+                    if(!await visibility.CanReadTicketAsync(account.Id,
+                        routeId.ToString()??"",context.HttpContext.RequestAborted))
+                        return Results.NotFound();
+                }catch(ZnunyTicketVisibility.UnavailableException){
+                    return Results.Problem(
+                        "Die persönlichen Znuny-Queue-Rechte konnten nicht geprüft werden.",
+                        statusCode:503);
+                }
+            }
+            return await next(context);
+        });
+
 
         admin.MapGet("/sync", async (ZnunyCentralSync sync,CancellationToken ct) =>
             Results.Ok(await sync.StatusAsync(ct)));
@@ -169,6 +196,7 @@ public static class ZnunySyncEndpoints
 
         reader.MapGet("/tickets",async(HttpContext http,
             UserManager<ApplicationUser> users,IConfiguration config,
+            ZnunyTicketVisibility visibility,
             string? view,string? search,string? queue,string? state,
             string? sort,string? direction,int? limit,int? page,CancellationToken ct) =>
         {
@@ -186,6 +214,14 @@ public static class ZnunySyncEndpoints
             var pageSize=Math.Clamp(limit??100,1,100);
             if(page is < 0 or > 1000)return Results.BadRequest(new {error="Ungültige Seite."});
             var skip=(page??0)*pageSize;
+            IReadOnlySet<string> allowed;
+            try {allowed=await visibility.VisibleAsync(account.Id,ct);}
+            catch(ZnunyTicketVisibility.UnavailableException){
+                return Results.Problem("Deine persönlichen Znuny-Queue-Rechte "+
+                    "konnten nicht bestätigt werden. Es werden keine "+
+                    "ungeprüften Tickets angezeigt.",statusCode:503);
+            }
+            if(allowed.Count==0)return Results.Ok(Array.Empty<object>());
             await using var db=await Open(config,ct);
             var sortColumn=sort switch {
                 "created"=>"t.created_at",
@@ -213,6 +249,7 @@ public static class ZnunySyncEndpoints
                 )
                 AND ((@view='completed' AND lower(t.state_type)='closed')
                   OR (@view<>'completed' AND lower(t.state_type)<>'closed'))
+                AND t.ticket_id=ANY(@authorizedIds)
                 AND (@queue='' OR t.queue=@queue)
                 AND (@state='' OR t.state=@state)
                 -- WPF-style candidate inclusion/exclusion. Split comma,
@@ -248,6 +285,8 @@ public static class ZnunySyncEndpoints
                 LIMIT @max OFFSET @skip
                 """,db);
             cmd.Parameters.AddWithValue("user",account.Id);
+            cmd.Parameters.Add("authorizedIds",NpgsqlTypes.NpgsqlDbType.Array |
+                NpgsqlTypes.NpgsqlDbType.Varchar).Value=allowed.ToArray();
             cmd.Parameters.AddWithValue("view",view??"mine");
             // This search is applied only *after* agent authorization in SQL.
             cmd.Parameters.AddWithValue("query",search?.Trim()??"");

@@ -101,6 +101,69 @@ Assert(!frameAncestors.Contains('*') &&
     nativeCsp.Contains("frame-src 'self'",StringComparison.Ordinal),
     "Znuny nested frame fix retains restricted framing and child frame policy");
 
+// A global service-account sync can contain far more tickets than the
+// authenticated agent can read. The personal session's TicketSearch result
+// is the only positive allowlist; a ticket from a foreign queue is excluded.
+var personalSearchCalls=0;
+var personalSearch=new ZnunyReader(new FakeFactory(request=>{
+    var path=request.RequestUri?.AbsolutePath??"";
+    if(path.EndsWith("/Session",StringComparison.Ordinal)){
+        Assert(request.Method==HttpMethod.Post,
+            "permission session uses normal personal Znuny login");
+        using var body=JsonDocument.Parse(request.Content!.ReadAsStringAsync()
+            .GetAwaiter().GetResult());
+        Assert(body.RootElement.GetProperty("UserLogin").GetString()=="ci-agent",
+            "queue permissions are checked as the signed-in agent");
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent("{\"SessionID\":\"personal-only\"}",
+                Encoding.UTF8,"application/json")
+        };
+    }
+    if(path.EndsWith("/Ticket",StringComparison.Ordinal)){
+        personalSearchCalls++;
+        var query=System.Web.HttpUtility.ParseQueryString(
+            request.RequestUri!.Query);
+        Assert(query["SessionID"]=="personal-only" &&
+            query["TicketCreateTimeNewerDate"] is not null,
+            "TicketSearch uses personal session and explicit date window");
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent("{\"TicketID\":[\"77\",\"79\"]}",
+                Encoding.UTF8,"application/json")
+        };
+    }
+    if(path.EndsWith("/Ticket/77",StringComparison.Ordinal)){
+        Assert(request.RequestUri!.Query.Contains("SessionID=personal-only"),
+            "ticket detail permission verifies with personal TicketGet");
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent(
+                "{\"Ticket\":{\"TicketID\":\"77\",\"TicketNumber\":\"2026#77\",\"Title\":\"Authorized\",\"Queue\":\"IT\",\"State\":\"open\",\"StateType\":\"open\"}}",
+                Encoding.UTF8,"application/json")
+        };
+    }
+    throw new Exception("Unexpected mock Znuny URL");
+}));
+var personalSettings=new ServerSettings(ApiUrl:
+    "https://znuny.example.org/otrs/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST",
+    SearchLimit:100);
+var personalCounter=new ZnunyReader.Counter(5);
+var personalSession=await personalSearch.SessionAsync(personalSettings,
+    "ci-agent","ci-password",personalCounter,CancellationToken.None);
+var personalAuthorized=await personalSearch.SearchWindowAsync(
+    personalSettings,personalSession,"created",
+    new DateTimeOffset(2026,1,1,0,0,0,TimeSpan.Zero),
+    new DateTimeOffset(2026,11,9,0,0,0,TimeSpan.Zero),
+    personalCounter,CancellationToken.None);
+Assert(personalSearchCalls==1,
+    "single unsaturated per-agent search produces authoritative ticket IDs");
+var restricted=ZnunyTicketVisibility.Intersect(
+    new[]{"42","77","78","79","80"},personalAuthorized.ToHashSet());
+Assert(restricted.SequenceEqual(new[]{"77","79"}) && !restricted.Contains("42"),
+    "central cache rows from foreign queues excluded by per-agent search");
+var checkedTicket=await personalSearch.GetAsync(personalSettings,personalSession,
+    "77",personalCounter,CancellationToken.None);
+Assert(checkedTicket.Id=="77" && checkedTicket.Queue=="IT",
+    "direct ticket reads revalidate permissions under agent identity");
+
 var settings=new ServerSettings(ApiUrl:"https://znuny.test/otrs/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST",
     WebUrl:"https://znuny.test/otrs/index.pl");
 

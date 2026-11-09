@@ -117,7 +117,8 @@ public static class ZnunyEndpoints
         });
 
         admin.MapPut("/server", async (ServerSettings settings, HttpContext http,
-            IAntiforgery anti, IConfiguration config, CancellationToken ct) =>
+            IAntiforgery anti, IConfiguration config,
+            ZnunyTicketVisibility visibility,CancellationToken ct) =>
         {
             if (!await ValidCsrfAsync(http, anti)) return CsrfError();
             if (ValidateServer(settings) is { } error)
@@ -133,11 +134,13 @@ public static class ZnunyEndpoints
             cmd.Parameters.Add("payload", NpgsqlDbType.Jsonb).Value =
                 JsonSerializer.Serialize(settings, Json);
             await cmd.ExecuteNonQueryAsync(ct);
+            visibility.InvalidateAll();
             return Results.NoContent();
         });
 
         admin.MapDelete("/server", async (HttpContext http, IAntiforgery anti,
-            IConfiguration config, CancellationToken ct) =>
+            IConfiguration config,ZnunyTicketVisibility visibility,
+            CancellationToken ct) =>
         {
             if (!await ValidCsrfAsync(http, anti)) return CsrfError();
             await using var db = await OpenAsync(config, ct);
@@ -146,6 +149,7 @@ public static class ZnunyEndpoints
                 """,db);
             cmd.Parameters.AddWithValue("key",GlobalKey);
             await cmd.ExecuteNonQueryAsync(ct);
+            visibility.InvalidateAll();
             return Results.NoContent();
         });
 
@@ -174,7 +178,7 @@ public static class ZnunyEndpoints
 
         group.MapPut("/me", async (PersonalUpdate input, HttpContext http,
             UserManager<ApplicationUser> users, IConfiguration config, IAntiforgery anti,
-            CancellationToken ct) =>
+            ZnunyTicketVisibility visibility,CancellationToken ct) =>
         {
             if (!await ValidCsrfAsync(http, anti)) return CsrfError();
             var owner = await OwnerAsync(http, users);
@@ -211,12 +215,13 @@ public static class ZnunyEndpoints
             cmd.Parameters.AddWithValue("show_all", input.ShowAllCandidatePoolTickets);
             cmd.Parameters.AddWithValue("reply_template", input.ReplyTemplate);
             await cmd.ExecuteNonQueryAsync(ct);
+            visibility.Invalidate(owner.Value);
             return Results.NoContent();
         });
 
         group.MapPut("/password", async (PasswordInput input, HttpContext http,
             UserManager<ApplicationUser> users, SecretVault vault, IAntiforgery anti,
-            CancellationToken ct) =>
+            ZnunyTicketVisibility visibility,CancellationToken ct) =>
         {
             if (!await ValidCsrfAsync(http, anti)) return CsrfError();
             var owner = await OwnerAsync(http, users);
@@ -226,12 +231,13 @@ public static class ZnunyEndpoints
             if (input.Password is not { Length: >= 1 and <= 4096 })
                 return Results.BadRequest(new { error = "Ungültige Passwortlänge." });
             await vault.SetAsync("user",owner.Value,PasswordKey,input.Password,ct);
+            visibility.Invalidate(owner.Value);
             return Results.NoContent();
         });
 
         group.MapDelete("/password", async (HttpContext http,
             UserManager<ApplicationUser> users, SecretVault vault, IAntiforgery anti,
-            CancellationToken ct) =>
+            ZnunyTicketVisibility visibility,CancellationToken ct) =>
         {
             if (!await ValidCsrfAsync(http, anti)) return CsrfError();
             var owner = await OwnerAsync(http,users);
@@ -239,6 +245,7 @@ public static class ZnunyEndpoints
             if (!vault.IsConfigured)
                 return Results.Problem("Secret-Vault nicht eingerichtet.", statusCode:503);
             await vault.DeleteAsync("user",owner.Value,PasswordKey,ct);
+            visibility.Invalidate(owner.Value);
             return Results.NoContent();
         });
 

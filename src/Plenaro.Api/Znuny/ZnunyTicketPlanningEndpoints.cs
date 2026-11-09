@@ -31,7 +31,8 @@ public static class ZnunyTicketPlanningEndpoints
     public static void Map(RouteGroupBuilder group)
     {
         group.MapGet("/tickets/agenda",async (string? date,HttpContext http,
-            UserManager<ApplicationUser> users,IConfiguration config,CancellationToken ct) =>
+            UserManager<ApplicationUser> users,IConfiguration config,
+            ZnunyTicketVisibility visibility,CancellationToken ct) =>
         {
             if(!DateOnly.TryParseExact(date,"yyyy-MM-dd",CultureInfo.InvariantCulture,
                 DateTimeStyles.None,out var day))
@@ -41,6 +42,13 @@ public static class ZnunyTicketPlanningEndpoints
             var end=TimeZoneInfo.ConvertTimeToUtc(day.AddDays(1).ToDateTime(TimeOnly.MinValue),zone);
             var user=await OwnUser(http,users);
             if(user is null)return Results.Unauthorized();
+            IReadOnlySet<string> allowed;
+            try{allowed=await visibility.VisibleAsync(user.Value,ct);}
+            catch(ZnunyTicketVisibility.UnavailableException){
+                return Results.Problem("Persönliche Znuny-Queue-Rechte sind "+
+                    "nicht überprüfbar.",statusCode:503);
+            }
+            if(allowed.Count==0)return Results.Ok(Array.Empty<object>());
             await using var db=await Open(config,ct);
             await using var cmd=new NpgsqlCommand("""
                 SELECT s.id,s.ticket_id,t.ticket_number,t.title,t.queue,t.state,
@@ -51,6 +59,7 @@ public static class ZnunyTicketPlanningEndpoints
                 JOIN znuny_approved_agent_bindings b ON b.user_id=s.user_id AND b.user_id=@user
                 LEFT JOIN znuny_user_settings p ON p.user_id=b.user_id
                 WHERE s.user_id=@user AND s.starts_at<@end AND s.ends_at>@start
+                AND t.ticket_id=ANY(@authorizedIds)
                 AND lower(t.state_type)<>'closed'
                 AND (
                   t.owner_agent_id=b.agent_id OR t.responsible_agent_id=b.agent_id OR
@@ -60,6 +69,8 @@ public static class ZnunyTicketPlanningEndpoints
                 ORDER BY s.starts_at,s.id LIMIT 500
                 """,db);
             cmd.Parameters.AddWithValue("user",user.Value);
+            cmd.Parameters.Add("authorizedIds",NpgsqlDbType.Array |
+                NpgsqlDbType.Varchar).Value=allowed.ToArray();
             cmd.Parameters.Add("start",NpgsqlDbType.TimestampTz).Value=start;
             cmd.Parameters.Add("end",NpgsqlDbType.TimestampTz).Value=end;
             var agenda=new List<object>();
