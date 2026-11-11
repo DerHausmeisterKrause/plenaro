@@ -203,3 +203,12 @@ Die globale Rechteprüfung aus PR #15 wurde in PR #17 gezielt auf **neue unzugew
 - [x] PR #23 nach main gemergt.
 - [ ] Echtes Wiki auf JS/CSS/Formulare/Logos prüfen; verbleibende 401/403/404/413-, CSP-/CORS- oder WebSocket-Fehler im Browser-Netzwerk-Tab feststellen, ohne Token/Cookies zu teilen.
 - [ ] Nur wenn Pfadhost weiterhin inkompatibel bleibt: bevorzugt dedizierten Favoriten-Host statt ungesichertem Root-Fallback erwägen.
+
+
+## 11.11.2026 – Phase 7: beschädigte Confluence-JavaScript-Bundles (PR #24)
+
+- [x] Realen Fehler mit bereinigter HAR-Auswertung lokal reproduziert: Confluence `batch.js` enthält nach Plenaro-Rewriting eine ungültige JS-RegEx (beispielsweise `.replace(/"/wiki/g, ...)` statt `.replace(/"/g, ...)`); die Folgefehler `define is not defined` und `AJS is not defined` erklären fehlende UI-Elemente.
+- [x] JavaScript und JSON werden vom Favoriten-Proxy jetzt unverändert ausgeliefert; HTML-Rewriting erhält Inline-`<script>`-Inhalte und korrigiert weiterhin externe JS-/CSS-/Bildpfade und Wiki-Kontextmetadaten.
+- [x] Regressionstests auf JS-Regex-Literale und HTML-Skripte ergänzt; Gesamt-CI einschließlich Build, Contracts, NGINX-TLS-Test und Docker-Smoke grün ([Run #42990397008](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42990397008)).
+- [x] [PR #24](https://github.com/DerHausmeisterKrause/plenaro/pull/24) nach main gemergt.
+- [ ] Live-Nachtest mit frisch gestarteter Favoriten-Session (Confluence-Menüs, Logos, Buttons, Formulare, JS-Konsole). Hartkodierte absolute JS-URLs bleiben mögliche Pfadhost-Inkompatibilität und müssen bei Bedarf separat behandelt werden.
