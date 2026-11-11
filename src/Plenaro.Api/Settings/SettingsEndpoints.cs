@@ -25,7 +25,8 @@ public static class SettingsEndpoints
 
     public sealed record PersonalSettings(
         string Theme = "light",
-        string WeekStart = "inherit");
+        string WeekStart = "inherit",
+        Guid? WikiFavoriteId = null);
 
     public static void MapPlenaroSettings(this WebApplication app)
     {
