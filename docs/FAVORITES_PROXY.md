@@ -1,3 +1,41 @@
+## Confluence-Login: HTTP 200, danach / statt /wiki/ (Root 404)
+
+Eine lokal analysierte Browseraufzeichnung zeigt den **entscheidenden**
+Fehler nach dem Absenden des Passwortformulars: Ein erfolgreiches
+`POST /wiki/rest/tsv/1.0/authenticate` erhält HTTP 200 und die
+JSON-Antwort `{"next":"/"}`. Anschließend navigiert das Atlassian-Login-
+Plugin in seinem JavaScript zur gemeinsamen Favoriten-Hostroot `/`.
+Diese Root ist absichtlich gesperrt (404), weil mehrere Favoriten
+unter `/<slug>/` denselben Host teilen. Die Confluence-Session wird
+beim erfolgreichen Upstream-POST im privaten Cookie-Jar gespeichert.
+Ein zuvor fehlgeschlagener Login-POST (401) ist **nicht** Ursache der
+anschließenden leeren Frame-Ansicht.
+
+**Gezielte Korrektur:** Nur bei einem erfolgreichen POST auf exakt
+`/rest/tsv/1.0/authenticate`, JSON-Antwort und für den explizit
+aktivierten Shared-Path-Browser-Shim (`PLENARO_FAVORITES_BROWSER_SHIM_SLUGS=wiki`)
+wird die JSON-Eigenschaft `next` von `/` auf `/wiki/`
+(oder von `/display/...` auf `/wiki/display/...`) geändert.
+`/wiki/...` bleibt idempotent. Fehlerantworten, andere API-JSON-Antworten,
+dedizierte Hosts, unbekannte Favoriten und fremde Domains bleiben
+unangetastet. Die Hostroot `/` bleibt absichtlich **404** – keine
+globale Root-Weiterleitung, keine DNS- oder NGINX-Änderung.
+
+Nach Deployment per `git pull --ff-only` und
+`docker compose up -d --build --no-deps --force-recreate web`, anschließend
+`docker compose up -d --no-deps --force-recreate nginx`: Favoriten-Session
+neu starten und Confluence-Anmeldung live testen. Im Netzwerk-Tab soll
+der erfolgreiche Login-POST jetzt `{"next":"/wiki/"}` antworten und
+der folgende Dokumentaufruf `/wiki/` statt `/` erreichen.
+Die echte Wiki-Seite nach dem Login und der getrennte Betrieb mehrerer
+Benutzer bleiben live zu prüfen.
+
+**Datenschutz:** Ein Browser-HAR kann Passwort-POSTs, Sitzungs-Cookies
+und andere vertrauliche Daten enthalten. Nie einen unbereinigten HAR
+in GitHub hochladen; Tests verwenden nur synthetische URLs und JSON.
+
+---
+
 ## Confluence: Formular vorhanden, nach Anmeldung verweigert ein eingebetteter Frame die Verbindung
 
 Nach PR #27 kann die Confluence-Passwortmaske im Pfadhost angezeigt werden.
