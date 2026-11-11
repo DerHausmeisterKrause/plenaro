@@ -1,3 +1,68 @@
+## Confluence unter /wiki/ behalten: Browser-Root-URL-Kompatibilität (PR #26)
+
+**Kein eigener DNS-Name erforderlich.** Die Anmeldung unter
+`https://apps-plenaro.example.org/wiki/` bleibt erhalten. Nach dem
+JavaScript-Syntaxfix aus PR #24 lädt die Confluence-Oberfläche korrekt,
+aber einige Atlassian-Plugins ignorieren den HTML-Kontextpfad und senden
+XHR/fetch-Anfragen an `/rest/...` (Antwort 401) und Ressourcenaufrufe
+an `/s/...` (Antwort 404). Das ist im lokalen HAR direkt belegt; ein
+eigentliches Passwort-Login-POST wurde noch nicht mitgeschnitten.
+
+Für solche Apps kann **explizit pro Slug** ein kleiner Browser-Kompatibilitäts-
+Shim aktiviert werden. Er wird unmittelbar nach `<head>` **vor dem
+originalen JavaScript** eingeblendet und ergänzt `/wiki` bei Requests
+an genau diese Root-Pfade:
+
+- `XMLHttpRequest.open` und `fetch` mit String-/URL-Parametern;
+- `navigator.sendBeacon`;
+- dynamisch per DOM eingesetzte `<script>`, `<link>` und `<img>` für
+  URLs unter `/s/` oder `/rest/`.
+
+Die externen JavaScript-Dateien werden unverändert weitergeleitet.
+Das vorhandene Cookie `Path=/wiki` bleibt unverändert. `/rest/...` und
+`/s/...` auf dem **gemeinsam genutzten** Host werden nach wie vor **nicht**
+freigeschaltet. Alle kompatiblen Anfragen laufen über `/wiki/rest/...`
+beziehungsweise `/wiki/s/...` und benötigen die normale Plenaro-Session,
+gültige Nutzerrechte und denselben freigegebenen Upstream.
+
+**Nur diese Einstellung in `/opt/plenaro/.env`:**
+
+```dotenv
+PLENARO_FAVORITES_PATH_ORIGIN=https://apps-plenaro.example.org
+PLENARO_FAVORITES_BROWSER_SHIM_SLUGS=wiki
+# Nicht setzen, wenn /wiki/ erhalten bleiben soll:
+# PLENARO_FAVORITES_DEDICATED_SLUGS=
+```
+
+Kein neuer DNS-Alias, kein `PLENARO_FAVORITES_HOST_TEMPLATE`, keine
+Änderung der äußeren NGINX. Die vorhandene funktionierende lokale
+HTTP-Bridge der äußeren NGINX bleibt unverändert.
+
+Deployment (insbesondere bei dem NGINX-Proxy, der `web` nur beim Start
+auflöst):
+
+```sh
+git switch main && git pull --ff-only
+docker compose up -d --build --no-deps --force-recreate web
+docker compose up -d --no-deps --force-recreate nginx
+```
+
+Anschließend Wiki-Favorit neu verbinden und Browser-Cache mit
+Strg+Shift+R umgehen. Im Netzwerkmitschnitt müssen die vorherigen
+`/rest/authconfig/1.0/login-options`-Anfragen nun unter
+`/wiki/rest/authconfig/1.0/login-options` erscheinen.
+
+**Einschränkungen:** Dieser selektive Shim deckt absichtlich nur die
+belegten Root-Pfade und bestimmte Browser-APIs ab; andere Wege wie
+bereits aufgebaute `Request`-Objekte, programmatische Navigationen
+oder WebSockets können zusätzliche Anpassungen erfordern.
+Same-Origin-Isolation zwischen mehreren Favoriten auf dem Shared Host
+ist grundsätzlich nicht garantiert. Nur gemeinsam vertrauenswürdige
+Apps unter diesem Host bereitstellen. Interaktiver Confluence-Login
+bleibt separat zu testen; Autologin über SSO/MFA wird damit nicht
+implementiert.
+
+---
 ## Confluence-Login trotz intakter Darstellung nicht möglich – dedizierter Favoriten-Host
 
 Eine bereinigte Confluence-Browseraufzeichnung zeigt `/wiki/login.action` mit
