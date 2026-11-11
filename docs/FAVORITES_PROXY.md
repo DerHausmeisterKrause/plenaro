@@ -1,3 +1,33 @@
+## Ergänzung: Confluence-Login mit Request-Objekten und dynamischen Assets
+
+Nach dem opt-in Browser-Shim aus PR #26 können einige Atlassian-Plugins
+weiterhin Root-Anfragen erzeugen, wenn sie `new Request("/rest/...")` benutzen
+oder Ressourcen über `script.src = "/s/..."` beziehungsweise
+`link.href = "/s/..."` einsetzen. Der bisherige Shim fing nur
+`fetch(string)`, `XMLHttpRequest.open`, `setAttribute` und bestimmte
+DOM-Einfügemethoden ab.
+
+Der Shim fängt daher zusätzlich neu erzeugte `Request`-Objekte und
+die nativen `src`-/`href`-Setter für Skript-, Stylesheet- und
+Bildelemente ab. Er ändert **nur** dieselben bekannten `/rest/`- und
+`/s/`-Pfade, ausschließlich beim ausdrücklich freigegebenen Favoriten
+`wiki`. Native Request-Optionen (Body, Header, Credentials, Signal) bleiben
+erhalten, da der native Request-Konstruktor mit den Originalargumenten
+weiterverwendet wird. Fremde Origins und andere Favoriten bleiben unberührt.
+
+**Live-Kontrolle nach Deployment:** Im Browser innerhalb des Wiki-Frames
+zeigt `document.querySelector('script[data-plenaro-browser-shim]') !== null`,
+ob der Browser-Shim wirklich ankommt. In F12 → Netzwerk sollten interne
+Confluence-Requests unter `/wiki/rest/...` bzw. `/wiki/s/...` statt an
+der gemeinsam genutzten Host-Root erscheinen. HTTP-401 innerhalb von
+`/wiki/rest/...` ist anschließend **ein anderer Fehler** (Upstream-
+Autorisierung/Confluence-Sitzung), nicht mehr die vorherige Root-Routen-Sperre.
+Bei weiterem Login-Fehler die ersten fehlgeschlagenen Requests inklusive
+Status und die JS-Konsolenfehlermeldung sichern (ohne Cookies, Tokens oder
+Passwörter). Ein echter Login-Test am Zielsystem bleibt notwendig.
+
+---
+
 ## Confluence unter /wiki/ behalten: Browser-Root-URL-Kompatibilität (PR #26)
 
 **Kein eigener DNS-Name erforderlich.** Die Anmeldung unter
