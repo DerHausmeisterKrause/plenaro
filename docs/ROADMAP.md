@@ -705,3 +705,12 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [x] CI insgesamt erfolgreich ([Run #42623296351](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42623296351)); PR #22 in main gemergt.
 - [ ] Lokale Zertifikatskette in Host-.env ergänzen oder PLENARO_TLS_CERT_PATH auf echtes fullchain.pem stellen, Docker-NGINX neu erstellen; strikt ohne -k verifizieren.
 - [ ] Realen Favoriten im Browser (CSS, JS, AJAX) erneut prüfen und verbleibende Fehler separat behandeln.
+
+
+### 11.11.2026 – Phase 7: Wiki-Oberfläche und Ressourcen im Pfadhost (PR #23)
+
+- [x] Confluence-kompatible HTML-Kontextpfad-Metadaten gezielt auf gemeinsamen /<slug>-Pfad aktualisiert.
+- [x] Textressourcen-Limit für CSS/JS auf 24 MiB begrenzt erweitert; HTML/JSON bleibt 6 MiB.
+- [x] Regressionstests und vollständige CI erfolgreich ([Run #42986077812](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42986077812)); PR #23 in main.
+- [ ] Liveprüfung echter Wiki-Ressourcen/Browser-Konsole, Benutzeranmeldung, Buttons, Logos und Formularfelder.
+- [ ] Einschränkungen von Path-Rewriting für WebSockets, fremde CDNs, OAuth und Service Worker weiterhin beachten; Browser-Origin-Sicherheit nicht aufweichen.
