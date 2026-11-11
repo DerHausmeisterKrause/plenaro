@@ -222,6 +222,45 @@ var pathOnlyConfig=new ConfigurationBuilder().AddInMemoryCollection(
         ["PLENARO_FAVORITES_PATH_ORIGIN"]="https://apps-plenaro.example.org",
         ["Security:RequireHttps"]="true"
     }).Build();
+// Path-host compatibility mode: Confluence plugins generate /rest and /s
+// despite corrected HTML context metadata. Fix URLs in a selected iframe's
+// browser before requests are sent, never by rewriting external JS bundles,
+// never by exposing /rest or /s directly on the shared host root.
+Assert(FavoritePathRouting.BrowserShimEnabled("wiki, docs","wiki") &&
+    !FavoritePathRouting.BrowserShimEnabled("wiki, docs","cloud") &&
+    !FavoritePathRouting.BrowserShimEnabled(null,"wiki"),
+    "browser compatibility shim enabled only for explicit safe slugs");
+var invalidShimSlug=false;
+try{FavoritePathRouting.BrowserShimEnabled("wiki,../rest","wiki");}
+catch(InvalidOperationException){invalidShimSlug=true;}
+Assert(invalidShimSlug,"invalid browser shim slug is rejected");
+var injectShim=typeof(FavoriteProxy).GetMethod("InjectBrowserPathShim",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+var fixtureHtml="<html><head><script>var matcher=/\"/g;"+
+    "var contextPath='';</script></head><body></body></html>";
+var shimmed=(string)injectShim.Invoke(null,new object[]{
+    fixtureHtml,"/wiki"})!;
+Assert(shimmed.Contains("data-plenaro-browser-shim",StringComparison.Ordinal)&&
+    shimmed.Contains("const base = \"/wiki\";",StringComparison.Ordinal)&&
+    shimmed.Contains("const routes = [\"/rest/\", \"/s/\"]",StringComparison.Ordinal)&&
+    shimmed.Contains("XMLHttpRequest.prototype.open",StringComparison.Ordinal)&&
+    shimmed.Contains("window.fetch = function",StringComparison.Ordinal)&&
+    shimmed.Contains("Node.prototype.appendChild",StringComparison.Ordinal)&&
+    shimmed.Contains("<script>var matcher=/\"/g;var contextPath='';</script>",
+        StringComparison.Ordinal)&&
+    shimmed.IndexOf("data-plenaro-browser-shim",StringComparison.Ordinal)<
+        shimmed.IndexOf("var matcher",StringComparison.Ordinal),
+    "browser path shim precedes app scripts; original inline JS is untouched");
+Assert((string)injectShim.Invoke(null,new object[]{shimmed,"/wiki"})==shimmed,
+    "browser shim injection is idempotent");
+Assert((string)injectShim.Invoke(null,new object[]{fixtureHtml,""})==fixtureHtml,
+    "dedicated-origin HTML is not modified");
+var invalidPrefixRejected=false;
+try{injectShim.Invoke(null,new object[]{fixtureHtml,"/../../rest"});}
+catch(System.Reflection.TargetInvocationException e) when(
+    e.InnerException is InvalidOperationException){invalidPrefixRejected=true;}
+Assert(invalidPrefixRejected,"untrusted browser shim prefix is rejected");
+
 // Confluence plugins use origin-root /rest and /s paths. Keep their session
 // on a dedicated host with cookie Path=/ while all unrelated favorites keep
 // the existing shared /<slug>/ host and their /<slug> cookie scope.
