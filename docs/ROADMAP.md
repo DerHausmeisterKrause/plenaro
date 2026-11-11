@@ -722,3 +722,11 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [x] JS und JSON unverändert streamen; Inline-HTML-Skripte gegen Regex-Rewrite geschützt; HTML-/CSS-/Logo- und Confluence-Kontextpfadkorrektur bleibt erhalten.
 - [x] Regressionstests und komplette CI erfolgreich ([Run #42990397008](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42990397008)); PR #24 in main gemergt.
 - [ ] Echte Browser-Abnahme mit Menüs, Bildern, Buttons und Formularen nach neuem Build; ggf. dynamische Root-/WebSocket-URLs prüfen.
+
+
+### 11.11.2026 – Phase 7: dedizierter Wiki-Host parallel zum Shared-Path-Host (PR #25)
+
+- [x] HAR-Erkenntnis: Confluence-Plugin-Root-REST/JS-URLs bleiben unter /wiki/ inkompatibel, HTTP 401/404, Login-POST nicht belegt.
+- [x] `PLENARO_FAVORITES_DEDICATED_SLUGS` erlaubt für ausgewählte Favoriten Root-Host-Cookies und Root-API-Routing ohne globale Weiterleitung fremder /rest-Requests; andere Favoriten bleiben auf /<slug>/.
+- [x] Tests/CI vollständig erfolgreich ([Run #42995835637](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42995835637)); PR #25 in main.
+- [ ] DNS/NGINX-Hostalias und .env auf Zielserver, Liveprüfung der Confluence-Anmeldung.
