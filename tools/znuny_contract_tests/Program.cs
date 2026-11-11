@@ -305,6 +305,49 @@ Assert(plainRewrite.Contains("href=\"/docs\"") &&
     plainRewrite.Contains("https://wiki-plenaro.example.org/help"),
     "existing subdomain proxy response stays unchanged");
 
+// Regression from a sanitized Confluence contextbatch/batch.js HAR:
+// the old global rewriter produced ".replace(/"/wiki/g,...)" and corrupted
+// JS regex flags, so AMD define/AJS never initialized despite HTTP 200.
+var rewriteMimeMethod=typeof(FavoriteProxy).GetMethod("RewriteMime",
+    BindingFlags.NonPublic|BindingFlags.Static)!;
+bool WillRewrite(string mime)=>(bool)rewriteMimeMethod.Invoke(null,new object[]{
+    new System.Net.Http.Headers.MediaTypeHeaderValue(mime)})!;
+Assert(!WillRewrite("text/javascript") &&
+    !WillRewrite("application/javascript") &&
+    !WillRewrite("application/x-javascript") &&
+    !WillRewrite("text/ecmascript") &&
+    !WillRewrite("application/ecmascript") &&
+    !WillRewrite("application/json") &&
+    !WillRewrite("application/problem+json") &&
+    !WillRewrite("text/plain") &&
+    WillRewrite("text/html") &&
+    WillRewrite("text/css") &&
+    WillRewrite("application/xhtml+xml") &&
+    WillRewrite("image/svg+xml"),
+    "executable JS and API JSON are streamed unchanged; HTML/CSS still rewritten");
+
+// Inline scripts must also be excluded from HTML rewriting, while external
+// script src, CSS, images and Confluence metadata remain path-prefixed.
+var htmlSafeMethod=typeof(FavoriteProxy).GetMethod(
+    "RewriteHtmlPreservingScripts",BindingFlags.NonPublic|BindingFlags.Static)!;
+var inlineJs="<script>var k=function(e){return e.replace(/\"/g,\"&quot;\")"+
+    ".replace(/'/g,\"&#39;\")};fetch('/api/js');</script>";
+var mixedHtml="<meta name=\"ajs-context-path\" content=\"\">"+
+    inlineJs+"<script src=\"/assets/batch.js\"></script>"+
+    "<link href=\"/assets/site.css\" rel=\"stylesheet\">"+
+    "<img src=\"/logos/brand.svg\">";
+var protectedHtml=(string)htmlSafeMethod.Invoke(null,new object[]{
+    mixedHtml,new Uri("https://old.example.org/"),
+    new Uri("https://apps-plenaro.example.org/wiki/"),"/wiki"})!;
+Assert(protectedHtml.Contains(inlineJs,StringComparison.Ordinal) &&
+    protectedHtml.Contains("src=\"/wiki/assets/batch.js\"") &&
+    protectedHtml.Contains("href=\"/wiki/assets/site.css\"") &&
+    protectedHtml.Contains("src=\"/wiki/logos/brand.svg\"") &&
+    protectedHtml.Contains("name=\"ajs-context-path\" content=\"/wiki\"") &&
+    !protectedHtml.Contains(".replace(/\"/wiki/g") &&
+    !protectedHtml.Contains(".replace(/'/wiki/g"),
+    "inline JS regex literals preserved, external JS/CSS/logo URLs still prefixed");
+
 // Shared path-host assets: rewrite root-relative HTML/CSS/JS URLs while
 // leaving already-prefixed routes and external protocol-relative URLs alone.
 var htmlResourcesMethod=typeof(FavoriteProxy).GetMethod("RewriteHtmlResources",
