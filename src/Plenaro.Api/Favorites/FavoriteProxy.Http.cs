@@ -228,6 +228,22 @@ public sealed partial class FavoriteProxy
             args[1] = rewrite(args[1]);
             return Reflect.apply(xhrOpen, this, args);
           };
+          // Confluence/Atlassian plugins sometimes construct Request objects
+          // before passing them to fetch(). Rewriting only fetch(string)
+          // leaves those origin-root requests unmodified. Rebase the URL at
+          // construction time; native Request still owns the method, body,
+          // headers, credentials, signal and other request options.
+          const NativeRequest = window.Request;
+          if (typeof NativeRequest === "function") {
+            window.Request = class PlenaroScopedRequest extends NativeRequest {
+              constructor(input, init) {
+                if (typeof input === "string" ||
+                    (typeof URL !== "undefined" && input instanceof URL))
+                  input = rewrite(input);
+                super(input, init);
+              }
+            };
+          }
           const nativeFetch = window.fetch;
           if (typeof nativeFetch === "function") {
             window.fetch = function (input, init) {
@@ -264,6 +280,29 @@ public sealed partial class FavoriteProxy
               if (corrected !== current) setAttr.call(node, attr, corrected);
             }
           }
+          // src=/s/... and href=/s/... property assignments do not
+          // necessarily call the JavaScript setAttribute override. Hook the
+          // native setters without replacing the native descriptor/getter.
+          function patchAssetUrlProperty(prototype, property) {
+            if (!prototype) return;
+            const descriptor = Object.getOwnPropertyDescriptor(prototype, property);
+            if (!descriptor || !descriptor.configurable ||
+                typeof descriptor.set !== "function") return;
+            Object.defineProperty(prototype, property, {
+              get: descriptor.get,
+              set: function (value) {
+                return descriptor.set.call(this, rewrite(value));
+              },
+              enumerable: descriptor.enumerable,
+              configurable: true
+            });
+          }
+          if (typeof HTMLScriptElement !== "undefined")
+            patchAssetUrlProperty(HTMLScriptElement.prototype, "src");
+          if (typeof HTMLLinkElement !== "undefined")
+            patchAssetUrlProperty(HTMLLinkElement.prototype, "href");
+          if (typeof HTMLImageElement !== "undefined")
+            patchAssetUrlProperty(HTMLImageElement.prototype, "src");
           const append = Node.prototype.appendChild;
           Node.prototype.appendChild = function (node) {
             adjust(node);

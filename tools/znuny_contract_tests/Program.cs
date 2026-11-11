@@ -245,6 +245,11 @@ Assert(shimmed.Contains("data-plenaro-browser-shim",StringComparison.Ordinal)&&
     shimmed.Contains("const routes = [\"/rest/\", \"/s/\"]",StringComparison.Ordinal)&&
     shimmed.Contains("XMLHttpRequest.prototype.open",StringComparison.Ordinal)&&
     shimmed.Contains("window.fetch = function",StringComparison.Ordinal)&&
+    shimmed.Contains("class PlenaroScopedRequest extends NativeRequest",StringComparison.Ordinal)&&
+    shimmed.Contains("input = rewrite(input);",StringComparison.Ordinal)&&
+    shimmed.Contains("patchAssetUrlProperty(HTMLScriptElement.prototype, \"src\")",StringComparison.Ordinal)&&
+    shimmed.Contains("patchAssetUrlProperty(HTMLLinkElement.prototype, \"href\")",StringComparison.Ordinal)&&
+    shimmed.Contains("patchAssetUrlProperty(HTMLImageElement.prototype, \"src\")",StringComparison.Ordinal)&&
     shimmed.Contains("Node.prototype.appendChild",StringComparison.Ordinal)&&
     shimmed.Contains("<script>var matcher=/\"/g;var contextPath='';</script>",
         StringComparison.Ordinal)&&
