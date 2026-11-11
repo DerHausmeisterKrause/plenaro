@@ -48,6 +48,25 @@ public static class FavoritePathRouting
         return true;
     }
 
+    // Browser-side path compatibility is opt-in per slug. It never opens
+    // origin-root /rest or /s on the shared host, and never changes routing
+    // or cookies for any other favorite.
+    public static bool BrowserShimEnabled(string? configured,string slug)
+    {
+        if(!FavoriteHostNames.ValidSlug(slug)||
+           string.IsNullOrWhiteSpace(configured))return false;
+        var enabled=false;
+        foreach(var candidate in configured.Split(',',
+            StringSplitOptions.TrimEntries|StringSplitOptions.RemoveEmptyEntries))
+        {
+            if(!FavoriteHostNames.ValidSlug(candidate))
+                throw new InvalidOperationException(
+                    "PLENARO_FAVORITES_BROWSER_SHIM_SLUGS enthält einen ungültigen Slug.");
+            if(candidate.Equals(slug,StringComparison.Ordinal))enabled=true;
+        }
+        return enabled;
+    }
+
     public static string CookiePath(string slug)=>"/"+slug;
     public static string AppPath(string slug,string path)=>
         CookiePath(slug)+(path.StartsWith('/')?path:"/"+path);

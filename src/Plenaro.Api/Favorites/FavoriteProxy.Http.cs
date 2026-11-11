@@ -193,6 +193,108 @@ public sealed partial class FavoriteProxy
         return rewritten;
     }
 
+    // Some Confluence plugins ignore ajs-context-path and emit origin-root
+    // AJAX /rest/... or dynamically added /s/... scripts. Rewriting downloaded
+    // JS was unsafe (PR #24); inject this scoped, early HTML bootstrap instead.
+    // It NEVER exposes /rest or /s routes at the shared host root, so the
+    // request still needs the normal /<slug>/ path-scoped proxy cookie and ACL.
+    // The script runs only in selected favorite HTML, not in Plenaro itself.
+    private const string BrowserPathShim = """
+        <script data-plenaro-browser-shim>
+        (function () {
+          "use strict";
+          const base = "__PREFIX__";
+          const routes = ["/rest/", "/s/"];
+          function rewrite(value) {
+            if (typeof value !== "string" &&
+                !(typeof URL !== "undefined" && value instanceof URL))
+              return value;
+            const raw = String(value);
+            if (!raw.startsWith("/") &&
+                !raw.startsWith(window.location.origin + "/"))
+              return value;
+            if (raw.startsWith("//")) return value;
+            let url;
+            try { url = new URL(raw, window.location.href); }
+            catch (_) { return value; }
+            if (url.origin !== window.location.origin ||
+                !routes.some(route => url.pathname.startsWith(route)))
+              return value;
+            return base + url.pathname + url.search + url.hash;
+          }
+          const xhrOpen = XMLHttpRequest.prototype.open;
+          XMLHttpRequest.prototype.open = function () {
+            const args = Array.prototype.slice.call(arguments);
+            args[1] = rewrite(args[1]);
+            return Reflect.apply(xhrOpen, this, args);
+          };
+          const nativeFetch = window.fetch;
+          if (typeof nativeFetch === "function") {
+            window.fetch = function (input, init) {
+              // Preserve Request objects as-is: they carry body/stream,
+              // credentials and request options that must not be reconstructed.
+              if (typeof input === "string" ||
+                  (typeof URL !== "undefined" && input instanceof URL))
+                input = rewrite(input);
+              return nativeFetch.call(this, input, init);
+            };
+          }
+          const nativeBeacon = navigator.sendBeacon;
+          if (typeof nativeBeacon === "function") {
+            navigator.sendBeacon = function (url, data) {
+              return nativeBeacon.call(this, rewrite(url), data);
+            };
+          }
+          const setAttr = Element.prototype.setAttribute;
+          function isAsset(node) {
+            return node && node.nodeType === 1 &&
+              /^(SCRIPT|LINK|IMG)$/.test(node.tagName);
+          }
+          Element.prototype.setAttribute = function (name, value) {
+            if (isAsset(this) && /^(src|href)$/i.test(name))
+              value = rewrite(value);
+            return setAttr.call(this, name, value);
+          };
+          function adjust(node) {
+            if (!isAsset(node)) return;
+            const attr = node.tagName === "LINK" ? "href" : "src";
+            const current = node.getAttribute(attr);
+            if (current !== null) {
+              const corrected = rewrite(current);
+              if (corrected !== current) setAttr.call(node, attr, corrected);
+            }
+          }
+          const append = Node.prototype.appendChild;
+          Node.prototype.appendChild = function (node) {
+            adjust(node);
+            return append.call(this, node);
+          };
+          const insert = Node.prototype.insertBefore;
+          Node.prototype.insertBefore = function (node, reference) {
+            adjust(node);
+            return insert.call(this, node, reference);
+          };
+        })();
+        </script>
+        """;
+
+    private static string InjectBrowserPathShim(string html,string pathPrefix)
+    {
+        if(pathPrefix.Length==0 ||
+           html.Contains("data-plenaro-browser-shim",StringComparison.Ordinal))
+            return html;
+        // ValidSlug limits the prefix to safe ASCII, so it is safe to use as
+        // a literal JS string. No browser-supplied value enters this script.
+        var slug=pathPrefix.TrimStart('/');
+        if(pathPrefix!="/"+slug || !FavoriteHostNames.ValidSlug(slug))
+            throw new InvalidOperationException("Invalid shim path.");
+        var script=BrowserPathShim.Replace("__PREFIX__",pathPrefix,
+            StringComparison.Ordinal);
+        return Regex.Replace(html,@"<head\b[^>]*>",
+            match=>match.Value+script,RegexOptions.IgnoreCase|
+            RegexOptions.CultureInvariant,TimeSpan.FromSeconds(1));
+    }
+
     // Confluence (and some Atlassian plugins) constructs AJAX and web-resource
     // URLs from these meta tags, not from the resource URLs in HTML. An empty
     // context path is correct on the upstream origin, but not on /<slug>/.
@@ -463,6 +565,11 @@ public sealed partial class FavoriteProxy
                 var transformed=isHtml
                     ? RewriteHtmlPreservingScripts(html,session.Upstream,external,pathPrefix)
                     : Rewrite(html,session.Upstream,external,pathPrefix);
+                if(isHtml&&pathPrefix.Length>0&&
+                   FavoritePathRouting.BrowserShimEnabled(
+                       configuration["PLENARO_FAVORITES_BROWSER_SHIM_SLUGS"],
+                       session.Slug))
+                    transformed=InjectBrowserPathShim(transformed,pathPrefix);
                 await ctx.Response.Body.WriteAsync(encoding.GetBytes(transformed),ct);
             }else{
                 await res.Content.CopyToAsync(ctx.Response.Body,ct);
