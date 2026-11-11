@@ -1,3 +1,65 @@
+## Confluence-Login weiterhin als abgelehnter Frame: Root-Navigation und NGINX-Header prüfen
+
+In der bereinigten Login-Aufzeichnung findet nach dem erfolgreichen
+`POST /wiki/rest/tsv/1.0/authenticate` mit `{"next":"/"}`
+ein `GET /` mit **`Sec-Fetch-Dest: iframe`**,
+`Sec-Fetch-Site: same-origin` und
+`Referer: /wiki/login.action?... ` statt; die Hostroot liefert 404.
+PR #29 schreibt den JSON-`next`-Pfad bereits um. Wenn ein Login-Plugin
+dennoch origin-root navigiert, ergänzt der Proxy jetzt einen **eng begrenzten**
+Fallback: Nur für explizit aktivierten `wiki`-Browser-Shim, HTTPS,
+`GET /` ohne Query, echte `iframe`-Navigation von genau
+`/wiki/login.action` auf demselben Shared-Favoriten-Host wird eine
+`303 Location: /wiki/` gesendet. Es gibt **keine** Root-Inhalte und
+keinen Weiterleitungs-Fallback für andere Apps, API-Requests,
+Cross-Origin-Referer oder POSTs; `/wiki/` prüft weiterhin die
+ursprünglichen Benutzer- und Favoritenrechte.
+
+Zwei ungefährliche Diagnoseheader vereinfachen die Live-Abnahme:
+- `X-Plenaro-Login-Next: prefixed` auf dem erfolgreichen Login-JSON,
+  wenn `next` tatsächlich korrigiert wurde; `unchanged`, wenn nicht.
+- `X-Plenaro-Login-Reroute: wiki-root` auf einer erkannten Root-Navigation
+  (HTTP 303).
+
+**Zusätzliche konkrete Auffälligkeit im HAR:** Auch der erfolgreiche
+Login-POST und die 404-Root-Antwort tragen
+`X-Frame-Options: SAMEORIGIN` sowie **zwei** CSP-Antwortheader.
+Der Plenaro-Favoriten-Proxy setzt kein `X-Frame-Options`; ebenso
+enthält die mitgelieferte Docker-NGINX-Vorlage diesen Header nicht.
+Damit stammt er aus einer anderen Proxy-Schicht. Die Haupt-Plenaro-
+Seite und der Favoriten-Host besitzen unterschiedliche Origins:
+`X-Frame-Options: SAMEORIGIN` kann daher auch bei korrekt umgeleiteter
+Confluence-Seite deren Einbettung blockieren.
+
+**Auf Zielserver prüfen (ohne Anmeldedaten):**
+
+```bash
+curl -sS -D - -o /dev/null \
+  https://apps-plenaro.example.org/wiki/login.action \
+  | grep -Ei '^(HTTP/|x-frame-options:|content-security-policy:|location:)'
+sudo nginx -T 2>&1 | grep -nE 'X-Frame-Options|Content-Security-Policy'
+```
+
+Ein `401` oder `302` ohne gültige Favoriten-Sitzung ist bei
+`curl` erwartbar; entscheidend sind die Sicherheitsheader. Ein
+zusätzliches `X-Frame-Options: SAMEORIGIN` muss in der tatsächlich
+zuständigen vorgeschalteten NGINX **nur für den Favoriten-Host**
+entfernt werden, nicht global. Im Zweifel erst `nginx -T` mit
+den wirksamen `server_name`-/`location`-Kontexten ansehen.
+`proxy_hide_header` entfernt nur Upstream-Header und hilft **nicht**
+gegen einen `add_header X-Frame-Options ...` derselben Proxy-Schicht.
+Vor jeder NGINX-Änderung `nginx -t` prüfen.
+
+**Nach dem Deploy:** Favorit neu verbinden, Netzwerk-Tab mit
+`Preserve log` prüfen. Erfolgreicher Login-POST sollte
+`{"next":"/wiki/"}` liefern, alternativ muss der spezifische
+Root-Fallback `303 /wiki/` ausführen. Wenn ein Folgedokument
+immer noch mit `SAMEORIGIN` blockiert wird, ist die vorgeschaltete
+NGINX separat zu korrigieren. Bitte nur URL-Pfad/Status/Response-
+Header und Konsolenfehler teilen, keine Passwörter, Token oder Cookies.
+
+---
+
 ## Confluence-Login: HTTP 200, danach / statt /wiki/ (Root 404)
 
 Eine lokal analysierte Browseraufzeichnung zeigt den **entscheidenden**
