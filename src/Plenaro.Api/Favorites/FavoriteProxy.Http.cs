@@ -164,6 +164,35 @@ public sealed partial class FavoriteProxy
               RegexOptions.CultureInvariant,TimeSpan.FromSeconds(1));
     }
 
+    // The HTML rewriter also runs on HTML that embeds inline JS. Preserve
+    // raw script bodies: they can contain regex literals and other JS syntax
+    // that must never pass through global string/URL replacement. The script
+    // opening tag remains eligible for src= rewriting. No script is executed.
+    private static string RewriteHtmlPreservingScripts(string source,
+        Uri upstream,Uri external,string pathPrefix)
+    {
+        var bodies=new List<string>();
+        var masked=Regex.Replace(source,
+            @"(?<open><script\b[^>]*>)(?<body>.*?)(?<close></script\s*>)",
+            match=>{
+                var marker="\uE000plenaro-script-"+bodies.Count+"\uE001";
+                if(source.Contains(marker,StringComparison.Ordinal))
+                    throw new InvalidOperationException("Unsafe HTML script marker collision.");
+                bodies.Add(match.Groups["body"].Value);
+                return match.Groups["open"].Value+marker+match.Groups["close"].Value;
+            },RegexOptions.IgnoreCase|RegexOptions.Singleline|
+              RegexOptions.CultureInvariant,TimeSpan.FromSeconds(1));
+        var rewritten=Rewrite(masked,upstream,external,pathPrefix);
+        if(pathPrefix.Length>0){
+            rewritten=RewriteHtmlResources(rewritten,pathPrefix);
+            rewritten=RewriteHtmlAppContext(rewritten,pathPrefix);
+        }
+        for(var i=0;i<bodies.Count;i++)
+            rewritten=rewritten.Replace("\uE000plenaro-script-"+i+"\uE001",
+                bodies[i],StringComparison.Ordinal);
+        return rewritten;
+    }
+
     // Confluence (and some Atlassian plugins) constructs AJAX and web-resource
     // URLs from these meta tags, not from the resource URLs in HTML. An empty
     // context path is correct on the upstream origin, but not on /<slug>/.
@@ -220,20 +249,20 @@ public sealed partial class FavoriteProxy
         return MaxTextBytes;
     }
 
+    // Never rewrite executable JavaScript, JSON or unknown text. The broad
+    // URL-regex rewriting cannot distinguish a JS regex literal (/"/g) from
+    // a quoted URL. It produced invalid Confluence contextbatch/batch.js
+    // (/"/wiki/g), preventing AJS/AMD initialization and whole UI sections.
+    // HTML/CSS/XML markup still needs /<slug>/ URL mapping.
     private static bool RewriteMime(MediaTypeHeaderValue? type)
     {
         var media=type?.MediaType??"";
-        return media.StartsWith("text/",StringComparison.OrdinalIgnoreCase)||
-            media.Equals("application/javascript",StringComparison.OrdinalIgnoreCase)||
-            media.Equals("application/x-javascript",StringComparison.OrdinalIgnoreCase)||
-            media.Equals("application/ecmascript",StringComparison.OrdinalIgnoreCase)||
-            media.Equals("application/x-ecmascript",StringComparison.OrdinalIgnoreCase)||
-            media.Equals("application/json",StringComparison.OrdinalIgnoreCase)||
-            media.Equals("application/xml",StringComparison.OrdinalIgnoreCase)||
+        return media.Equals("text/html",StringComparison.OrdinalIgnoreCase)||
             media.Equals("application/xhtml+xml",StringComparison.OrdinalIgnoreCase)||
-            media.Equals("image/svg+xml",StringComparison.OrdinalIgnoreCase)||
-            media.EndsWith("+json",StringComparison.OrdinalIgnoreCase)||
-            media.EndsWith("+xml",StringComparison.OrdinalIgnoreCase);
+            media.Equals("text/css",StringComparison.OrdinalIgnoreCase)||
+            media.Equals("text/xml",StringComparison.OrdinalIgnoreCase)||
+            media.Equals("application/xml",StringComparison.OrdinalIgnoreCase)||
+            media.Equals("image/svg+xml",StringComparison.OrdinalIgnoreCase);
     }
 
     // The upstream might incorrectly label styles/scripts as text/plain or
@@ -426,17 +455,14 @@ public sealed partial class FavoriteProxy
                 else if(binarySniff){
                     await ctx.Response.Body.WriteAsync(bytes,ct);return;
                 }
-                var transformed=Rewrite(html,session.Upstream,external,pathPrefix);
                 var mediaType=mime?.MediaType;
-                if(pathPrefix.Length>0 &&
-                    (mediaType is not null &&
-                     (mediaType.Equals("text/html",StringComparison.OrdinalIgnoreCase)||
-                      mediaType.Equals("application/xhtml+xml",StringComparison.OrdinalIgnoreCase))||
-                     sniff&&LooksLikeHtml(html)))
-                {
-                    transformed=RewriteHtmlResources(transformed,pathPrefix);
-                    transformed=RewriteHtmlAppContext(transformed,pathPrefix);
-                }
+                var isHtml=mediaType is not null &&
+                    (mediaType.Equals("text/html",StringComparison.OrdinalIgnoreCase)||
+                     mediaType.Equals("application/xhtml+xml",StringComparison.OrdinalIgnoreCase))||
+                    sniff&&LooksLikeHtml(html);
+                var transformed=isHtml
+                    ? RewriteHtmlPreservingScripts(html,session.Upstream,external,pathPrefix)
+                    : Rewrite(html,session.Upstream,external,pathPrefix);
                 await ctx.Response.Body.WriteAsync(encoding.GetBytes(transformed),ct);
             }else{
                 await res.Content.CopyToAsync(ctx.Response.Body,ct);
