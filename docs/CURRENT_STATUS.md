@@ -222,3 +222,14 @@ Die globale Rechteprüfung aus PR #15 wurde in PR #17 gezielt auf **neue unzugew
 - [x] [PR #25](https://github.com/DerHausmeisterKrause/plenaro/pull/25) nach main gemergt.
 - [ ] Betreiber: dedizierten DNS-Alias und äußeren NGINX-vHost (HTTP-Bridge) einrichten; .env um selektive Dedicated-Slug-Option und Hostnamen ergänzen; Login live testen.
 - [ ] Potenziell blockierende globale X-Frame-Options für den dedizierten Favoriten-Host gezielt korrigieren, sofern die Browser-Einbettung betroffen ist. Automatische Anmeldung über Confluence-SSO/JS-Formular weiterhin nicht implementiert.
+
+### 11.11.2026 – Phase 7: Confluence-Login auf apps-plenaro.example.org/wiki/ (PR #26)
+
+- [x] Bereinigten HAR geprüft: Wiki-Login-HTML 200, Confluence-Plugin-Root-REST 401 und -Asset 404, echter Passwort-POST nicht beobachtet
+- [x] Opt-in PLENARO_FAVORITES_BROWSER_SHIM_SLUGS=wiki für browserseitige /wiki/rest/ und /wiki/s/ Korrektur ohne JS-Bundle-Veränderung
+- [x] Cookie-Pfad /wiki, serverseitige ACL und gemeinsam genutzte Root-Routen unverändert; kein neuer DNS-Name/NGINX-Host nötig
+- [x] Regressionstests, Backend- und Frontend-Build, TLS-Test und Docker-Smoke grün; PR #26 gemergt
+- [ ] Auf Zielserver .env setzen, Web + Docker-NGINX neu erstellen und Browser-Anmeldung prüfen (SSO/MFA nicht durch Shim implementiert)
+
+PR: https://github.com/DerHausmeisterKrause/plenaro/pull/26
+CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
