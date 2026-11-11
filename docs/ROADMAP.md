@@ -714,3 +714,11 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [x] Regressionstests und vollständige CI erfolgreich ([Run #42986077812](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42986077812)); PR #23 in main.
 - [ ] Liveprüfung echter Wiki-Ressourcen/Browser-Konsole, Benutzeranmeldung, Buttons, Logos und Formularfelder.
 - [ ] Einschränkungen von Path-Rewriting für WebSockets, fremde CDNs, OAuth und Service Worker weiterhin beachten; Browser-Origin-Sicherheit nicht aufweichen.
+
+
+### 11.11.2026 – Phase 7: Confluence-JavaScript und Inline-Skript-Schutz (PR #24)
+
+- [x] Defekten allgemeinen JS-Textpfad identifiziert: Root-URL-Rewrite beschädigte RegEx-Literale in `batch.js`, obwohl Ressourcen HTTP 200 zurücklieferten.
+- [x] JS und JSON unverändert streamen; Inline-HTML-Skripte gegen Regex-Rewrite geschützt; HTML-/CSS-/Logo- und Confluence-Kontextpfadkorrektur bleibt erhalten.
+- [x] Regressionstests und komplette CI erfolgreich ([Run #42990397008](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42990397008)); PR #24 in main gemergt.
+- [ ] Echte Browser-Abnahme mit Menüs, Bildern, Buttons und Formularen nach neuem Build; ggf. dynamische Root-/WebSocket-URLs prüfen.
