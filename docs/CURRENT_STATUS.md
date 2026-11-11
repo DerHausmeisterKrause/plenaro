@@ -234,7 +234,7 @@ Die globale Rechteprüfung aus PR #15 wurde in PR #17 gezielt auf **neue unzugew
 PR: https://github.com/DerHausmeisterKrause/plenaro/pull/26
 CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 
-### 11.11.2026 – Phase 7: Confluence-Browser-Shim für Request-Objekte und dynamische Assets (PR ausstehend)
+### 11.11.2026 – Phase 7: Confluence-Browser-Shim für Request-Objekte und dynamische Assets (PR #27)
 
 - [x] Opt-in-Browser-Shim ergänzt: `new Request("/rest/...")` und native DOM-Eigenschaften `script.src`, `link.href`, `img.src` korrigieren bekannte Root-Routen auf `/wiki/rest/...` oder `/wiki/s/...`
 - [x] Fremde Origins, andere Favoriten, Proxy-Cookies, vorhandene Zugriffsprüfung und externe JS-Bundles bleiben unverändert
