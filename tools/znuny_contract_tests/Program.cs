@@ -251,9 +251,9 @@ Assert(shimmed.Contains("data-plenaro-browser-shim",StringComparison.Ordinal)&&
     shimmed.IndexOf("data-plenaro-browser-shim",StringComparison.Ordinal)<
         shimmed.IndexOf("var matcher",StringComparison.Ordinal),
     "browser path shim precedes app scripts; original inline JS is untouched");
-Assert((string)injectShim.Invoke(null,new object[]{shimmed,"/wiki"})==shimmed,
+Assert((string?)injectShim.Invoke(null,new object[]{shimmed,"/wiki"})==shimmed,
     "browser shim injection is idempotent");
-Assert((string)injectShim.Invoke(null,new object[]{fixtureHtml,""})==fixtureHtml,
+Assert((string?)injectShim.Invoke(null,new object[]{fixtureHtml,""})==fixtureHtml,
     "dedicated-origin HTML is not modified");
 var invalidPrefixRejected=false;
 try{injectShim.Invoke(null,new object[]{fixtureHtml,"/../../rest"});}
