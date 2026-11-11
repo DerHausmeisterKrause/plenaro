@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -430,6 +432,49 @@ public sealed partial class FavoriteProxy
         };
     }
 
+    // Atlassian's interactive login plugin returns {"next":"/"} after a
+    // successful POST /rest/tsv/1.0/authenticate. In the shared path-host
+    // configuration, browser navigation to "/" is intentionally blocked.
+    // Rewrite only this plugin's successful JSON login response and only
+    // the 'next' navigation property, never generic API JSON or JS bundles.
+    private static string RewriteConfluenceLoginNext(string json,string pathPrefix)
+    {
+        if(pathPrefix.Length==0)return json;
+        try{
+            var document=JsonNode.Parse(json) as JsonObject;
+            if(document is null ||
+               document["next"] is not JsonValue value ||
+               !value.TryGetValue<string>(out var next)||
+               string.IsNullOrEmpty(next)||
+               !next.StartsWith('/')||next.StartsWith("//")||
+               next==pathPrefix||
+               next.StartsWith(pathPrefix+"/",StringComparison.Ordinal)||
+               next.StartsWith(pathPrefix+"?",StringComparison.Ordinal)||
+               next.StartsWith(pathPrefix+"#",StringComparison.Ordinal))
+                return json;
+            document["next"]=pathPrefix+next;
+            return document.ToJsonString();
+        }catch(JsonException){
+            return json;
+        }catch(InvalidOperationException){
+            return json;
+        }
+    }
+
+    private static bool ShouldRewriteConfluenceLoginNext(
+        string method,HttpStatusCode status,string appPath,string pathPrefix,
+        string slug,MediaTypeHeaderValue? contentType,string? enabledSlugs)
+    {
+        return HttpMethods.IsPost(method)&&
+            (int)status>=200&&(int)status<300 &&
+            pathPrefix.Length>0 &&
+            appPath.Equals("/rest/tsv/1.0/authenticate",
+                StringComparison.OrdinalIgnoreCase)&&
+            contentType?.MediaType?.Equals("application/json",
+                StringComparison.OrdinalIgnoreCase)==true &&
+            FavoritePathRouting.BrowserShimEnabled(enabledSlugs,slug);
+    }
+
     private static bool Navigation(HttpRequest request)
     {
         if(!HttpMethods.IsGet(request.Method))return false;
@@ -574,6 +619,19 @@ public sealed partial class FavoriteProxy
             if(HttpMethods.IsHead(method)||res.StatusCode is
                 HttpStatusCode.NotModified or HttpStatusCode.NoContent)
                 return;
+            if(ShouldRewriteConfluenceLoginNext(method,res.StatusCode,
+                appPath,pathPrefix,session.Slug,mime,
+                configuration["PLENARO_FAVORITES_BROWSER_SHIM_SLUGS"])){
+                // Keep the login response small and avoid streaming an
+                // unbounded upstream JSON payload. The upstream session
+                // cookies remain in this user's private HttpClient jar.
+                var payload=await ReadLimitedAsync(res.Content,65536,ct);
+                var content=Encoding.UTF8.GetString(payload);
+                var rewritten=RewriteConfluenceLoginNext(content,pathPrefix);
+                ctx.Response.ContentType="application/json; charset=utf-8";
+                await ctx.Response.WriteAsync(rewritten,ct);
+                return;
+            }
             var sniff=Navigation(ctx.Request)&&res.IsSuccessStatusCode&&
                 disposition is null && (mime?.MediaType is null or
                     "text/plain" or "application/octet-stream" or
