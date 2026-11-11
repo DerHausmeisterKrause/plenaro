@@ -8,6 +8,7 @@ import { DayMarkerBudgetSettings } from './DayMarkersPanel';
 import { ReminderSettingsPanel } from './ReminderSettingsPanel';
 import { ZnunySettingsPanel } from './ZnunySettingsPanel';
 import {FavoriteSettingsPanel,FavoriteAppsAdminPanel} from './FavoritesPage';
+import {WikiSettingsPanel} from './WikiSettingsPanel';
 import {useSearchParams} from 'react-router-dom';
 import { ZnunyCentralAdminPanel } from './ZnunyCentralAdminPanel';
 import { ClassicImportPanel } from './ClassicImportPanel';
@@ -290,7 +291,7 @@ function AdminUsers({ currentId }: { currentId: string }) {
   </section>;
 }
 
-type SettingsSection = 'general' | 'planning' | 'import' | 'microsoft' | 'ticket' | 'favorites' | 'security' | 'admin';
+type SettingsSection = 'general' | 'planning' | 'import' | 'microsoft' | 'ticket' | 'favorites' | 'wiki' | 'security' | 'admin';
 
 export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved, onFavoritesChanged }: {
   user: CurrentUser | null | undefined;
@@ -300,7 +301,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved, onFavori
 }) {
   const [params,setParams]=useSearchParams();
   const validSections:SettingsSection[]=['general','planning','import','microsoft',
-    'ticket','favorites','security','admin'];
+    'ticket','favorites','wiki','security','admin'];
   const requested=params.get('section') as SettingsSection|null;
   const [appsRevision,setAppsRevision]=useState(0);
   const [section,setSection]=useState<SettingsSection>(
@@ -318,6 +319,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved, onFavori
     { key: 'microsoft', label: 'Microsoft 365' },
     { key: 'ticket', label: 'Ticketsystem' },
     { key: 'favorites', label: 'Favoriten' },
+    { key: 'wiki', label: 'Wiki' },
     { key: 'security', label: 'Konto & Sicherheit' },
     ...(admin ? [{ key: 'admin' as const, label: 'Administration' }] : []),
   ];
@@ -359,6 +361,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved, onFavori
       {admin&&<FavoriteAppsAdminPanel onChanged={()=>{
         setAppsRevision(v=>v+1);onFavoritesChanged();
       }}/>}</>}
+    {section === 'wiki' && <WikiSettingsPanel admin={admin} userId={user.id}/>}
     {section === 'security' && <>
       <section className="content-card um-account">
         <div className="um-section-title"><ShieldCheck size={20}/><h2>Mein Konto</h2></div>

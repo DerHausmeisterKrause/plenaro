@@ -779,3 +779,16 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] GitHub-CI erfolgreich ([Run #43011123820](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43011123820)); [PR #30](https://github.com/DerHausmeisterKrause/plenaro/pull/30) nach main gemergt
 - [ ] Auf echtem Zielserver nach Deployment prüfen, ob `X-Frame-Options` von vorgeschalteter NGINX gesetzt wird, und ggf. nur für Favoritenhost korrigieren; keine globalen Sicherheitsheader lockern
 - [ ] Interaktiver Login, Folgeseite nach erfolgreichem POST sowie zwei getrennte Nutzer weiterhin offen
+
+## 11.11.2026 – Phase 7: Wissensdatenbank als Wiki-Browser (PR #31)
+
+- [x] WPF-`WikiBrowserView`, `WikiBrowserViewModel` und `WikiSettingsView` als Verhaltensreferenz ausgewertet: Standardquelle, Startseite, eingebetteter Browser, persönliche Zugangsdaten.
+- [x] `/wiki` von einem Platzhalter zu einer funktionierenden Wissensdatenbank-Seite mit auswählbarer Wiki-Quelle, Neu-verbinden und persönlicher Proxy-Sitzung ausgebaut.
+- [x] Einstellungen → Wiki: bestehenden Wiki-Favoriten als Standard wählen oder neue persönliche Wiki-Quelle aus adminfreigegebener Anwendung mit Startpfad und optionalem Browserlogin anlegen.
+- [x] Adminseitige Freigabe einer HTTPS-Wiki-Origin mit optionaler Startseite und Benutzer-ACL eingebaut, ohne bestehende Favoriten-/NGINX-Konfiguration zu verändern.
+- [x] Persönliche Standardquelle serverseitig unter `/api/v1/wiki/settings` gespeichert; Login + CSRF + Eigentümer/ACL-Prüfung und geschützter Favoriten-Bootstrap, vorhandenes Vault statt neuer Passwortspeicher.
+- [x] Personal-Settings-JSONB-Merge verhindert unbeabsichtigtes Löschen des gewählten Wiki-Favoriten durch Theme-/Wochenbeginn-Änderungen.
+- [x] Tests für bereits angebundene Quelle, neue Wiki-Quelle, Admin-URL-Prüfung, StrictMode, Wiederverbinden und Ablehnung fremder Proxy-URLs ergänzt.
+- [ ] PR-CI vollständig erfolgreich abschließen und Feature-Branch nach main mergen.
+- [ ] Host-Abnahme der realen Confluence-Seite: Wiki-Einstellungen, persönliche Anmeldung, Navigation nach Reload und zwei getrennte Benutzer.
+- [ ] Noch offen: REST-Wiki-Suche, Space-Key-Einschränkungen, Ticket-Wiki-Treffer, Dokumenten-/Attachment-Index und KI-Knowledge-Retrieval (WPF-Parität).

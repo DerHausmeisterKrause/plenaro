@@ -13,6 +13,7 @@ import { SettingsPage } from './SettingsPage';
 import { WeekCalendarPage } from './WeekCalendarPage';
 import { ZnunyWebPortalPage } from './ZnunyWebPortalPage';
 import {FavoritePage} from './FavoritesPage';
+import {WikiPage} from './WikiPage';
 import {loadFavorites,type Favorite} from './favoritesApi';
 import { ClassicTodayPage } from './ClassicTodayPage';
 import { ReportsPage } from './ReportsPage';
@@ -377,7 +378,8 @@ export function AppContent() {
           {themeError && <p role="alert" className="um-feedback failure app-settings-error">{themeError}</p>}
           <Routes>
             <Route path="/" element={<PrivateArea user={user}><Dashboard web={web} database={database} instanceName={instanceName}/></PrivateArea>} />
-            {navigation.filter(item => !['settings', 'week', 'today', 'ticketsystem', 'reports'].includes(item.key)).map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
+            {navigation.filter(item => !['settings', 'week', 'today', 'ticketsystem', 'reports', 'wiki'].includes(item.key)).map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
+            <Route path="/wiki" element={<PrivateArea user={user}><WikiPage/></PrivateArea>} />
             <Route path="/week" element={<PrivateArea user={user}><WeekCalendarPage/></PrivateArea>} />
             <Route path="/ticket-system" element={<PrivateArea user={user}><ZnunyWebPortalPage/></PrivateArea>} />
             <Route path="/favorites/:id" element={<PrivateArea user={user}><FavoritePage/></PrivateArea>} />

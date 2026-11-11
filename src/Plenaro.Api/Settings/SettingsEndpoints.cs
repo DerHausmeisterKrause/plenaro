@@ -68,7 +68,8 @@ public static class SettingsEndpoints
                 INSERT INTO user_preferences (user_id, preferences, updated_at)
                 VALUES (@uid, @json, now())
                 ON CONFLICT (user_id) DO UPDATE
-                SET preferences = EXCLUDED.preferences, updated_at = now()
+                SET preferences = COALESCE(user_preferences.preferences,'{}'::jsonb)
+                    || EXCLUDED.preferences, updated_at = now()
                 """, db);
             cmd.Parameters.AddWithValue("uid", account.Id);
             cmd.Parameters.AddWithValue("json", NpgsqlDbType.Jsonb,
