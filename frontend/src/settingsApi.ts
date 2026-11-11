@@ -1,7 +1,6 @@
 export type PersonalPreferences = {
   theme: 'light' | 'dark';
   weekStart: 'inherit' | 'monday' | 'sunday';
-  wikiFavoriteId?: string | null;
 };
 
 export type WorkspacePreferences = {
