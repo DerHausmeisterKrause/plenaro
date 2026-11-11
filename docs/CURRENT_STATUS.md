@@ -242,3 +242,13 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [ ] GitHub-CI und PR-Merge bestätigen
 - [ ] Auf Zielserver Deploy inkl. `PLENARO_FAVORITES_BROWSER_SHIM_SLUGS=wiki`, Browser-Netzwerk/Console prüfen; Benutzername-/Passwort-Eingabe und interaktiven Login wirklich abnehmen
 - [ ] Wenn weiterhin fehlgeschlagen: neue bereinigte Browser-Netzwerkdaten (URL-Pfad/Status und JS-Fehler), nicht blind zusätzliche Proxy-Routen freischalten
+
+
+### 11.11.2026 – Phase 7: Confluence blockierte Frames nach dem Login (PR #28)
+
+- [x] Ursache im Quellcode gefunden: Favoriten-`frame-ancestors` enthielt nur Plenaro-Origin; Confluence kann nach Login eigene verschachtelte `/wiki/`-Frames laden.
+- [x] Restriktiv `'self'` als zusätzlich erlaubten Vorfahren ergänzt, analog zu Znuny; kein globales `*`, kein Öffnen fremder Hosts, ACL/Cookies/CSRF unverändert.
+- [x] Regressionstests für dedizierten Favoritenhost und gemeinsamen Pfadhost hinzugefügt.
+- [ ] PR-CI abwarten und nach erfolgreichem Lauf in main übernehmen.
+- [ ] Live-Abnahme: Nutzername/Passwort absenden und echte Weiterleitung testen, Browser-Frame/Nachlade-Verhalten prüfen. Screenshot allein beweist keine erfolgreiche Anmeldung.
+- [ ] Wenn Browser weiterhin blockiert: HTTP-Dokumentnavigation (Status, Location, X-Frame-Options, CSP) und Konsole anonymisiert erfassen; vHost-Header oder fremden Identity-Provider gesondert prüfen.
