@@ -1,3 +1,34 @@
+## Confluence: HTTP 200, aber Buttons/Logos/Formulare fehlen (PR #24)
+
+Eine echte Browser-Netzwerkaufzeichnung mit Confluence-Web-Resources zeigte
+fast ausschließlich HTTP 200; dennoch brachen mehrere `batch.js`-Dateien
+mit `Invalid regular expression flags` ab. Ursache: Die bisherige
+globale URL-Ersetzung behandelte **jede** Zeichenfolge mit `"/` oder
+`'/` als Root-URL. In Confluence-JavaScript wurde beispielsweise
+ein regulärer Ausdruck `replace(/"/g, ...)` zu
+`replace(/"/wiki/g, ...)` beschädigt. Dadurch initialisierten
+`define` (AMD) und `AJS` nicht; komplette UI-Elemente fehlten.
+
+**Korrektur:** Der Favoriten-Proxy liefert JavaScript und JSON jetzt
+unverändert aus. Nur HTML, CSS und ausgewählte XML/SVG-Markup-Typen
+werden weiterhin pfadbezogen umgeschrieben. Bei HTML bleibt der
+**Inhalt von Inline-`<script>`-Elementen** unverändert; externe
+`src`-/`href`-Attribute, Bilder, Stylesheets und relevante
+Confluence-Kontext-Metatags behalten ihre Pfadkorrektur.
+
+Das verhindert JavaScript-Syntaxbeschädigung, kann aber JS-generierte
+absolute Root-URLs nicht generell an `/<slug>/` anpassen. Das muss
+die Zielanwendung über korrekten Kontextpfad/öffentliche Base-URL
+leisten, oder die App benötigt einen separaten Favoriten-Host.
+Nach Deployment neuen Favoriten-Proxy-Sessionstart durchführen,
+Browser-Cache deaktivieren und Confluence-Console/Netzwerk prüfen.
+
+Keine Produktions-HAR-Datei in GitHub hochladen: Solche Dateien
+können Cookies, Authorization-Header, Querytokens und persönliche
+Daten enthalten. Regressionstests verwenden ausschließlich
+synthetische, bereinigte JS-Snippets.
+
+---
 ## Wiki-Oberfläche unvollständig: Buttons, Logos, Eingabemasken (PR #23)
 
 Ein HTTP-200-Healthcheck zeigt lediglich, dass DNS, die beiden NGINX-Schichten
