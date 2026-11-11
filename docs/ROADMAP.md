@@ -769,3 +769,13 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] Regressionstests für Erfolg/Fehler, Route, MIME, Slug, externe URLs und Idempotenz ergänzt
 - [x] GitHub-CI erfolgreich ([Run #43009144307](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43009144307)); [PR #29](https://github.com/DerHausmeisterKrause/plenaro/pull/29) nach main gemergt
 - [ ] Zielhost: Docker-Web und Docker-NGINX aktualisieren, persönliche Session neu verbinden, Anmelde-POST 200 `{"next":"/wiki/"}`, navigierte Wiki-Seite und zwei Benutzer wirklich abnehmen
+
+### 11.11.2026 – Phase 7: Confluence-Login-iframe navigiert noch auf Root, vorgelagerter Frame-Header (PR ausstehend)
+
+- [x] Bestehende HAR-Metadaten nochmals kontrolliert: erfolgreicher POST liefert `{"next":"/"}`; anschließend GET `/` als iframe mit Referer `/wiki/login.action` und 404
+- [x] Einmaliger enger Root-Navigationsfallback implementiert: nur GET, iframe, same-origin, Referer exakt `/wiki/login.action`, Opt-in wiki und Shared-Pfadhost → 303 `/wiki/`; andere Root-Routen weiter 404
+- [x] Diagnostik für Login-JSON-Rewrite und Root-Fallback über nicht-sensitive Header; Vertragstests für zulässigen und abgelehnten Browser-Routenfall
+- [x] In HAR sichtbarer `X-Frame-Options: SAMEORIGIN`-Header zusätzlich als wahrscheinlicher Einbettungsblocker erfasst; laut Projektcode nicht durch Favoriten-API oder Docker-NGINX gesetzt
+- [ ] GitHub-CI erfolgreich und PR mergen
+- [ ] Auf echtem Zielserver nach Deployment prüfen, ob `X-Frame-Options` von vorgeschalteter NGINX gesetzt wird, und ggf. nur für Favoritenhost korrigieren; keine globalen Sicherheitsheader lockern
+- [ ] Interaktiver Login, Folgeseite nach erfolgreichem POST sowie zwei getrennte Nutzer weiterhin offen

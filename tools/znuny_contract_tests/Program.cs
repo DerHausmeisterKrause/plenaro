@@ -433,6 +433,81 @@ sharedProbe.Request.Path="/";
 await sharedProxy.ServeAsync(sharedProbe,CancellationToken.None);
 Assert(sharedProbe.Response.StatusCode==404,
     "shared host root never exposes Plenaro login");
+// In the sanitized Confluence login trace, the successful login plugin
+// navigates to GET / with Referer /wiki/login.action and iframe destination.
+// Root remains 404 generally; only this exact same-origin navigation may
+// redirect to /wiki/, which enforces its original session/ACL normally.
+var recoveryConfig=new ConfigurationBuilder().AddInMemoryCollection(
+    new Dictionary<string,string?>{
+        ["PLENARO_PUBLIC_ORIGIN"]="https://portal.example.org",
+        ["PLENARO_ZNUNY_PROXY_ORIGIN"]="https://tickets.example.org",
+        ["PLENARO_FAVORITES_PATH_ORIGIN"]="https://apps-plenaro.example.org",
+        ["PLENARO_FAVORITES_BROWSER_SHIM_SLUGS"]="wiki",
+        ["Security:RequireHttps"]="true"
+    }).Build();
+var recoveryProxy=new FavoriteProxy(recoveryConfig);
+var rootNavigation=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+rootNavigation.Request.Method="GET";
+rootNavigation.Request.Scheme="https";
+rootNavigation.Request.Host=new Microsoft.AspNetCore.Http.HostString(
+    "apps-plenaro.example.org");
+rootNavigation.Request.Path="/";
+rootNavigation.Request.Headers["Sec-Fetch-Dest"]="iframe";
+rootNavigation.Request.Headers["Sec-Fetch-Site"]="same-origin";
+rootNavigation.Request.Headers["Referer"]=
+    "https://apps-plenaro.example.org/wiki/login.action?os_destination=%2F";
+Assert(FavoritePathRouting.ConfluenceLoginRootNavigation(
+    rootNavigation.Request,"wiki"),
+    "Confluence same-origin login iframe navigation recognized exactly");
+using(var body=new MemoryStream()){
+    rootNavigation.Response.Body=body;
+    await recoveryProxy.ServeAsync(rootNavigation,CancellationToken.None);
+    Assert(rootNavigation.Response.StatusCode==303 &&
+        rootNavigation.Response.Headers.Location=="/wiki/" &&
+        rootNavigation.Response.Headers["X-Plenaro-Login-Reroute"]=="wiki-root" &&
+        body.Length==0,
+        "login-root fallback only redirects to ACL protected /wiki/ without content");
+}
+rootNavigation.Request.Headers["Referer"]=
+    "https://apps-plenaro.example.org/cloud/login.action";
+Assert(!FavoritePathRouting.ConfluenceLoginRootNavigation(
+    rootNavigation.Request,"wiki"),
+    "login fallback never chooses another app from Referer");
+rootNavigation.Request.Headers["Referer"]=
+    "https://other.example.org/wiki/login.action";
+Assert(!FavoritePathRouting.ConfluenceLoginRootNavigation(
+    rootNavigation.Request,"wiki"),
+    "login fallback denies cross-origin spoofed Referer");
+rootNavigation.Request.Headers["Referer"]=
+    "https://apps-plenaro.example.org/wiki/login.action";
+rootNavigation.Request.Headers["Sec-Fetch-Site"]="cross-site";
+Assert(!FavoritePathRouting.ConfluenceLoginRootNavigation(
+    rootNavigation.Request,"wiki"),
+    "login fallback requires same-origin browser navigation");
+rootNavigation.Request.Headers["Sec-Fetch-Site"]="same-origin";
+rootNavigation.Request.Headers["Sec-Fetch-Dest"]="empty";
+Assert(!FavoritePathRouting.ConfluenceLoginRootNavigation(
+    rootNavigation.Request,"wiki"),
+    "login fallback refuses AJAX requests");
+rootNavigation.Request.Headers["Sec-Fetch-Dest"]="iframe";
+Assert(!FavoritePathRouting.ConfluenceLoginRootNavigation(
+    rootNavigation.Request,"cloud"),
+    "login fallback is opt-in only for wiki");
+rootNavigation.Request.Method="POST";
+Assert(!FavoritePathRouting.ConfluenceLoginRootNavigation(
+    rootNavigation.Request,"wiki"),
+    "login fallback refuses root form POST");
+rootNavigation.Request.Method="GET";
+rootNavigation.Request.Path="/api/v1/users";
+Assert(!FavoritePathRouting.ConfluenceLoginRootNavigation(
+    rootNavigation.Request,"wiki"),
+    "login fallback refuses API root");
+rootNavigation.Request.Path="/";
+rootNavigation.Request.QueryString=new Microsoft.AspNetCore.Http.QueryString("?query=1");
+Assert(!FavoritePathRouting.ConfluenceLoginRootNavigation(
+    rootNavigation.Request,"wiki"),
+    "login fallback refuses arbitrary root query");
+
 sharedProbe.Request.Path="/api/v1/users";
 await sharedProxy.ServeAsync(sharedProbe,CancellationToken.None);
 Assert(sharedProbe.Response.StatusCode==404,

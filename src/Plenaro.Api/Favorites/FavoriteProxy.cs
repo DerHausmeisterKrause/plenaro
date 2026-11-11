@@ -220,6 +220,20 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             if(ctx.Request.Path==DiagnosticPath){
                 await FavoriteHealthAsync(ctx,ct);return;
             }
+            if(!FavoriteHostNames.PreferDedicated(
+                configuration["PLENARO_FAVORITES_DEDICATED_SLUGS"],"wiki") &&
+               FavoritePathRouting.ConfluenceLoginRootNavigation(
+                   ctx.Request,
+                   configuration["PLENARO_FAVORITES_BROWSER_SHIM_SLUGS"])){
+                // Never serve arbitrary content at the shared host root.
+                // Only the proven login iframe navigation is redirected to
+                // /wiki/, where the normal scoped session cookie is required.
+                ctx.Response.StatusCode=StatusCodes.Status303SeeOther;
+                ctx.Response.Headers.Location="/wiki/";
+                ctx.Response.Headers.CacheControl="no-store";
+                ctx.Response.Headers["X-Plenaro-Login-Reroute"]="wiki-root";
+                return;
+            }
             if(!FavoritePathRouting.TrySplitPath(ctx.Request.Path.Value,
                 out slug,out appPath)){
                 ctx.Response.StatusCode=404;return;
