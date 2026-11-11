@@ -252,3 +252,12 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] GitHub-CI vollständig erfolgreich ([Run #43007066314](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43007066314)); [PR #28](https://github.com/DerHausmeisterKrause/plenaro/pull/28) nach main gemergt.
 - [ ] Live-Abnahme: Nutzername/Passwort absenden und echte Weiterleitung testen, Browser-Frame/Nachlade-Verhalten prüfen. Screenshot allein beweist keine erfolgreiche Anmeldung.
 - [ ] Wenn Browser weiterhin blockiert: HTTP-Dokumentnavigation (Status, Location, X-Frame-Options, CSP) und Konsole anonymisiert erfassen; vHost-Header oder fremden Identity-Provider gesondert prüfen.
+
+### 11.11.2026 – Phase 7: Confluence-Login-POST erfolgreich, Navigation in gesperrte Root (PR folgt)
+
+- [x] Bereinigte HAR-Metadaten analysiert: erfolgreicher `POST /wiki/rest/tsv/1.0/authenticate` mit HTTP 200 und `{"next":"/"}`, unmittelbar danach `GET /` HTTP 404 im Favoriten-Pfadhost
+- [x] Erfolgreiche JSON-Antwort am konkreten Confluence-Anmelde-Endpunkt unter Opt-in `wiki` so korrigiert, dass `next` auf `/wiki/` beziehungsweise `/wiki/<ziel>` zeigt; andere JSON-Antworten und Fehlerstatus bleiben unverändert
+- [x] Freigaberegeln, Authentifizierung, Cookie-Jar, Root-404 und fremde Favoriten unverändert; keine globalen Root-Redirects
+- [x] Regressionstests für Erfolg/Fehler, Route, MIME, Slug, externe URLs und Idempotenz ergänzt
+- [ ] CI-Test erfolgreich abschließen und PR in main mergen
+- [ ] Zielhost: Docker-Web und Docker-NGINX aktualisieren, persönliche Session neu verbinden, Anmelde-POST 200 `{"next":"/wiki/"}`, navigierte Wiki-Seite und zwei Benutzer wirklich abnehmen

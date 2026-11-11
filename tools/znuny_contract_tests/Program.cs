@@ -277,6 +277,62 @@ catch(System.Reflection.TargetInvocationException e) when(
     e.InnerException is InvalidOperationException){invalidPrefixRejected=true;}
 Assert(invalidPrefixRejected,"untrusted browser shim prefix is rejected");
 
+// A sanitized real Confluence login HAR shows successful POST
+// /wiki/rest/tsv/1.0/authenticate -> {"next":"/"} (200), followed by
+// browser navigation to shared host root "/" (404). Only the successful
+// plugin endpoint JSON navigation field may receive the /wiki/ prefix.
+var loginRewrite=typeof(FavoriteProxy).GetMethod("RewriteConfluenceLoginNext",
+    BindingFlags.NonPublic|BindingFlags.Static)!;
+string LoginNext(string json,string prefix)=>
+    (string)loginRewrite.Invoke(null,new object[]{json,prefix})!;
+const string nextRoot = """{"next":"/"}""";
+const string nextWiki = """{"next":"/wiki/"}""";
+const string nextSubPath = """{"next":"/display/SPACE?a=1","ok":true}""";
+const string nextSubPathRewritten = """{"next":"/wiki/display/SPACE?a=1","ok":true}""";
+Assert(LoginNext(nextRoot,"/wiki")==nextWiki &&
+    LoginNext(nextSubPath,"/wiki")==nextSubPathRewritten &&
+    LoginNext("""{"next":"/wiki/display/SPACE"}""","/wiki")
+        == """{"next":"/wiki/display/SPACE"}""" &&
+    LoginNext("""{"next":"//outside.invalid/"}""","/wiki")
+        == """{"next":"//outside.invalid/"}""" &&
+    LoginNext("""{"next":"https://outside.invalid/"}""","/wiki")
+        == """{"next":"https://outside.invalid/"}""" &&
+    LoginNext(nextRoot,"")==nextRoot &&
+    LoginNext("{broken","/wiki")=="{broken",
+    "Confluence login JSON 'next' rewrite is narrow, prefix-safe and idempotent");
+var loginRewriteGate=typeof(FavoriteProxy).GetMethod(
+    "ShouldRewriteConfluenceLoginNext",
+    BindingFlags.NonPublic|BindingFlags.Static)!;
+bool ShouldLoginRewrite(string method,System.Net.HttpStatusCode status,
+    string path,string prefix,string slug,string media,string slugs)=>
+    (bool)loginRewriteGate.Invoke(null,new object?[]{
+        method,status,path,prefix,slug,
+        new System.Net.Http.Headers.MediaTypeHeaderValue(media),slugs})!;
+Assert(ShouldLoginRewrite("POST",System.Net.HttpStatusCode.OK,
+        "/rest/tsv/1.0/authenticate","/wiki","wiki",
+        "application/json","wiki") &&
+    !ShouldLoginRewrite("POST",System.Net.HttpStatusCode.Unauthorized,
+        "/rest/tsv/1.0/authenticate","/wiki","wiki",
+        "application/json","wiki") &&
+    !ShouldLoginRewrite("POST",System.Net.HttpStatusCode.OK,
+        "/rest/tsv/1.0/authenticate","","wiki","application/json","wiki") &&
+    !ShouldLoginRewrite("POST",System.Net.HttpStatusCode.OK,
+        "/rest/tsv/1.0/authenticate","/cloud","cloud",
+        "application/json","wiki") &&
+    !ShouldLoginRewrite("POST",System.Net.HttpStatusCode.OK,
+        "/rest/tsv/1.0/authenticate","/wiki","wiki",
+        "application/json","") &&
+    !ShouldLoginRewrite("GET",System.Net.HttpStatusCode.OK,
+        "/rest/tsv/1.0/authenticate","/wiki","wiki",
+        "application/json","wiki") &&
+    !ShouldLoginRewrite("POST",System.Net.HttpStatusCode.OK,
+        "/rest/other/1.0/authenticate","/wiki","wiki",
+        "application/json","wiki") &&
+    !ShouldLoginRewrite("POST",System.Net.HttpStatusCode.OK,
+        "/rest/tsv/1.0/authenticate","/wiki","wiki",
+        "text/html","wiki"),
+    "Confluence login rewrite gated by exact endpoint, success, mime and opted-in slug");
+
 // Confluence plugins use origin-root /rest and /s paths. Keep their session
 // on a dedicated host with cookie Path=/ while all unrelated favorites keep
 // the existing shared /<slug>/ host and their /<slug> cookie scope.
