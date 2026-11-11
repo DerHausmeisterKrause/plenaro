@@ -164,6 +164,62 @@ public sealed partial class FavoriteProxy
               RegexOptions.CultureInvariant,TimeSpan.FromSeconds(1));
     }
 
+    // Confluence (and some Atlassian plugins) constructs AJAX and web-resource
+    // URLs from these meta tags, not from the resource URLs in HTML. An empty
+    // context path is correct on the upstream origin, but not on /<slug>/.
+    // Only alter these specific metadata tags in HTML, never arbitrary values,
+    // JSON responses, or third-party URLs.
+    private static string RewriteHtmlAppContext(string source,string pathPrefix)
+    {
+        if(pathPrefix.Length==0)return source;
+        return Regex.Replace(source,@"<meta\b[^>]*>",
+            meta=>{
+                var name=Attribute(meta.Value,"name");
+                if(name is null ||
+                   (!name.Equals("ajs-context-path",StringComparison.OrdinalIgnoreCase)&&
+                    !name.Equals("confluence-context-path",StringComparison.OrdinalIgnoreCase)))
+                    return meta.Value;
+                return Regex.Replace(meta.Value,
+                    @"(?<key>\bcontent\s*=\s*)(?:""(?<dq>[^""]*)""|'(?<sq>[^']*)'|(?<bare>[^\s>]+))",
+                    value=>{
+                        var old=WebUtility.HtmlDecode(
+                            value.Groups["dq"].Success?value.Groups["dq"].Value:
+                            value.Groups["sq"].Success?value.Groups["sq"].Value:
+                            value.Groups["bare"].Value);
+                        string corrected;
+                        if(old is "" or "/")corrected=pathPrefix;
+                        else if(old==pathPrefix ||
+                            old.StartsWith(pathPrefix+"/",StringComparison.Ordinal))
+                            return value.Value;
+                        else if(old.StartsWith('/')&&!old.StartsWith("//"))
+                            corrected=pathPrefix+old;
+                        else return value.Value;
+                        return value.Groups["key"].Value+"\""+
+                            WebUtility.HtmlEncode(corrected)+"\"";
+                    },RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,
+                    TimeSpan.FromSeconds(1));
+            },RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,
+            TimeSpan.FromSeconds(1));
+    }
+
+    // HTML/API JSON remains deliberately bounded at 6 MiB. Some application
+    // web-resource JavaScript/CSS bundles exceed that size, which previously
+    // caused 413 and broke complete toolbars/forms. Give only script/style
+    // bundles a separate, bounded cap rather than disabling size checks.
+    private const int MaxStyleScriptBytes=24*1024*1024;
+    private static int RewriteLimit(MediaTypeHeaderValue? type)
+    {
+        var media=type?.MediaType??"";
+        if(media.Equals("text/css",StringComparison.OrdinalIgnoreCase)||
+           media.Equals("text/javascript",StringComparison.OrdinalIgnoreCase)||
+           media.Equals("application/javascript",StringComparison.OrdinalIgnoreCase)||
+           media.Equals("application/x-javascript",StringComparison.OrdinalIgnoreCase)||
+           media.Equals("application/ecmascript",StringComparison.OrdinalIgnoreCase)||
+           media.Equals("application/x-ecmascript",StringComparison.OrdinalIgnoreCase))
+            return MaxStyleScriptBytes;
+        return MaxTextBytes;
+    }
+
     private static bool RewriteMime(MediaTypeHeaderValue? type)
     {
         var media=type?.MediaType??"";
@@ -357,7 +413,7 @@ public sealed partial class FavoriteProxy
                 var binarySniff=sniff&&!textual;
                 var bytes=binarySniff?
                     await ReadOpaqueAsync(res.Content,ctx.Response.Body,ct):
-                    await ReadLimitedAsync(res.Content,MaxTextBytes,ct);
+                    await ReadLimitedAsync(res.Content,RewriteLimit(mime),ct);
                 if(bytes is null)return;
                 var charset=mime?.CharSet?.Trim('"');
                 Encoding encoding;
@@ -377,7 +433,10 @@ public sealed partial class FavoriteProxy
                      (mediaType.Equals("text/html",StringComparison.OrdinalIgnoreCase)||
                       mediaType.Equals("application/xhtml+xml",StringComparison.OrdinalIgnoreCase))||
                      sniff&&LooksLikeHtml(html)))
+                {
                     transformed=RewriteHtmlResources(transformed,pathPrefix);
+                    transformed=RewriteHtmlAppContext(transformed,pathPrefix);
+                }
                 await ctx.Response.Body.WriteAsync(encoding.GetBytes(transformed),ct);
             }else{
                 await res.Content.CopyToAsync(ctx.Response.Body,ct);
