@@ -285,7 +285,7 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [ ] Host-Abnahme der realen Confluence-Seite: Wiki-Einstellungen, persönliche Anmeldung, Navigation nach Reload und zwei getrennte Benutzer.
 - [ ] Noch offen: REST-Wiki-Suche, Space-Key-Einschränkungen, Ticket-Wiki-Treffer, Dokumenten-/Attachment-Index und KI-Knowledge-Retrieval (WPF-Parität).
 
-## 11.11.2026 – Phase 7: Admin-Wiki für alle, verpflichtender Auto-Login je Benutzer (PR folgt)
+## 11.11.2026 – Phase 7: Admin-Wiki für alle, verpflichtender Auto-Login je Benutzer (PR #32)
 
 - [x] Zielmodell überarbeitet: genau ein zentral durch Admin freigegebener Wiki-Server mit globalem Startpfad; keine individuellen Server-/Favoriten-Zieladressen für Benutzer.
 - [x] Admin-API `GET/PUT /api/v1/wiki/admin/` mit RBAC und CSRF implementiert; vorhandene `favorite_apps`-Wiki-Origin wiederverwenden, für alle Benutzer freigeben, bestehende persönliche Favoriten/Secrets nicht löschen.
@@ -293,6 +293,6 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] Spezialisierter Wiki-Start nur bei gespeicherten Credentials und durch Confluence-JSON-Login bestätigter Anmeldung; bei 401/Captcha keine vermeintlich erfolgreiche Session; generischer Favoriten-Proxy unverändert.
 - [x] Wiki-Browser und Wiki-Einstellungen für Admin-/Benutzer-Trennung umgebaut; keine manuelle Wiki-Favoriteneinrichtung mehr erforderlich.
 - [x] Frontend-Regressionen und synthetische Confluence-Login-/URL-Validierungs-Vertragstests ergänzt; keine echten Credentials oder HAR-Daten in GitHub.
-- [ ] CI grün und PR nach main mergen.
+- [x] CI vollständig erfolgreich ([Run #43018570330](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43018570330)); [PR #32](https://github.com/DerHausmeisterKrause/plenaro/pull/32) nach main gemergt.
 - [ ] Echte Confluence-Autoanmeldung (inkl. Cookies, Logout, abgelaufenem Passwort) sowie parallele Benutzer auf Zielhost live abnehmen.
 - [ ] WPF-Restfunktionen Wiki-Suche, Ticket-Wiki-Treffer, Dokumenten- und KI-Index später.
