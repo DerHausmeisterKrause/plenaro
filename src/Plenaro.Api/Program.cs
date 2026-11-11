@@ -23,6 +23,7 @@ using Plenaro.Api.Tasks;
 using Plenaro.Api.DayMarkers;
 using Plenaro.Api.Znuny;
 using Plenaro.Api.Favorites;
+using Plenaro.Api.Wiki;
 
 if (args.Contains("--healthcheck", StringComparer.Ordinal))
 {
@@ -498,6 +499,7 @@ app.MapPlenaroReminders();
 app.MapPlenaroClassicImport();
 app.MapPlenaroZnuny();
 app.MapPlenaroFavorites();
+app.MapPlenaroWiki();
 ZnunyNativeProxy.Map(app);
 app.MapPlenaroZnunyCentral();
 app.MapPlenaroDayMarkers();
