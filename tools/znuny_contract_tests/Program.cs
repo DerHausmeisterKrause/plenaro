@@ -222,6 +222,57 @@ var pathOnlyConfig=new ConfigurationBuilder().AddInMemoryCollection(
         ["PLENARO_FAVORITES_PATH_ORIGIN"]="https://apps-plenaro.example.org",
         ["Security:RequireHttps"]="true"
     }).Build();
+// Confluence plugins use origin-root /rest and /s paths. Keep their session
+// on a dedicated host with cookie Path=/ while all unrelated favorites keep
+// the existing shared /<slug>/ host and their /<slug> cookie scope.
+var mixedOriginConfig=new ConfigurationBuilder().AddInMemoryCollection(
+    new Dictionary<string,string?>{
+        ["PLENARO_PUBLIC_ORIGIN"]="https://portal.example.org",
+        ["PLENARO_ZNUNY_PROXY_ORIGIN"]="https://tickets.example.org",
+        ["PLENARO_FAVORITES_PATH_ORIGIN"]="https://apps-plenaro.example.org",
+        ["PLENARO_FAVORITES_HOST_TEMPLATE"]="{slug}-plenaro.example.org",
+        ["PLENARO_FAVORITES_DEDICATED_SLUGS"]="wiki, confluence",
+        ["Security:RequireHttps"]="true"
+    }).Build();
+var mixedOriginProxy=new FavoriteProxy(mixedOriginConfig);
+var originMethod=typeof(FavoriteProxy).GetMethod("ProxyOrigin",
+    BindingFlags.NonPublic|BindingFlags.Instance)!;
+Uri? MixedOrigin(string slug)=>originMethod.Invoke(mixedOriginProxy,
+    new object[]{slug}) as Uri;
+Assert(MixedOrigin("wiki")?.AbsoluteUri=="https://wiki-plenaro.example.org/" &&
+    MixedOrigin("cloud")?.AbsoluteUri=="https://apps-plenaro.example.org/cloud/" &&
+    MixedOrigin("confluence")?.AbsoluteUri=="https://confluence-plenaro.example.org/",
+    "selected Confluence favorites get dedicated origin, other slugs stay on path host");
+Assert(FavoriteHostNames.PreferDedicated("wiki, confluence","wiki") &&
+    !FavoriteHostNames.PreferDedicated("wiki, confluence","cloud") &&
+    !FavoriteHostNames.PreferDedicated(null,"wiki"),
+    "dedicated origin preference is explicit, scoped and off by default");
+var isolatedProbe=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+isolatedProbe.Request.Scheme="https";
+isolatedProbe.Request.Host=new Microsoft.AspNetCore.Http.HostString(
+    "wiki-plenaro.example.org");
+Assert(mixedOriginProxy.IsFavoriteHost(isolatedProbe),
+    "dedicated alias is intercepted before primary Plenaro routes");
+isolatedProbe.Request.Host=new Microsoft.AspNetCore.Http.HostString(
+    "apps-plenaro.example.org");
+Assert(mixedOriginProxy.IsFavoriteHost(isolatedProbe),
+    "shared path-host continues serving unrelated favorites");
+var noAliasConfig=new ConfigurationBuilder().AddInMemoryCollection(
+    new Dictionary<string,string?>{
+        ["PLENARO_PUBLIC_ORIGIN"]="https://portal.example.org",
+        ["PLENARO_ZNUNY_PROXY_ORIGIN"]="https://tickets.example.org",
+        ["PLENARO_FAVORITES_PATH_ORIGIN"]="https://apps-plenaro.example.org",
+        ["PLENARO_FAVORITES_DEDICATED_SLUGS"]="wiki",
+        ["Security:RequireHttps"]="true"
+    }).Build();
+Assert(originMethod.Invoke(new FavoriteProxy(noAliasConfig),new object[]{"wiki"}) is null,
+    "selected dedicated host fails closed without configured domain/template");
+var invalidSlugRejected=false;
+try{FavoriteHostNames.PreferDedicated("wiki,../admin","wiki");}
+catch(InvalidOperationException){invalidSlugRejected=true;}
+Assert(invalidSlugRejected,
+    "malformed allowlist fails closed rather than accepting partial configuration");
+
 var sharedProxy=new FavoriteProxy(pathOnlyConfig);
 Assert(sharedProxy.BaseConfigured,"path-host router is opt-in without subdomain wildcard");
 Assert(FavoritePathRouting.SharedOrigin("https://apps-plenaro.example.org",
