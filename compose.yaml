@@ -36,6 +36,7 @@ services:
       PLENARO_FAVORITES_BASE_DOMAIN: "${PLENARO_FAVORITES_BASE_DOMAIN:-}"
       PLENARO_FAVORITES_HOST_TEMPLATE: "${PLENARO_FAVORITES_HOST_TEMPLATE:-}"
       PLENARO_FAVORITES_PATH_ORIGIN: "${PLENARO_FAVORITES_PATH_ORIGIN:-}"
+      PLENARO_FAVORITES_DEDICATED_SLUGS: "${PLENARO_FAVORITES_DEDICATED_SLUGS:-}"
       # CA file is merged with the public OS CA bundle at container startup.
       # Default /dev/null means "no extra CA", preserving existing installs.
     depends_on:
