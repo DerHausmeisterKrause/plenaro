@@ -285,18 +285,20 @@ var loginRewrite=typeof(FavoriteProxy).GetMethod("RewriteConfluenceLoginNext",
     BindingFlags.NonPublic|BindingFlags.Static)!;
 string LoginNext(string json,string prefix)=>
     (string)loginRewrite.Invoke(null,new object[]{json,prefix})!;
-Assert(LoginNext("{\\"next\\":\\"/\\"}","/wiki")=="{\\"next\\":\\"/wiki/\\"}" &&
-    LoginNext("{\\"next\\":\\"/display/SPACE?a=1\\",\\"ok\\":true}","/wiki")
-        .Contains("\\"next\\":\\"/wiki/display/SPACE?a=1\\"",StringComparison.Ordinal) &&
-    LoginNext("{\\"next\\":\\"/wiki/display/SPACE\\"}","/wiki")
-        =="{\\"next\\":\\"/wiki/display/SPACE\\"}" &&
-    LoginNext("{\\"next\\":\\"//outside.invalid/\\"}","/wiki")
-        =="{\\"next\\":\\"//outside.invalid/\\"}" &&
-    LoginNext("{\\"next\\":\\"https://outside.invalid/\\"}","/wiki")
-        =="{\\"next\\":\\"https://outside.invalid/\\"}" &&
-    LoginNext("{\\"next\\":\\"/\\"}","")
-        =="{\\"next\\":\\"/\\"}" &&
-    LoginNext("{broken", "/wiki")=="{broken",
+const string nextRoot = """{"next":"/"}""";
+const string nextWiki = """{"next":"/wiki/"}""";
+const string nextSubPath = """{"next":"/display/SPACE?a=1","ok":true}""";
+const string nextSubPathRewritten = """{"next":"/wiki/display/SPACE?a=1","ok":true}""";
+Assert(LoginNext(nextRoot,"/wiki")==nextWiki &&
+    LoginNext(nextSubPath,"/wiki")==nextSubPathRewritten &&
+    LoginNext("""{"next":"/wiki/display/SPACE"}""","/wiki")
+        == """{"next":"/wiki/display/SPACE"}""" &&
+    LoginNext("""{"next":"//outside.invalid/"}""","/wiki")
+        == """{"next":"//outside.invalid/"}""" &&
+    LoginNext("""{"next":"https://outside.invalid/"}""","/wiki")
+        == """{"next":"https://outside.invalid/"}""" &&
+    LoginNext(nextRoot,"")==nextRoot &&
+    LoginNext("{broken","/wiki")=="{broken",
     "Confluence login JSON 'next' rewrite is narrow, prefix-safe and idempotent");
 var loginRewriteGate=typeof(FavoriteProxy).GetMethod(
     "ShouldRewriteConfluenceLoginNext",
