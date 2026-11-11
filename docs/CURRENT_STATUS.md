@@ -193,3 +193,13 @@ Die globale Rechteprüfung aus PR #15 wurde in PR #17 gezielt auf **neue unzugew
 - [x] PR #22 nach main gemergt; Diagnoseverfahren für TLS-Fehler 20 dokumentiert.
 - [ ] **Betrieb:** tatsächliche Host-.env auf vollständige Chain verweisen lassen, erneuten Docker-NGINX-Start durchführen, Curl ohne -k auf Port 8443 und auf äußeren HTTPS-Host testen.
 - [ ] Echte Wiki-/Favoriten-Browsersitzung und CSS/JS nach Behebung des 502 testen.
+
+
+## 11.11.2026 – Phase 7: Wiki-Kontext und große CSS-/JS-Ressourcen (PR #23)
+
+- [x] HTML-Metadaten für Confluence-Kontextpfade (`ajs-context-path`, `confluence-context-path`) im gemeinsamen Favoriten-Pfadhost `/<slug>/` umgesetzt, bestehende App-Pfade bleiben erhalten.
+- [x] Separate, begrenzte 24-MiB-Obergrenze für text/css und JavaScript-MIME-Typen; HTML/API-JSON und sonstige Texte bleiben bei 6 MiB.
+- [x] Regressionstests für Metadaten, Pfad-Idempotenz, Limits sowie .NET/Frontend, NGINX-TLS und Docker-Smoke grün ([Run #42986077812](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42986077812)).
+- [x] PR #23 nach main gemergt.
+- [ ] Echtes Wiki auf JS/CSS/Formulare/Logos prüfen; verbleibende 401/403/404/413-, CSP-/CORS- oder WebSocket-Fehler im Browser-Netzwerk-Tab feststellen, ohne Token/Cookies zu teilen.
+- [ ] Nur wenn Pfadhost weiterhin inkompatibel bleibt: bevorzugt dedizierten Favoriten-Host statt ungesichertem Root-Fallback erwägen.
