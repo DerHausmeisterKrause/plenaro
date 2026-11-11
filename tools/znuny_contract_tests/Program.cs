@@ -98,6 +98,17 @@ Assert(favoriteProbe.Response.StatusCode==200 &&
     Encoding.UTF8.GetString(favoriteProbeBody.ToArray())==
         "plenaro-favorite-proxy-ready",
     "favorite wildcard health confirms correct proxy routing without token");
+// Confluence may embed additional same-origin frames after a successful login.
+// The browser evaluates CSP frame-ancestors against *every* ancestor, not
+// only the outer Plenaro document. Preserve the exact, restricted allowlist.
+var favoriteCsp=favoriteProbe.Response.Headers["Content-Security-Policy"].ToString();
+var favoriteAncestors=favoriteCsp.Split(';',StringSplitOptions.TrimEntries)
+    .Single(x=>x.StartsWith("frame-ancestors ",StringComparison.Ordinal));
+Assert(favoriteAncestors=="frame-ancestors 'self' https://portal.example.org" &&
+    favoriteCsp.Contains("frame-src 'self'",StringComparison.Ordinal) &&
+    !favoriteCsp.Contains("frame-ancestors *",StringComparison.Ordinal) &&
+    !favoriteProbe.Response.Headers.ContainsKey("X-Frame-Options"),
+    "favorite host permits nested same-origin frames and Plenaro only");
 favoriteProbe.Request.Method="POST";
 favoriteProbeBody.SetLength(0);
 await favoriteProxy.ServeAsync(favoriteProbe,CancellationToken.None);
@@ -374,6 +385,15 @@ sharedProbe.Request.Path="/wiki/css/site.css";
 await sharedProxy.ServeAsync(sharedProbe,CancellationToken.None);
 Assert(sharedProbe.Response.StatusCode==401,
     "path resource requires independent valid favorite cookie");
+// Only /<slug>/ routes create the app frame policy. The public healthcheck
+// exits before that policy is applied, so test on an actual favorite path.
+var sharedCsp=sharedProbe.Response.Headers["Content-Security-Policy"].ToString();
+var sharedAncestors=sharedCsp.Split(';',StringSplitOptions.TrimEntries)
+    .Single(x=>x.StartsWith("frame-ancestors ",StringComparison.Ordinal));
+Assert(sharedAncestors=="frame-ancestors 'self' https://portal.example.org" &&
+    sharedCsp.Contains("frame-src 'self'",StringComparison.Ordinal) &&
+    !sharedProbe.Response.Headers.ContainsKey("X-Frame-Options"),
+    "shared /wiki/ host permits own nested login frames and Plenaro only");
 sharedProbe.Request.Path="/cloud/_plenaro/favorite-bootstrap";
 await sharedProxy.ServeAsync(sharedProbe,CancellationToken.None);
 Assert(sharedProbe.Response.StatusCode==401,

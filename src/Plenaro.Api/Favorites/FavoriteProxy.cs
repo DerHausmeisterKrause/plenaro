@@ -246,7 +246,10 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             "img-src 'self' data: blob:; font-src 'self' data:; "+
             "connect-src 'self'; frame-src 'self'; worker-src 'self' blob:; "+
             "form-action 'self'; base-uri 'self'; object-src 'none'; "+
-            "frame-ancestors "+configuration["PLENARO_PUBLIC_ORIGIN"];
+            // Confluence can load nested same-origin frames after login.
+            // Every ancestor is checked: the proxy frame itself and Plenaro.
+            // Allow only these two origins, never arbitrary parent websites.
+            "frame-ancestors 'self' "+configuration["PLENARO_PUBLIC_ORIGIN"];
         ctx.Response.Headers.CacheControl="private,no-store";
         if(!pathMode&&ctx.Request.Path==DiagnosticPath){
             await FavoriteHealthAsync(ctx,ct);return;
