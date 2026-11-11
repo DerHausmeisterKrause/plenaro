@@ -628,6 +628,10 @@ public sealed partial class FavoriteProxy
                 var payload=await ReadLimitedAsync(res.Content,65536,ct);
                 var content=Encoding.UTF8.GetString(payload);
                 var rewritten=RewriteConfluenceLoginNext(content,pathPrefix);
+                // Non-sensitive deployment diagnostic: a browser trace can
+                // prove this code path ran, without logging login contents.
+                ctx.Response.Headers["X-Plenaro-Login-Next"]=
+                    rewritten==content?"unchanged":"prefixed";
                 ctx.Response.ContentType="application/json; charset=utf-8";
                 await ctx.Response.WriteAsync(rewritten,ct);
                 return;
