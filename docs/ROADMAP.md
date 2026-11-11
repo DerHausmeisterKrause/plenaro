@@ -789,6 +789,6 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] Persönliche Standardquelle serverseitig unter `/api/v1/wiki/settings` gespeichert; Login + CSRF + Eigentümer/ACL-Prüfung und geschützter Favoriten-Bootstrap, vorhandenes Vault statt neuer Passwortspeicher.
 - [x] Personal-Settings-JSONB-Merge verhindert unbeabsichtigtes Löschen des gewählten Wiki-Favoriten durch Theme-/Wochenbeginn-Änderungen.
 - [x] Tests für bereits angebundene Quelle, neue Wiki-Quelle, Admin-URL-Prüfung, StrictMode, Wiederverbinden und Ablehnung fremder Proxy-URLs ergänzt.
-- [ ] PR-CI vollständig erfolgreich abschließen und Feature-Branch nach main mergen.
+- [x] GitHub-CI komplett erfolgreich ([Run #43015995547](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43015995547)); [PR #31](https://github.com/DerHausmeisterKrause/plenaro/pull/31) nach main gemergt.
 - [ ] Host-Abnahme der realen Confluence-Seite: Wiki-Einstellungen, persönliche Anmeldung, Navigation nach Reload und zwei getrennte Benutzer.
 - [ ] Noch offen: REST-Wiki-Suche, Space-Key-Einschränkungen, Ticket-Wiki-Treffer, Dokumenten-/Attachment-Index und KI-Knowledge-Retrieval (WPF-Parität).
