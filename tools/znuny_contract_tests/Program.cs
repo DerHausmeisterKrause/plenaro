@@ -368,6 +368,44 @@ Assert(slashRoot.Response.StatusCode==307 &&
     slashRoot.Response.Headers.Location.ToString()=="/wiki/?page=2",
     "shared app root canonicalized to /wiki/ so relative CSS/JS resolve within app");
 
+// Wiki frameworks such as Confluence build dynamic REST/web-resource URLs
+// from ajs-context-path rather than from the rewritten static HTML links.
+// The upstream root context must be replaced with the public /<slug> path.
+var contextMethod=typeof(FavoriteProxy).GetMethod("RewriteHtmlAppContext",
+    BindingFlags.NonPublic|BindingFlags.Static)!;
+string RewriteContext(string html,string path)=>
+    (string)contextMethod.Invoke(null,new object[]{html,path})!;
+var metaEmpty="<meta name=\"ajs-context-path\" content=\"\">"+
+    "<meta name='confluence-context-path' content='/'>"+
+    "<meta name=\"unrelated\" content=\"\">"+
+    "<meta name=\"ajs-context-path\" content=\"/wiki\">"+
+    "<meta name=\"ajs-context-path\" content=\"/wiki/confluence\">";
+var metaFixed=RewriteContext(metaEmpty,"/wiki");
+Assert(metaFixed.Contains("name=\"ajs-context-path\" content=\"/wiki\"") &&
+    metaFixed.Contains("name='confluence-context-path' content=\"/wiki\"") &&
+    metaFixed.Contains("name=\"unrelated\" content=\"\"") &&
+    !metaFixed.Contains("/wiki/wiki"),
+    "Confluence path metadata becomes /wiki without modifying other meta values");
+var previousContext=RewriteContext(
+    "<meta name=\"ajs-context-path\" content=\"/confluence\">","/wiki");
+Assert(previousContext.Contains("content=\"/wiki/confluence\"") &&
+    RewriteContext(previousContext,"/wiki")==previousContext,
+    "non-root application context is preserved and rewriting is idempotent");
+Assert(RewriteContext("<meta name=\"ajs-context-path\" content=\"\">","")==
+    "<meta name=\"ajs-context-path\" content=\"\">",
+    "dedicated-host favorites do not alter upstream context metadata");
+var limitMethod=typeof(FavoriteProxy).GetMethod("RewriteLimit",
+    BindingFlags.NonPublic|BindingFlags.Static)!;
+int RewriteBound(string media)=> (int)limitMethod.Invoke(null,
+    new object[]{new System.Net.Http.Headers.MediaTypeHeaderValue(media)})!;
+Assert(RewriteBound("text/javascript")>=20*1024*1024 &&
+    RewriteBound("application/javascript")>=20*1024*1024 &&
+    RewriteBound("text/css")>=20*1024*1024 &&
+    RewriteBound("text/html")==6*1024*1024 &&
+    RewriteBound("application/json")==6*1024*1024 &&
+    RewriteBound("image/svg+xml")==6*1024*1024,
+    "large JS/CSS bundles are accepted while HTML/API/other text limits remain strict");
+
 // Znuny article bodies are nested iframes: every ancestor must satisfy
 // frame-ancestors. Parent Plenaro plus the proxy's own origin are permitted,
 // without allowing unrelated websites or disabling framing protection.

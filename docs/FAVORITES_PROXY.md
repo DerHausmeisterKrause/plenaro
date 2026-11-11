@@ -1,3 +1,38 @@
+## Wiki-Oberfläche unvollständig: Buttons, Logos, Eingabemasken (PR #23)
+
+Ein HTTP-200-Healthcheck zeigt lediglich, dass DNS, die beiden NGINX-Schichten
+und die Favoriten-Routing-API erreicht werden. Er beweist **nicht**, dass
+CSS-/JS-/Bildressourcen sowie dynamische AJAX-Anfragen funktionieren.
+
+Der gemeinsame Pfadhost setzt eine Anwendung unter `/<slug>/`, während
+die Originalanwendung oft für `/` konfiguriert ist. Der Proxy schreibt
+bereits viele HTML/CSS/JS-Pfade um. Mit PR #23 werden zusätzlich bekannte
+Confluence-Kontextpfad-Metadaten (`ajs-context-path` und
+`confluence-context-path`) im HTML für `/<slug>` angepasst, damit
+JavaScript dynamische Webressourcen und API-URLs nicht an der Host-Root
+statt am Favoriten-Pfad anfragt. Dies greift nur bei diesen Meta-Tags,
+nicht bei beliebigen JSON-Daten oder fremden Origins.
+
+Bisher wurde jeder textuelle Body über 6 MiB mit 413 abgewiesen.
+JS-/CSS-Bundles dürfen jetzt bis 24 MiB groß sein; HTML, API-JSON
+und andere Textressourcen behalten ihre 6-MiB-Grenze.
+
+Nach Update Browser im privaten Fenster testen, Favorit **Neu verbinden**,
+und in F12 -> Netzwerk/Console vor allem auf 401, 403, 404, 413 und
+CSP/CORS-Blockaden achten. URL + Status + Content-Type reichen für
+eine gezielte Fehleranalyse; keine Bootstraptokens oder Cookies teilen.
+
+Die Pfadvariante garantiert **keine** vollständige Kompatibilität mit
+WebSockets, fremden CDNs, Service Workern, OAuth-Redirects oder
+beliebig zusammengebauten JavaScript-URLs. Für Confluence Data Center
+ist der offiziell unterstützte Kontextpfad des Originalservers
+entscheidend: dessen Basispfad muss korrekt zu Connector/server.xml
+und der Confluence-Base-URL passen. Ein Proxy kann die serverseitige
+Konfiguration nicht vollständig ersetzen. Eine dedizierte Fav-Subdomain
+ist für inkompatible Anwendungen zuverlässiger und bietet echte
+Browser-Origin-Trennung.
+
+---
 ## 502 nach Docker-Neustart: TLS-Zertifikatskette prüfen
 
 Wenn der direkte Healthcheck am Docker-Port **nur mit curl -k** HTTP 200 liefert,
