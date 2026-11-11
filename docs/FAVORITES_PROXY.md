@@ -1,3 +1,70 @@
+## Confluence-Login trotz intakter Darstellung nicht möglich – dedizierter Favoriten-Host
+
+Eine bereinigte Confluence-Browseraufzeichnung zeigt `/wiki/login.action` mit
+HTTP 200, aber dynamische Root-Anfragen an `/rest/authconfig/1.0/login-options`,
+`/rest/wrm/2.0/resources`, `/rest/menu/latest/appswitcher` und weitere
+`/rest/...` erhalten 401; ein Root-Asset unter `/s/...` erhält 404.
+Das ist nicht durch falsche Zugangsdaten belegt: Der Mitschnitt enthält
+**keinen eigentlichen Login-POST**. Confluence-/Webpack-Plugins verwenden
+teilweise absolute Host-Root-Pfade selbst bei korrigierten HTML-Metatags.
+
+**Sichere Lösung (ab PR #25):** Der gemeinsame Host bleibt für kompatible
+Favoriten bestehen; einzelne bekannte inkompatible Apps nutzen einen
+bevorzugten eigenen Host (genau **eine** Browser-Origin pro App):
+
+```dotenv
+PLENARO_FAVORITES_PATH_ORIGIN=https://apps-plenaro.example.org
+PLENARO_FAVORITES_HOST_TEMPLATE={slug}-plenaro.example.org
+PLENARO_FAVORITES_DEDICATED_SLUGS=wiki
+PLENARO_SERVER_NAME=portal.example.org tickets.example.org apps-plenaro.example.org wiki-plenaro.example.org
+```
+
+Beispiel: Wiki-Slug `wiki` startet unter
+`https://wiki-plenaro.example.org/_plenaro/favorite-bootstrap`, dann
+`https://wiki-plenaro.example.org/login.action`; alle JS-Root-Anfragen
+`/rest/...`, `/s/...` tragen die **gleiche Host-Origin** und
+finden die Root-Session-Cookie (`Path=/`). Ein zweiter Favorit `cloud`
+bleibt unter `https://apps-plenaro.example.org/cloud/` und erhält
+weiterhin nur einen pfadbezogenen Cookie. Existieren Alias-Konfiguration
+oder DNS nicht, schlägt ein explizit ausgewählter Slug sicher fehl, statt
+unbemerkt zum inkompatiblen Pfadhost zurückzufallen.
+
+**Deployment-Schritte:**
+
+1. Nur für `wiki-plenaro.example.org` einen expliziten DNS-A-/CNAME-Eintrag
+   zum selben vorgeschalteten NGINX wie `apps-plenaro.example.org` erstellen.
+   Bei vorhandener Wildcard-DNS-Zone prüfen, ob sie diese konkrete Adresse
+   bereits auflöst. Keine Änderung der anderen Hostnamen notwendig.
+2. Auf der **vorgeschalteten** NGINX einen HTTPS-vHost für den neuen Namen
+   hinzufügen oder den funktionierenden `apps-plenaro`-vHost um dessen
+   `server_name` erweitern. Das öffentliche Zertifikat muss den Namen
+   enthalten. Die vorhandene Loopback-Bridge (beispielsweise
+   `proxy_pass http://127.0.0.1:18080;`) und `Host $host` weiter verwenden.
+   **Kein** erneuter Wechsel zur fehleranfälligen TLS-Upstream-URL.
+3. Neue .env-Variablen ergänzen, `PLENARO_SERVER_NAME` um den Alias erweitern,
+   `docker compose config` kontrollieren und anschließend Web **und**
+   Docker-NGINX zusammen neu erstellen (wegen statischer NGINX-Auflösung der
+   Docker-Hostnamen). Äußere NGINX nur nach `nginx -t` reloaden.
+4. Browser-Einbettung mit echten Login-Anfragen testen. Globale
+   `X-Frame-Options: SAMEORIGIN`-Header können auch auf dem neuen Alias
+   iFrames vom Plenaro-Hauptorigin blockieren. Header **nur für diesen**
+   Alias entsprechend der geplanten `frame-ancestors`-Policy konfigurieren,
+   nicht für alle Sites pauschal deaktivieren.
+
+**Nicht empfohlen:** Root-`/rest`- oder Root-`/s`-Routen auf dem
+**gemeinsam** genutzten `apps-plenaro`-Host einfach zu einem Favoriten
+weiterleiten. Auf diesem Host können mehrere Apps aktiv sein, deren
+Authentifizierung, Session und Origin voneinander getrennt bleiben müssen.
+
+**Wichtig:** Plenaro-Autologin unterstützt aktuell nur traditionelle
+HTML-Benutzername/Passwort-POST-Formulare. Confluence-Authentifizierungsplugins
+mit dynamischer Login-Seite, SSO oder MFA können dadurch **nicht** automatisch
+angemeldet werden. Der dedizierte Host löst das Browser-Routing, nicht die
+Automatisierung des Loginvorgangs. Eine normale interaktive Anmeldung muss
+separat geprüft werden.
+
+---
+
 ## Confluence: HTTP 200, aber Buttons/Logos/Formulare fehlen (PR #24)
 
 Eine echte Browser-Netzwerkaufzeichnung mit Confluence-Web-Resources zeigte

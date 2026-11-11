@@ -118,11 +118,19 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             configuration["PLENARO_FAVORITES_PATH_ORIGIN"],
             configuration["PLENARO_PUBLIC_ORIGIN"],
             configuration["PLENARO_ZNUNY_PROXY_ORIGIN"]);
-        if(shared is not null)return FavoritePathRouting.AppOrigin(shared,slug);
+        var dedicated=FavoriteHostNames.PreferDedicated(
+            configuration["PLENARO_FAVORITES_DEDICATED_SLUGS"],slug);
+        if(shared is not null&&!dedicated)
+            return FavoritePathRouting.AppOrigin(shared,slug);
         var alias=FavoriteHostNames.PreferredOrigin(slug,
             configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
             configuration["PLENARO_FAVORITES_HOST_TEMPLATE"]);
+        // A selected dedicated app must not silently fall back to /<slug>/.
+        // That would reintroduce invalid root REST/Webpack URLs at login.
         if(alias is null)return null;
+        if(shared is not null &&
+            alias.Host.Equals(shared.Host,StringComparison.OrdinalIgnoreCase))
+            return null;
         // A changed template must never turn an app alias into the primary
         // application or native Znuny login origin.
         foreach(var key in new[]{"PLENARO_PUBLIC_ORIGIN","PLENARO_ZNUNY_PROXY_ORIGIN"})

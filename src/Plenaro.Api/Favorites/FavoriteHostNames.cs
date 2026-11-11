@@ -60,6 +60,25 @@ public static class FavoriteHostNames
         return (prefix, suffix);
     }
 
+    // Some apps (notably Confluence plugins) generate absolute browser URLs
+    // such as /rest/... or /s/... despite a configured HTML context path.
+    // Such apps need a dedicated browser origin with a root-scoped session.
+    // An explicit allowlist keeps all other favorites on the shared path host.
+    public static bool PreferDedicated(string? configured, string slug)
+    {
+        if (string.IsNullOrWhiteSpace(configured)) return false;
+        var selected = false;
+        foreach (var value in configured.Split(',',
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!ValidSlug(value))
+                throw new InvalidOperationException(
+                    "PLENARO_FAVORITES_DEDICATED_SLUGS enthält einen ungültigen Favoriten-Slug.");
+            if (value.Equals(slug, StringComparison.Ordinal)) selected = true;
+        }
+        return selected;
+    }
+
     public static Uri? PreferredOrigin(string? slug, string? baseDomain,
         string? hostTemplate)
     {
