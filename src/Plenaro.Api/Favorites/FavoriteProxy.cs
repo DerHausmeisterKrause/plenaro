@@ -141,7 +141,8 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
     }
 
     public async Task<string> StartAsync(Guid user,FavoritesEndpoints.FavoriteInfo favorite,
-        string upstreamUrl,SecretVault vault,CancellationToken ct)
+        string upstreamUrl,SecretVault vault,CancellationToken ct,
+        bool requireWikiAutoLogin=false)
     {
         var external=ProxyOrigin(favorite.Slug) ??
             throw new InvalidOperationException("Favorite proxy is not configured.");
@@ -167,17 +168,32 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             Timeout=TimeSpan.FromSeconds(35)
         };
         try{
-            if(favorite.AutoLogin && vault.IsConfigured){
+            if(requireWikiAutoLogin){
+                // Central wiki must establish the private upstream login
+                // BEFORE exposing the iframe. No silent manual fallback.
+                if(favorite.Slug!="wiki"||!favorite.AutoLogin||!vault.IsConfigured)
+                    throw new InvalidOperationException("Wiki-Autologin fehlt.");
+                var secret=await vault.GetForIntegrationAsync("user",user,
+                    FavoritesEndpoints.PasswordName(favorite.Id),ct);
+                if(string.IsNullOrEmpty(secret)||
+                   string.IsNullOrWhiteSpace(favorite.Username)||
+                   !await TryConfluenceWikiLoginAsync(client,root,
+                       favorite.Username,secret,ct))
+                    throw new InvalidOperationException("Wiki-Autologin wurde nicht bestätigt.");
+            }else if(favorite.AutoLogin && vault.IsConfigured){
                 var password=await vault.GetForIntegrationAsync("user",user,
                     FavoritesEndpoints.PasswordName(favorite.Id),ct);
                 if(!string.IsNullOrEmpty(password) &&
                    !string.IsNullOrWhiteSpace(favorite.Username))
-                    await TryLoginAsync(client,root,new Uri(root,favorite.Path),favorite.Username,password,ct);
+                    await TryLoginAsync(client,root,new Uri(root,favorite.Path),
+                        favorite.Username,password,ct);
             }
-        }catch(Exception e) when(!ct.IsCancellationRequested &&
+        }catch(Exception e) when(!requireWikiAutoLogin&&!ct.IsCancellationRequested &&
             e is HttpRequestException or InvalidOperationException or TaskCanceledException){
-            // A custom login form may be unsupported: the iframe still
-            // permits a regular interactive login in the same private session.
+            // Legacy favorites retain their existing interactive fallback.
+        }catch{
+            client.Dispose();
+            throw;
         }
         var key=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var session=new ProxySession(user,favorite.Id,favorite.AppId,
