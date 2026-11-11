@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+
 namespace Plenaro.Api.Favorites;
 
 /// <summary>
@@ -65,6 +67,34 @@ public static class FavoritePathRouting
             if(candidate.Equals(slug,StringComparison.Ordinal))enabled=true;
         }
         return enabled;
+    }
+
+    // Some Confluence login flows navigate the iframe to origin-root "/"
+    // even when their JSON 'next' value was corrected. A sanitized browser
+    // capture shows this GET has Referer /wiki/login.action, is same-origin,
+    // and has Sec-Fetch-Dest: iframe. A tightly scoped redirect lets the
+    // browser reach /wiki/ while keeping root and other apps inaccessible.
+    // The redirected request still needs the normal /wiki session cookie.
+    public static bool ConfluenceLoginRootNavigation(
+        HttpRequest request,string? enabledShimSlugs)
+    {
+        if(!HttpMethods.IsGet(request.Method) ||
+           request.Path.Value!="/" || request.QueryString.HasValue ||
+           !request.IsHttps || request.Host.Port.GetValueOrDefault(443)!=443 ||
+           request.Headers["Sec-Fetch-Dest"].ToString()!="iframe" ||
+           request.Headers["Sec-Fetch-Site"].ToString()!="same-origin" ||
+           !BrowserShimEnabled(enabledShimSlugs,"wiki") ||
+           !request.Headers.TryGetValue("Referer",out var referers) ||
+           referers.Count!=1 ||
+           !Uri.TryCreate(referers.ToString(),UriKind.Absolute,out var referer) ||
+           referer.Scheme!=Uri.UriSchemeHttps ||
+           !referer.Host.Equals(request.Host.Host,
+               StringComparison.OrdinalIgnoreCase) ||
+           referer.Port!=443 ||
+           !referer.AbsolutePath.Equals("/wiki/login.action",
+               StringComparison.OrdinalIgnoreCase))
+            return false;
+        return true;
     }
 
     public static string CookiePath(string slug)=>"/"+slug;
