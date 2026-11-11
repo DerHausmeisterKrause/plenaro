@@ -730,3 +730,14 @@ Die bisherige Znuny-Integration bleibt unverändert. Diese Vorbereitung stellt *
 - [x] `PLENARO_FAVORITES_DEDICATED_SLUGS` erlaubt für ausgewählte Favoriten Root-Host-Cookies und Root-API-Routing ohne globale Weiterleitung fremder /rest-Requests; andere Favoriten bleiben auf /<slug>/.
 - [x] Tests/CI vollständig erfolgreich ([Run #42995835637](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42995835637)); PR #25 in main.
 - [ ] DNS/NGINX-Hostalias und .env auf Zielserver, Liveprüfung der Confluence-Anmeldung.
+
+### 11.11.2026 – Phase 7: Confluence-Login auf apps-plenaro.example.org/wiki/ (PR #26)
+
+- [x] Bereinigten HAR geprüft: Wiki-Login-HTML 200, Confluence-Plugin-Root-REST 401 und -Asset 404, echter Passwort-POST nicht beobachtet
+- [x] Opt-in PLENARO_FAVORITES_BROWSER_SHIM_SLUGS=wiki für browserseitige /wiki/rest/ und /wiki/s/ Korrektur ohne JS-Bundle-Veränderung
+- [x] Cookie-Pfad /wiki, serverseitige ACL und gemeinsam genutzte Root-Routen unverändert; kein neuer DNS-Name/NGINX-Host nötig
+- [x] Regressionstests, Backend- und Frontend-Build, TLS-Test und Docker-Smoke grün; PR #26 gemergt
+- [ ] Auf Zielserver .env setzen, Web + Docker-NGINX neu erstellen und Browser-Anmeldung prüfen (SSO/MFA nicht durch Shim implementiert)
+
+PR: https://github.com/DerHausmeisterKrause/plenaro/pull/26
+CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
