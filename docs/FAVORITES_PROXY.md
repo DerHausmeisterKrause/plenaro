@@ -1,3 +1,36 @@
+## Confluence: Formular vorhanden, nach Anmeldung verweigert ein eingebetteter Frame die Verbindung
+
+Nach PR #27 kann die Confluence-Passwortmaske im Pfadhost angezeigt werden.
+Wenn der Browser **erst nach Absenden des Formulars** meldet,
+`apps-plenaro.example.org hat die Verbindung abgelehnt`, ist ein
+blockierter Frame eine mögliche Ursache – noch **kein** Beweis für eine
+erfolgreiche oder fehlgeschlagene Anmeldung.
+
+Der Favoriten-Proxy erlaubte bislang in seiner `Content-Security-Policy`
+bei `frame-ancestors` nur die Haupt-Plenaro-Origin, nicht die eigene
+Proxy-Origin. Ein von Confluence nach dem Login zusätzlich eingebetteter
+Frame unter `apps-plenaro.example.org/wiki/...` hat aber **zwei**
+Vorfahren: Confluence auf dem Shared-Favoriten-Host und Plenaro.
+Die Browserrichtlinie wird gegen alle Vorfahren ausgewertet. Deshalb
+erlaubt der Proxy künftig explizit `frame-ancestors 'self'
+https://portal.example.org`; `frame-src 'self'` und alle sonstigen
+Origin-/CSRF-/Sitzungsprüfungen bleiben unverändert. Das entspricht
+der bestehenden restriktiven Znuny-Frame-Policy.
+
+Nach Deployment: Favorit neu verbinden, Login im Browser erneut testen.
+Bei weiterer Ablehnung im Netzwerk-Tab **die HTML-Dokumentanfrage nach
+dem Login** kontrollieren: URL-Pfad, Status, `Location`, `X-Frame-Options`
+und `Content-Security-Policy` sowie die exakte Konsolenmeldung.
+**Nicht** Passwörter, Cookies, Token, POST-Body oder vollständige HARs
+in GitHub hochladen. Wenn ein externer Identity-Provider im Frame
+`X-Frame-Options: DENY` oder `frame-ancestors 'self'` erzwingt,
+kann Plenaro das nicht sicher umgehen; dessen Anmeldung muss dann
+außerhalb des eingebetteten Frames stattfinden. Ein vom äußeren NGINX
+gesetzter blockierender `X-Frame-Options`-Header ist ebenfalls separat
+zu untersuchen, ohne globale Schutzheader anderer Dienste abzuschalten.
+
+---
+
 ## Ergänzung: Confluence-Login mit Request-Objekten und dynamischen Assets
 
 Nach dem opt-in Browser-Shim aus PR #26 können einige Atlassian-Plugins
