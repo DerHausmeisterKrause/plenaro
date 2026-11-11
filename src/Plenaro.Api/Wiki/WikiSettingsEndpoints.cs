@@ -106,6 +106,47 @@ public static class WikiSettingsEndpoints
             return Results.NoContent();
         });
 
+        // Reuses the proven FavoriteProxy, but requires this user's
+        // Confluence credentials to establish a VERIFIED server-side session.
+        // No fallback to another user's session or an interactive login form.
+        group.MapPost("/start",async(HttpContext http,IAntiforgery anti,
+            ClaimsPrincipal principal,UserManager<ApplicationUser> users,
+            IConfiguration config,SecretVault vault,FavoriteProxy proxy,
+            CancellationToken ct)=>{
+            if(!await ValidCsrf(http,anti))return CsrfError();
+            var user=await users.GetUserAsync(principal);
+            if(user is null||user.IsDisabled)return Results.Unauthorized();
+            if(!FavoriteProxy.IsTrustedStartOrigin(http.Request,config))
+                return Results.BadRequest(new{error="Ungültige Browser-Origin."});
+            await using var db=await Open(config,ct);
+            var wiki=await Wiki(db,ct);
+            if(wiki is null||!wiki.Enabled||!wiki.All)
+                return Results.Conflict(new{error="Der Wiki-Server ist nicht für alle freigegeben."});
+            var personal=await Personal(db,user.Id,wiki.Id,ct);
+            if(personal is null||!personal.Value.AutoLogin||
+               string.IsNullOrWhiteSpace(personal.Value.Username)||!vault.IsConfigured||
+               !(await vault.ListNamesAsync("user",user.Id,ct))
+                   .Contains(FavoritesEndpoints.PasswordName(personal.Value.Id)))
+                return Results.Conflict(new{
+                    error="Bitte deinen Wiki-Benutzernamen und dein Passwort unter Einstellungen → Wiki hinterlegen."});
+            var favorite=new FavoritesEndpoints.FavoriteInfo(
+                personal.Value.Id,wiki.Id,wiki.Name,wiki.Name,"wiki",
+                await Home(db,ct),personal.Value.Username,
+                true,true,0,true);
+            try{
+                var url=await proxy.StartAsync(user.Id,favorite,
+                    wiki.UpstreamUrl,vault,ct,requireWikiAutoLogin:true);
+                return Results.Ok(new{url});
+            }catch(OperationCanceledException) when(!ct.IsCancellationRequested){
+                return Results.Problem("Wiki antwortet nicht.",statusCode:504);
+            }catch(HttpRequestException){
+                return Results.Problem("Wiki ist nicht erreichbar.",statusCode:502);
+            }catch(InvalidOperationException){
+                return Results.UnprocessableEntity(new{
+                    error="Automatische Wiki-Anmeldung fehlgeschlagen. Bitte deine persönlichen Wiki-Zugangsdaten prüfen. CAPTCHA, MFA und SSO werden nicht automatisch umgangen."});
+            }
+        }).RequireRateLimiting("znuny-native-start");
+
         group.MapDelete("/settings",async(HttpContext http,IAntiforgery anti,
             ClaimsPrincipal principal,UserManager<ApplicationUser> users,
             IConfiguration config,SecretVault vault,FavoriteProxy proxy,
