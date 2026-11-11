@@ -212,3 +212,13 @@ Die globale Rechteprüfung aus PR #15 wurde in PR #17 gezielt auf **neue unzugew
 - [x] Regressionstests auf JS-Regex-Literale und HTML-Skripte ergänzt; Gesamt-CI einschließlich Build, Contracts, NGINX-TLS-Test und Docker-Smoke grün ([Run #42990397008](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42990397008)).
 - [x] [PR #24](https://github.com/DerHausmeisterKrause/plenaro/pull/24) nach main gemergt.
 - [ ] Live-Nachtest mit frisch gestarteter Favoriten-Session (Confluence-Menüs, Logos, Buttons, Formulare, JS-Konsole). Hartkodierte absolute JS-URLs bleiben mögliche Pfadhost-Inkompatibilität und müssen bei Bedarf separat behandelt werden.
+
+
+## 11.11.2026 – Phase 7: Confluence-Login im dedizierten Host (PR #25)
+
+- [x] Lokale HAR-Analyse: Login-Seite unter `/wiki/login.action` HTTP 200, Atlassian-Plugin-Root-Requests `/rest/...` HTTP 401 und `/s/...` HTTP 404; kein echter Anmelde-POST im Mitschnitt.
+- [x] Neues Opt-in `PLENARO_FAVORITES_DEDICATED_SLUGS=wiki` erlaubt dedizierten Host aus `PLENARO_FAVORITES_HOST_TEMPLATE` für Confluence, während der gemeinsame Favoriten-Pfadhost für alle anderen Apps erhalten bleibt. Fehlende Alias-Konfiguration führt für ausgewählten Slug zu Fehler statt stillem unsicherem Fallback.
+- [x] Regressionen für gemischten Hostmodus, erwartete Hostnamen und Fehlkonfiguration sowie sämtliche CI-Schritte (Build, Znuny-Contracts, TLS, Docker-Smoke) grün ([Run #42995835637](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/42995835637)).
+- [x] [PR #25](https://github.com/DerHausmeisterKrause/plenaro/pull/25) nach main gemergt.
+- [ ] Betreiber: dedizierten DNS-Alias und äußeren NGINX-vHost (HTTP-Bridge) einrichten; .env um selektive Dedicated-Slug-Option und Hostnamen ergänzen; Login live testen.
+- [ ] Potenziell blockierende globale X-Frame-Options für den dedizierten Favoriten-Host gezielt korrigieren, sofern die Browser-Einbettung betroffen ist. Automatische Anmeldung über Confluence-SSO/JS-Formular weiterhin nicht implementiert.
