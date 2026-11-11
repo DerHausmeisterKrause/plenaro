@@ -970,6 +970,77 @@ Assert(optionCalls==2 && fieldResult.CostCenterOptions.Count==2 &&
     fieldResult.OrderOptions.Single().Key=="AB",
     "404 on optional DynamicField route falls back to admin-controlled booking keys");
 
+// Central Wiki is administratively configured once. Individual users
+// supply only their personal credentials and may never change the origin.
+var wikiValidation=typeof(Plenaro.Api.Wiki.WikiSettingsEndpoints).GetMethod(
+    "ValidAdminInput",BindingFlags.NonPublic|BindingFlags.Static)!;
+bool ValidWiki(string url,string home){
+    var args=new object?[]{
+        new Plenaro.Api.Wiki.WikiSettingsEndpoints.WikiAdminInput(
+            "Firmenwiki",url,home),favoriteConfig,null,null
+    };
+    return (bool)wikiValidation.Invoke(null,args)!;
+}
+Assert(ValidWiki("https://wiki.example.org/","/") &&
+    ValidWiki("https://wiki.example.org/","/display/IT") &&
+    !ValidWiki("http://wiki.example.org/","/") &&
+    !ValidWiki("https://wiki.example.org/other","/") &&
+    !ValidWiki("https://portal.example.org/","/") &&
+    !ValidWiki("https://wiki.example.org/","//elsewhere") &&
+    !ValidWiki("https://wiki.example.org/","/../../wrong\\\\path"),
+    "central Wiki admin URL and home-path policy denies unsafe targets");
+
+// A synthetic mock reproduces the observed Confluence plugin POST shape
+// without recording an actual user password, cookie, token or HAR.
+var confluenceMethod=typeof(FavoriteProxy).GetMethod(
+    "TryConfluenceWikiLoginAsync",BindingFlags.NonPublic|BindingFlags.Static)!;
+var wikiRequests=new List<string>();
+using var confluenceClient=new HttpClient(new MockHandler(req=>{
+    var url=req.RequestUri!;
+    wikiRequests.Add(req.Method+" "+url.AbsolutePath);
+    Assert(url.Host=="wiki.example.org",
+        "wiki password never leaves the approved upstream origin");
+    if(req.Method==HttpMethod.Get)
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent("<html>login</html>",Encoding.UTF8,"text/html")
+        };
+    var json=JsonDocument.Parse(req.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+    var properties=json.RootElement;
+    Assert(properties.GetProperty("username").GetString()=="test-wiki-user" &&
+        properties.GetProperty("password").GetString()=="synthetic-secret" &&
+        properties.GetProperty("rememberMe").GetBoolean()==false &&
+        properties.GetProperty("targetUrl").GetString()=="/" &&
+        properties.GetProperty("captchaId").GetString()=="" &&
+        req.Content.Headers.ContentType?.MediaType=="application/json",
+        "confluence login sends correct JSON fields only over HTTPS");
+    return new HttpResponseMessage(HttpStatusCode.OK){
+        Content=new StringContent("""{"next":"/"}""",Encoding.UTF8,"application/json")
+    };
+}));
+var confluenceTask=(Task<bool>)confluenceMethod.Invoke(null,new object[]{
+    confluenceClient,new Uri("https://wiki.example.org/"),
+    "test-wiki-user","synthetic-secret",CancellationToken.None
+})!;
+Assert(await confluenceTask &&
+    wikiRequests.SequenceEqual(new[]{
+        "GET /login.action","POST /rest/tsv/1.0/authenticate"
+    }),
+    "verified Confluence JSON login succeeds before Wiki iframe bootstrap");
+using var rejectedWikiClient=new HttpClient(new MockHandler(req=>
+    req.Method==HttpMethod.Get
+        ? new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent("login",Encoding.UTF8,"text/html")}
+        : new HttpResponseMessage(HttpStatusCode.Unauthorized){
+            Content=new StringContent("""{"captchaRequired":true}""",
+                Encoding.UTF8,"application/json")}
+));
+var rejectedWikiTask=(Task<bool>)confluenceMethod.Invoke(null,new object[]{
+    rejectedWikiClient,new Uri("https://wiki.example.org/"),
+    "test-wiki-user","wrong-pass",CancellationToken.None
+})!;
+Assert(!await rejectedWikiTask,
+    "wrong credentials/captcha never create a supposedly authenticated Wiki session");
+
 // Native iframe proxy tests use ONLY synthetic example hosts, never
 // customer infrastructure. Verify the exact standard agent login markup.
 var proxyType=typeof(ZnunyNativeProxy);
