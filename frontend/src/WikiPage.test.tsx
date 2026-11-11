@@ -5,77 +5,76 @@ import {MemoryRouter} from 'react-router-dom';
 import {WikiPage} from './WikiPage';
 
 const mocks=vi.hoisted(()=>({
-  loadFavorites:vi.fn(),startFavorite:vi.fn(),
-  readWikiSelection:vi.fn(),saveWikiSelection:vi.fn()
-}));
-vi.mock('./favoritesApi',()=>({
-  loadFavorites:mocks.loadFavorites,startFavorite:mocks.startFavorite
+  readWikiSettings:vi.fn(),startWiki:vi.fn()
 }));
 vi.mock('./wikiApi',async(importOriginal)=>{
   const real=await importOriginal<typeof import('./wikiApi')>();
-  return {...real,readWikiSelection:mocks.readWikiSelection,
-    saveWikiSelection:mocks.saveWikiSelection};
+  return {...real,readWikiSettings:mocks.readWikiSettings,
+    startWiki:mocks.startWiki};
 });
-
-const wiki={
-  id:'00000000-0000-4000-8000-000000000010',
-  appId:'00000000-0000-4000-8000-000000000020',
-  name:'Internes Wiki',appName:'Wiki',slug:'wiki',path:'/',
-  username:'',autoLogin:false,enabled:true,sortOrder:0,hasPassword:false
+const ready={
+  configured:true,name:'Firmenwiki',homePath:'/',username:'alice',
+  hasPassword:true,ready:true,
+  favoriteId:'00000000-0000-4000-8000-000000000010'
 };
-function renderPage(){return render(<StrictMode><MemoryRouter><WikiPage/></MemoryRouter></StrictMode>);}
-
+function renderPage(){return render(<StrictMode><MemoryRouter>
+  <WikiPage/>
+</MemoryRouter></StrictMode>);}
 beforeEach(()=>{
   vi.clearAllMocks();
-  mocks.loadFavorites.mockResolvedValue([wiki]);
-  mocks.readWikiSelection.mockResolvedValue({favoriteId:wiki.id});
-  mocks.saveWikiSelection.mockResolvedValue(undefined);
-  mocks.startFavorite.mockResolvedValue({
+  mocks.readWikiSettings.mockResolvedValue(ready);
+  mocks.startWiki.mockResolvedValue({
     url:'https://apps-plenaro.example.org/wiki/_plenaro/favorite-bootstrap?token=test'
   });
 });
 afterEach(cleanup);
 
-describe('Knowledge base / WikiBrowser migration',()=>{
-  it('loads the selected personal wiki into the established proxy iframe',async()=>{
+describe('Central knowledge-base and mandatory user auto-login',()=>{
+  it('opens only the backend-confirmed private Wiki session, once in StrictMode',async()=>{
     renderPage();
-    const frame=await screen.findByTitle('Wissensdatenbank – Internes Wiki');
-    expect((frame as HTMLIFrameElement).src).toContain('/wiki/_plenaro/favorite-bootstrap?token=test');
+    const frame=await screen.findByTitle('Wissensdatenbank – Firmenwiki');
+    expect((frame as HTMLIFrameElement).src)
+      .toContain('/wiki/_plenaro/favorite-bootstrap?token=test');
+    await waitFor(()=>expect(mocks.startWiki).toHaveBeenCalledTimes(1));
     expect(frame.getAttribute('sandbox')).toContain('allow-same-origin');
-    await waitFor(()=>expect(mocks.startFavorite).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('heading',{name:'Wissensdatenbank'})).toBeTruthy();
   });
-
-  it('does not embed an arbitrary or cross-favorite URL',async()=>{
-    mocks.startFavorite.mockResolvedValue({url:
-      'https://apps-plenaro.example.org/cloud/_plenaro/favorite-bootstrap?token=test'});
+  it('does not start when admin has not yet configured a Wiki',async()=>{
+    mocks.readWikiSettings.mockResolvedValue({
+      ...ready,configured:false,ready:false,favoriteId:null
+    });
+    renderPage();
+    expect(await screen.findByText('Wiki noch nicht konfiguriert')).toBeTruthy();
+    expect(mocks.startWiki).not.toHaveBeenCalled();
+  });
+  it('requires user-specific credentials before any Wiki iframe',async()=>{
+    mocks.readWikiSettings.mockResolvedValue({
+      ...ready,username:'',hasPassword:false,ready:false,favoriteId:null
+    });
+    renderPage();
+    expect(await screen.findByText('Persönliche Wiki-Anmeldung einrichten')).toBeTruthy();
+    expect(mocks.startWiki).not.toHaveBeenCalled();
+  });
+  it('rejects cross-app bootstrap destinations',async()=>{
+    mocks.startWiki.mockResolvedValue({
+      url:'https://apps-plenaro.example.org/cloud/_plenaro/favorite-bootstrap?token=x'
+    });
     renderPage();
     expect(await screen.findByText('Ungültige Wiki-Proxy-Adresse.')).toBeTruthy();
-    expect(screen.queryByTitle('Wissensdatenbank – Internes Wiki')).toBeNull();
+    expect(screen.queryByTitle('Wissensdatenbank – Firmenwiki')).toBeNull();
   });
-
-  it('uses an existing wiki favorite when no default has been saved',async()=>{
-    mocks.readWikiSelection.mockResolvedValue({favoriteId:null});
+  it('shows a failed credential auto-login instead of silently opening Wiki',async()=>{
+    mocks.startWiki.mockRejectedValue(new Error('Automatische Wiki-Anmeldung fehlgeschlagen.'));
     renderPage();
-    await screen.findByTitle('Wissensdatenbank – Internes Wiki');
-    expect(mocks.startFavorite).toHaveBeenCalledWith(wiki.id);
+    expect(await screen.findByText('Automatische Wiki-Anmeldung fehlgeschlagen.')).toBeTruthy();
+    expect(screen.queryByTitle('Wissensdatenbank – Firmenwiki')).toBeNull();
   });
-
-  it('never picks unrelated favorites without an explicit configuration',async()=>{
-    mocks.readWikiSelection.mockResolvedValue({favoriteId:null});
-    mocks.loadFavorites.mockResolvedValue([{...wiki,slug:'cloud',name:'Cloud'}]);
+  it('reconnects only on an explicit button click',async()=>{
     renderPage();
-    expect(await screen.findByText('Noch keine Wiki-Quelle ausgewählt')).toBeTruthy();
-    expect(mocks.startFavorite).not.toHaveBeenCalled();
-  });
-
-  it('starts a fresh session only after the user requests reconnect',async()=>{
-    renderPage();
-    const frame=await screen.findByTitle('Wissensdatenbank – Internes Wiki');
+    const frame=await screen.findByTitle('Wissensdatenbank – Firmenwiki');
     fireEvent.load(frame);
-    const refresh=screen.getByRole('button',{name:/Neu verbinden/});
-    await waitFor(()=>expect(refresh.hasAttribute('disabled')).toBe(false));
-    fireEvent.click(refresh);
-    await waitFor(()=>expect(mocks.startFavorite).toHaveBeenCalledTimes(2));
+    const reconnect=screen.getByRole('button',{name:/Wiki neu verbinden/});
+    await waitFor(()=>expect(reconnect.hasAttribute('disabled')).toBe(false));
+    fireEvent.click(reconnect);
+    await waitFor(()=>expect(mocks.startWiki).toHaveBeenCalledTimes(2));
   });
 });

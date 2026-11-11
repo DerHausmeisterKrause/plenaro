@@ -361,7 +361,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved, onFavori
       {admin&&<FavoriteAppsAdminPanel onChanged={()=>{
         setAppsRevision(v=>v+1);onFavoritesChanged();
       }}/>}</>}
-    {section === 'wiki' && <WikiSettingsPanel admin={admin} userId={user.id}/>}
+    {section === 'wiki' && <WikiSettingsPanel admin={admin}/>}
     {section === 'security' && <>
       <section className="content-card um-account">
         <div className="um-section-title"><ShieldCheck size={20}/><h2>Mein Konto</h2></div>

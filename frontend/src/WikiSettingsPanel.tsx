@@ -1,202 +1,158 @@
 import {useCallback,useEffect,useState,type FormEvent} from 'react';
-import {BookOpenText,CheckCircle2,Plus,Save,ShieldCheck} from 'lucide-react';
+import {BookOpenText,CheckCircle2,Save,ShieldCheck,Trash2} from 'lucide-react';
 import {Link} from 'react-router-dom';
 import {
-  loadFavoriteApps,loadFavorites,loadApprovedApps,createApprovedApp,createFavorite,
-  type Favorite,type FavoriteApp
-} from './favoritesApi';
-import {readWikiSelection,saveWikiSelection} from './wikiApi';
+  readWikiSettings,readWikiAdmin,saveWikiLogin,deleteWikiLogin,
+  saveWikiAdmin,type WikiAdminInput,type WikiAdminSettings,type WikiSettings
+} from './wikiApi';
 
-type SelectableApp=Pick<FavoriteApp,'id'|'name'|'slug'>;
+const emptyAdmin:WikiAdminSettings={
+  configured:false,name:'Firmenwiki',baseUrl:'',homePath:'/'
+};
 
-/** Classic WikiSettingsView: source, home URL, personal browser login. */
-export function WikiSettingsPanel({admin,userId}:{admin:boolean;userId:string}){
-  const [sources,setSources]=useState<Favorite[]>([]);
-  const [apps,setApps]=useState<SelectableApp[]>([]);
-  const [approved,setApproved]=useState<FavoriteApp[]>([]);
-  const [selected,setSelected]=useState('');
-  const [newApp,setNewApp]=useState('');
-  const [name,setName]=useState('Mein Wiki');
-  const [home,setHome]=useState('/');
+/** Admin owns the server; every user owns only their Wiki credentials. */
+export function WikiSettingsPanel({admin}:{admin:boolean}){
+  const [server,setServer]=useState<WikiAdminSettings>(emptyAdmin);
+  const [serverForm,setServerForm]=useState<WikiAdminInput>({
+    name:'Firmenwiki',baseUrl:'',homePath:'/'
+  });
+  const [myWiki,setMyWiki]=useState<WikiSettings|null>(null);
   const [username,setUsername]=useState('');
   const [password,setPassword]=useState('');
-  const [autoLogin,setAutoLogin]=useState(false);
-  const [serverName,setServerName]=useState('Wiki');
-  const [serverUrl,setServerUrl]=useState('');
-  const [shareWithAll,setShareWithAll]=useState(false);
   const [busy,setBusy]=useState(false);
   const [loading,setLoading]=useState(true);
-  const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
+  const [error,setError]=useState('');
 
-  const reload=useCallback(async()=>{
-    const [favorites,allowed,preference,adminApps]=await Promise.all([
-      loadFavorites(),loadFavoriteApps(),readWikiSelection(),
-      admin?loadApprovedApps():Promise.resolve([] as FavoriteApp[])
+  const refresh=useCallback(async()=>{
+    const [userWiki,adminWiki]=await Promise.all([
+      readWikiSettings(),admin?readWikiAdmin():Promise.resolve(null)
     ]);
-    setSources(favorites.filter(f=>f.enabled));
-    setApps(allowed);
-    setApproved(adminApps);
-    setSelected(preference.favoriteId??'');
-    setNewApp(current=>allowed.some(a=>a.id===current)?current:
-      allowed.find(a=>a.slug==='wiki')?.id??allowed[0]?.id??'');
+    setMyWiki(userWiki);setUsername(userWiki.username);
+    if(adminWiki){
+      setServer(adminWiki);
+      setServerForm({name:adminWiki.name||'Firmenwiki',
+        baseUrl:adminWiki.baseUrl,homePath:adminWiki.homePath||'/'});
+    }
   },[admin]);
 
   useEffect(()=>{
     let active=true;
-    void reload().then(()=>{if(active)setLoading(false);})
+    void refresh().then(()=>{if(active)setLoading(false);})
       .catch(reason=>{if(active){setLoading(false);
-        setError(reason instanceof Error?reason.message:'Wissensdatenbank konnte nicht geladen werden.');}});
+        setError(reason instanceof Error?reason.message:'Wiki-Einstellungen konnten nicht geladen werden.');}});
     return()=>{active=false;};
-  },[reload]);
+  },[refresh]);
 
-  async function choose(e:FormEvent){
+  async function saveServer(e:FormEvent){
     e.preventDefault();if(busy)return;
     setBusy(true);setError('');setNotice('');
     try{
-      await saveWikiSelection(selected||null);
-      setNotice('Standard-Wiki für dein Konto gespeichert.');
-    }catch(reason){setError(reason instanceof Error?reason.message:'Speichern fehlgeschlagen.');}
+      await saveWikiAdmin(serverForm);
+      await refresh();
+      setNotice('Der Wiki-Server ist zentral für alle Benutzer eingerichtet.');
+    }catch(reason){setError(reason instanceof Error?reason.message:'Wiki-Server konnte nicht gespeichert werden.');}
     finally{setBusy(false);}
   }
 
-  async function addFavorite(e:FormEvent){
+  async function saveCredentials(e:FormEvent){
     e.preventDefault();if(busy)return;
     setBusy(true);setError('');setNotice('');
     try{
-      if(!available.some(a=>a.id===newAppId))throw new Error('Bitte eine freigegebene Wiki-Anwendung wählen.');
-      if(!home.startsWith('/')||home.startsWith('//')||home.includes('#')||
-         home.includes('\\')||home.includes('://'))
-        throw new Error('Die Startseite muss ein relativer Pfad wie /display/TEAM sein.');
-      const added=await createFavorite({
-        appId:newAppId,name:name.trim(),path:home,
-        username:username.trim(),password,autoLogin,enabled:true,
-        sortOrder:sources.length
-      });
-      await saveWikiSelection(added.id);
-      await reload();
-      setPassword('');
-      setNotice('Wiki-Quelle hinzugefügt und als Standard gespeichert.');
-    }catch(reason){setError(reason instanceof Error?reason.message:'Wiki konnte nicht eingerichtet werden.');}
+      await saveWikiLogin(username.trim(),password);
+      setPassword('');await refresh();
+      setNotice('Deine persönlichen Wiki-Zugangsdaten wurden verschlüsselt gespeichert.');
+    }catch(reason){setError(reason instanceof Error?reason.message:'Wiki-Zugangsdaten konnten nicht gespeichert werden.');}
     finally{setBusy(false);}
   }
 
-  async function addApproved(e:FormEvent){
-    e.preventDefault();if(busy)return;
+  async function clearCredentials(){
+    if(busy||!myWiki?.hasPassword)return;
+    if(!window.confirm('Deine persönlichen Wiki-Zugangsdaten entfernen?'))return;
     setBusy(true);setError('');setNotice('');
     try{
-      const input=new URL(serverUrl.trim());
-      if(input.protocol!=='https:'||input.username||input.password||
-        input.search||input.hash||!input.hostname.includes('.'))
-        throw new Error('Bitte eine gültige interne HTTPS-Wiki-Adresse ohne Query oder Zugangsdaten eingeben.');
-      if(approved.some(a=>a.slug==='wiki'))
-        throw new Error('Eine Wiki-Anwendung ist bereits freigegeben. Bestehende URL unter Favoriten verwalten.');
-      const registered=await createApprovedApp({
-        name:serverName.trim(),slug:'wiki',upstreamUrl:input.origin+'/',
-        enabled:true,availableToAll:shareWithAll,
-        allowedUsers:shareWithAll?[]:[userId]
-      });
-      await reload();
-      setNewApp(registered.id);
-      setHome(input.pathname||'/');
-      setName(serverName.trim());
-      setNotice('Wiki-Server freigegeben. Jetzt unten persönliche Wiki-Quelle hinzufügen.');
-    }catch(reason){setError(reason instanceof Error?reason.message:'Wiki-Server konnte nicht freigegeben werden.');}
+      await deleteWikiLogin();
+      setUsername('');setPassword('');await refresh();
+      setNotice('Deine Wiki-Zugangsdaten wurden entfernt.');
+    }catch(reason){setError(reason instanceof Error?reason.message:'Zugangsdaten konnten nicht gelöscht werden.');}
     finally{setBusy(false);}
   }
 
-  const available=apps.filter(a=>!sources.some(f=>f.appId===a.id));
-  const newAppId=available.some(a=>a.id===newApp)?newApp:available[0]?.id??'';
-  const existingWiki=approved.find(a=>a.slug==='wiki');
   return <div className="wiki-settings">
+    {admin&&<section className="content-card um-panel">
+      <div className="um-section-title"><ShieldCheck size={20}/>
+        <h2>Zentrale Wiki-Konfiguration (Administrator)</h2></div>
+      <p>Diese Verbindung gilt für <strong>alle Plenaro-Benutzer</strong>.
+        Nur Administratoren können die Serveradresse und die Startseite festlegen.
+        Benutzer dürfen die Wiki-Adresse nicht ändern.</p>
+      {!loading&&<form className="um-form" onSubmit={e=>void saveServer(e)}>
+        <label htmlFor="wiki-admin-name">Wiki-Bezeichnung</label>
+        <input id="wiki-admin-name" required maxLength={120}
+          value={serverForm.name}
+          onChange={e=>setServerForm({...serverForm,name:e.target.value})}/>
+        <label htmlFor="wiki-admin-url">Wiki-Serveradresse (HTTPS)</label>
+        <input id="wiki-admin-url" type="url" required
+          placeholder="https://wiki.example.org/"
+          value={serverForm.baseUrl}
+          onChange={e=>setServerForm({...serverForm,baseUrl:e.target.value})}/>
+        <label htmlFor="wiki-admin-home">Wiki-Startseite / Pfad</label>
+        <input id="wiki-admin-home" required value={serverForm.homePath}
+          placeholder="/" maxLength={2048}
+          onChange={e=>setServerForm({...serverForm,homePath:e.target.value})}/>
+        <p className="um-hint">Die Serveradresse muss eine HTTPS-Origin ohne Unterpfad sein.
+          Die Startseite kann beispielsweise / oder /display/IT sein.
+          Bestehende Wiki-Zugangsdaten der Benutzer bleiben beim Ändern erhalten.
+          Bereits laufende Wiki-Sitzungen werden neu aufgebaut.</p>
+        <button type="submit" className="button button-primary" disabled={busy}>
+          <Save size={16}/>Zentrale Wiki-Konfiguration speichern</button>
+      </form>}
+      {server.configured&&<p className="um-hint">Aktuell aktiv: {server.name}</p>}
+    </section>}
+
     <section className="content-card um-panel">
-      <div className="um-section-title"><BookOpenText size={20}/><h2>Wiki / Wissensdatenbank</h2></div>
-      <p>Wie im Desktop-Plenaro verwendest du eine Wiki-Quelle mit eigener Startseite.
-        Im Web wird sie über den bereits eingerichteten Plenaro-Favoriten-Proxy geöffnet.
-        Zugangsdaten und die Sitzung bleiben benutzerbezogen.</p>
-      {loading?<p role="status">Wiki-Einstellungen werden geladen …</p>:<>
-        <form className="um-form" onSubmit={e=>void choose(e)}>
-          <label htmlFor="wiki-default">Standard-Wiki</label>
-          <select id="wiki-default" value={selected}
-            onChange={e=>setSelected(e.target.value)}>
-            <option value="">Keine Wiki-Quelle ausgewählt</option>
-            {sources.map(s=><option key={s.id} value={s.id}>
-              {s.name} ({s.appName})</option>)}
-          </select>
-          <p className="um-hint">Du kannst einen bereits funktionierenden Wiki-Favoriten übernehmen.
-            Er wird in der Wissensdatenbank als eigener Browser angezeigt.</p>
-          <div className="favorites-toolbar">
-            <button className="button button-primary" type="submit" disabled={busy}>
-              <Save size={16}/>Standard speichern</button>
-            <Link className="button button-secondary" to="/wiki">Wissensdatenbank öffnen</Link>
-            <Link className="button button-secondary" to="/settings?section=favorites">
-              Favoriten und Anmeldedaten bearbeiten</Link>
-          </div>
-        </form>
-      </>}
+      <div className="um-section-title"><BookOpenText size={20}/>
+        <h2>Meine Wiki-Anmeldung</h2></div>
+      {loading?<p role="status">Wiki-Einstellungen werden geladen …</p>:
+        !myWiki?.configured?<p>Der Administrator hat noch keinen zentralen Wiki-Server
+          freigegeben. Sobald dies erfolgt, kannst du hier deine eigenen Zugangsdaten eingeben.</p>:
+        <>
+          <p>Wiki: <strong>{myWiki.name}</strong>.
+            Trage deinen persönlichen Confluence-Benutzernamen und dein Passwort ein.
+            Plenaro versucht beim Öffnen der Wissensdatenbank automatisch,
+            dich mit deinem Benutzerkonto am Wiki anzumelden.</p>
+          <form className="um-form" onSubmit={e=>void saveCredentials(e)}>
+            <label htmlFor="wiki-user">Mein Wiki-Benutzername</label>
+            <input id="wiki-user" required autoComplete="off"
+              maxLength={180} value={username}
+              onChange={e=>setUsername(e.target.value)}/>
+            <label htmlFor="wiki-pass">Mein Wiki-Passwort</label>
+            <input id="wiki-pass" type="password"
+              required={!myWiki.hasPassword} autoComplete="new-password"
+              value={password} onChange={e=>setPassword(e.target.value)}
+              placeholder={myWiki.hasPassword
+                ? 'Gespeichert – leer lassen zum Beibehalten'
+                : 'Wiki-Passwort eingeben'}/>
+            <p className="um-hint">Das Passwort wird ausschließlich im persönlichen
+              verschlüsselten Plenaro-Vault gespeichert und nicht an andere Benutzer
+              oder die Wiki-Browserseite übermittelt. Die Anmeldung erfolgt
+              serverseitig und nur über die freigegebene HTTPS-Wiki-Adresse.</p>
+            <div className="favorites-toolbar">
+              <button type="submit" className="button button-primary" disabled={busy}>
+                <Save size={16}/>Wiki-Zugangsdaten speichern</button>
+              {myWiki.ready&&<Link to="/wiki" className="button button-secondary">
+                Wissensdatenbank öffnen</Link>}
+              {myWiki.hasPassword&&<button type="button" className="button button-secondary"
+                disabled={busy} onClick={()=>void clearCredentials()}>
+                <Trash2 size={16}/>Zugangsdaten entfernen</button>}
+            </div>
+          </form>
+          <p className="um-hint">Automatischer Login ist für deine Confluence-Anmeldung
+            vorgesehen. Falls das Wiki zusätzliche Faktoren, CAPTCHA oder SSO verlangt,
+            meldet Plenaro den fehlgeschlagenen automatischen Login.</p>
+        </>}
     </section>
-
-    {admin&&!loading&&<section className="content-card um-panel">
-      <div className="um-section-title"><ShieldCheck size={20}/><h2>Wiki-Server freigeben</h2></div>
-      {existingWiki?<p>Der Server <strong>{existingWiki.name}</strong> ist bereits freigegeben:
-        <code> {existingWiki.upstreamUrl}</code>. Die URL ist nach der Freigabe
-        aus Sicherheitsgründen unveränderlich. Zugriffsrechte und weitere Quellen
-        können unter <Link to="/settings?section=favorites">Favoriten</Link> verwaltet werden.</p>:
-      <form className="um-form" onSubmit={e=>void addApproved(e)}>
-        <p>Nur Administratoren können die Zieladresse festlegen.
-          Es werden ausschließlich HTTPS-Wikis freigegeben.</p>
-        <label htmlFor="wiki-server-name">Bezeichnung</label>
-        <input id="wiki-server-name" required value={serverName} maxLength={120}
-          onChange={e=>setServerName(e.target.value)}/>
-        <label htmlFor="wiki-server-url">Wiki-Adresse (HTTPS)</label>
-        <input id="wiki-server-url" required type="url" value={serverUrl}
-          placeholder="https://wiki.beispiel.org/display/TEAM"
-          onChange={e=>setServerUrl(e.target.value)}/>
-        <label className="favorites-check">
-          <input type="checkbox" checked={shareWithAll}
-            onChange={e=>setShareWithAll(e.target.checked)}/>
-          Für alle Plenaro-Benutzer freigeben</label>
-        <p className="um-hint">Die Server-Origin wird freigegeben; die Unterseite wird
-          als persönliche Startseite übernommen. Zugriffe erfolgen nie als freier URL-Proxy.</p>
-        <button className="button button-primary" type="submit" disabled={busy}>
-          <Plus size={16}/>Wiki-Server freigeben</button>
-      </form>}
-    </section>}
-
-    {!loading&&<section className="content-card um-panel">
-      <div className="um-section-title"><Plus size={20}/><h2>Persönliche Wiki-Quelle hinzufügen</h2></div>
-      {available.length===0?<p>Aktuell gibt es keine weitere für dich freigegebene Anwendung.
-        {sources.length>0?' Du kannst deine vorhandene Wiki-Quelle oben auswählen.':
-        ' Ein Administrator muss zunächst den Wiki-Server freigeben.'}</p>:
-      <form className="um-form" onSubmit={e=>void addFavorite(e)}>
-        <label htmlFor="wiki-app">Freigegebener Wiki-Server</label>
-        <select id="wiki-app" value={newAppId} onChange={e=>setNewApp(e.target.value)}>
-          {available.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-        <label htmlFor="wiki-name">Name der Wiki-Quelle</label>
-        <input id="wiki-name" value={name} required maxLength={120}
-          onChange={e=>setName(e.target.value)}/>
-        <label htmlFor="wiki-home">Startseite / Pfad</label>
-        <input id="wiki-home" value={home} required maxLength={2048}
-          placeholder="/" onChange={e=>setHome(e.target.value)}/>
-        <label htmlFor="wiki-username">Benutzername (optional)</label>
-        <input id="wiki-username" value={username} maxLength={180}
-          onChange={e=>setUsername(e.target.value)} autoComplete="off"/>
-        <label htmlFor="wiki-password">Passwort (optional)</label>
-        <input id="wiki-password" type="password" value={password}
-          onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/>
-        <label className="favorites-check">
-          <input type="checkbox" checked={autoLogin}
-            onChange={e=>setAutoLogin(e.target.checked)}/>
-          Automatischen HTML-Login versuchen</label>
-        <p className="um-hint">Ein Confluence-Login mit eigenem JavaScript kann weiterhin
-          eine manuelle Anmeldung benötigen. Passwörter werden nur im verschlüsselten
-          Plenaro-Vault gespeichert, nicht in Wiki-Einstellungen.</p>
-        <button className="button button-primary" type="submit" disabled={busy}>
-          <Plus size={16}/>Wiki hinzufügen und als Standard verwenden</button>
-      </form>}
-    </section>}
-    {notice&&<p className="um-feedback success" role="status"><CheckCircle2 size={16}/>{notice}</p>}
+    {notice&&<p className="um-feedback success" role="status">
+      <CheckCircle2 size={16}/>{notice}</p>}
     {error&&<p className="um-feedback failure" role="alert">{error}</p>}
   </div>;
 }

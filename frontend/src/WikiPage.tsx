@@ -1,118 +1,105 @@
 import {useEffect,useRef,useState} from 'react';
 import {BookOpenText,RefreshCw,Settings2,ShieldCheck} from 'lucide-react';
 import {Link} from 'react-router-dom';
-import {loadFavorites,startFavorite,type Favorite} from './favoritesApi';
-import {readWikiSelection,saveWikiSelection,validWikiBootstrap} from './wikiApi';
+import {readWikiSettings,startWiki,validWikiBootstrap,type WikiSettings} from './wikiApi';
 
-/** Classic WikiBrowserView: source selection + isolated embedded browser. */
+/** One admin-configured Wiki with each user's private verified login. */
 export function WikiPage(){
-  const [sources,setSources]=useState<Favorite[]>([]);
-  const [selected,setSelected]=useState('');
-  const [frameUrl,setFrameUrl]=useState('');
+  const [wiki,setWiki]=useState<WikiSettings|null>(null);
+  const [url,setUrl]=useState('');
   const [revision,setRevision]=useState(0);
   const [loading,setLoading]=useState(true);
-  const [frameLoading,setFrameLoading]=useState(false);
+  const [starting,setStarting]=useState(false);
   const [error,setError]=useState('');
   const startup=useRef<{key:string;promise:Promise<string>}|null>(null);
 
   useEffect(()=>{
     let active=true;
-    void Promise.all([readWikiSelection(),loadFavorites()]).then(([pref,items])=>{
-      if(!active)return;
-      const enabled=items.filter(f=>f.enabled);
-      const configured=enabled.find(f=>f.id===pref.favoriteId);
-      // The classic desktop browser defaults to the first enabled Wiki.
-      // Never silently open an unrelated favorite as a knowledge source.
-      const fallback=enabled.find(f=>f.slug==='wiki');
-      setSources(enabled);
-      setSelected(configured?.id??fallback?.id??'');
-      setLoading(false);
+    void readWikiSettings().then(settings=>{
+      if(active){setWiki(settings);setLoading(false);}
     }).catch(reason=>{
-      if(active){setError(reason instanceof Error?reason.message:'Wiki konnte nicht geladen werden.');
-        setLoading(false);}
+      if(active){setLoading(false);
+        setError(reason instanceof Error?reason.message:'Wiki konnte nicht geladen werden.');}
     });
     return()=>{active=false;};
   },[]);
 
-  const source=sources.find(f=>f.id===selected);
   useEffect(()=>{
-    if(!source){setFrameUrl('');return;}
+    if(!wiki?.ready||!wiki.favoriteId){setUrl('');return;}
     let active=true;
-    const key=source.id+':'+revision;
-    setFrameUrl('');setFrameLoading(true);setError('');
-    // React StrictMode repeats effects. Bootstrap tokens are single-use,
-    // and a second start would revoke the first user's proxy session.
+    setStarting(true);setUrl('');setError('');
+    const key=wiki.favoriteId+':'+revision;
+    // React StrictMode mounts effects twice. Starting a second time would
+    // revoke the first single-use bootstrap token and its private cookie jar.
     if(startup.current?.key!==key){
       const promise=(async()=>{
-        const result=await startFavorite(source.id);
-        if(!validWikiBootstrap(result.url,source.slug))
+        const result=await startWiki();
+        if(!validWikiBootstrap(result.url))
           throw new Error('Ungültige Wiki-Proxy-Adresse.');
         return result.url;
       })();
       startup.current={key,promise};
     }
-    void startup.current.promise.then(url=>{
-      if(active)setFrameUrl(url);
+    void startup.current.promise.then(result=>{
+      if(active)setUrl(result);
     }).catch(reason=>{
-      if(active){setFrameLoading(false);
-        setError(reason instanceof Error?reason.message:'Wiki-Verbindung fehlgeschlagen.');}
+      if(active){setStarting(false);setError(
+        reason instanceof Error?reason.message:'Wiki-Autologin fehlgeschlagen.');}
     });
     return()=>{active=false;};
-  },[source?.id,revision]);
-
-  async function chooseSource(id:string){
-    if(id===selected)return;
-    try{
-      await saveWikiSelection(id||null);
-      setSelected(id);
-      setRevision(0);
-      startup.current=null;
-    }catch(reason){setError(reason instanceof Error?reason.message:'Quelle konnte nicht gespeichert werden.');}
-  }
+  },[wiki?.ready,wiki?.favoriteId,revision]);
 
   return <div className="page znuny-web-portal wiki-browser-page">
     <div className="znuny-web-portal-toolbar content-card wiki-browser-toolbar">
       <div>
         <span className="eyebrow"><BookOpenText size={14}/>PLENARO / WISSENSDATENBANK</span>
         <h1>Wissensdatenbank</h1>
-        <p>Wiki-Browser mit persönlicher Anmeldung und geschützter Sitzung.</p>
+        <p>{wiki?.configured
+          ? wiki.name+' · persönliche Wiki-Anmeldung'
+          : 'Zentral bereitgestelltes Firmenwiki'}</p>
       </div>
       <div className="favorites-toolbar">
-        {sources.length>0&&<label className="wiki-source-picker">Wiki-Quelle
-          <select aria-label="Wiki-Quelle" value={selected}
-            onChange={e=>void chooseSource(e.target.value)}>
-            <option value="">Bitte auswählen</option>
-            {sources.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-        </label>}
         <button type="button" className="button button-secondary"
-          disabled={!source||frameLoading} onClick={()=>setRevision(v=>v+1)}>
-          <RefreshCw size={16}/>Startseite / Neu verbinden</button>
+          disabled={!wiki?.ready||starting}
+          onClick={()=>setRevision(value=>value+1)}>
+          <RefreshCw size={16}/>Wiki neu verbinden</button>
         <Link to="/settings?section=wiki" className="button button-secondary">
-          <Settings2 size={16}/>Wiki-Einstellungen</Link>
+          <Settings2 size={16}/>Wiki-Zugangsdaten</Link>
       </div>
     </div>
-    {loading&&<div role="status" className="znuny-native-loading">Wiki-Quellen werden geladen …</div>}
-    {!loading&&error&&<div className="content-card znuny-portal-error" role="alert">
-      <strong>Wissensdatenbank</strong><p>{error}</p>
-    </div>}
-    {!loading&&!source&&<div className="content-card znuny-native-setup">
-      <h2>Noch keine Wiki-Quelle ausgewählt</h2>
-      <p>Verknüpfe unter Einstellungen eine freigegebene Wiki-Webseite.
-        Ein bereits funktionierender Wiki-Favorit kann direkt übernommen werden.</p>
+    {loading&&<div className="znuny-native-loading" role="status">
+      Wiki-Verbindung wird geprüft …</div>}
+    {!loading&&!wiki?.configured&&<div className="content-card znuny-native-setup">
+      <h2>Wiki noch nicht konfiguriert</h2>
+      <p>Ein Administrator muss unter Einstellungen → Wiki die Wiki-Adresse
+        für alle Plenaro-Benutzer einrichten.</p>
       <Link to="/settings?section=wiki" className="button button-primary">
-        <Settings2 size={16}/>Wiki einrichten</Link>
+        Wiki-Einstellungen öffnen</Link>
     </div>}
-    {source&&<div className="znuny-portal-frame-wrap znuny-native-frame-wrap">
+    {!loading&&wiki?.configured&&!wiki.ready&&<div className="content-card znuny-native-setup">
+      <h2>Persönliche Wiki-Anmeldung einrichten</h2>
+      <p>Der Wiki-Server wurde vom Administrator bereitgestellt.
+        Hinterlege deinen eigenen Wiki-Benutzernamen und dein Passwort.
+        Erst danach wird die Wissensdatenbank automatisch geöffnet.</p>
+      <Link to="/settings?section=wiki" className="button button-primary">
+        Zugangsdaten hinterlegen</Link>
+    </div>}
+    {!loading&&error&&<div className="content-card znuny-portal-error" role="alert">
+      <strong>Wiki-Verbindung nicht hergestellt</strong>
+      <p>{error}</p>
+      <p>Bitte deine Wiki-Zugangsdaten unter Einstellungen → Wiki prüfen.</p>
+    </div>}
+    {wiki?.ready&&<div className="znuny-portal-frame-wrap znuny-native-frame-wrap">
       <div className="znuny-portal-security-caption">
-        <ShieldCheck size={14}/>Die Wiki-Seite läuft über den persönlichen Plenaro-Favoriten-Proxy.
+        <ShieldCheck size={14}/>Eigene, automatisch angemeldete Wiki-Sitzung;
+        keine Zugangsdaten im Browser-Frame.
       </div>
-      {frameLoading&&!frameUrl&&<div className="znuny-native-loading" role="status">
-        {source.name} wird verbunden …</div>}
-      {frameUrl&&<iframe title={'Wissensdatenbank – '+source.name}
-        key={frameUrl} src={frameUrl} className="znuny-native-frame"
+      {starting&&!url&&<div className="znuny-native-loading" role="status">
+        Wiki-Anmeldung wird geprüft …</div>}
+      {url&&<iframe title={'Wissensdatenbank – '+wiki.name}
+        key={url} src={url} className="znuny-native-frame"
         sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"
-        referrerPolicy="no-referrer" onLoad={()=>setFrameLoading(false)}/>}
+        referrerPolicy="no-referrer" onLoad={()=>setStarting(false)}/>}
     </div>}
   </div>;
 }

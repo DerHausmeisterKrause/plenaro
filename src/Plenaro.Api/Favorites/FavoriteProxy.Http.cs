@@ -35,6 +35,47 @@ public sealed partial class FavoriteProxy
         return null;
     }
 
+    // Verified against the existing Confluence login network trace:
+    // POST /rest/tsv/1.0/authenticate, JSON username/password/rememberMe/
+    // targetUrl/captchaId. Only the approved Wiki upstream receives these
+    // secrets, server-to-server over verified HTTPS. A 200 JSON response with
+    // a same-origin navigation target confirms successful authentication.
+    // Captcha/MFA/SSO, wrong passwords and unsupported plugins fail closed.
+    private static async Task<bool> TryConfluenceWikiLoginAsync(
+        HttpClient client,Uri origin,string username,string password,
+        CancellationToken ct)
+    {
+        using(var page=await client.GetAsync(new Uri(origin,"/login.action"),
+            HttpCompletionOption.ResponseHeadersRead,ct)){
+            if(!page.IsSuccessStatusCode)return false;
+        }
+        using var request=new HttpRequestMessage(HttpMethod.Post,
+            new Uri(origin,"/rest/tsv/1.0/authenticate")){
+            Content=System.Net.Http.Json.JsonContent.Create(new {
+                username,password,rememberMe=false,targetUrl="/",captchaId=""
+            })
+        };
+        request.Headers.Referrer=new Uri(origin,"/login.action");
+        request.Headers.TryAddWithoutValidation("Origin",
+            origin.GetLeftPart(UriPartial.Authority));
+        using var result=await client.SendAsync(request,
+            HttpCompletionOption.ResponseHeadersRead,ct);
+        if(!result.IsSuccessStatusCode ||
+           result.Content.Headers.ContentType?.MediaType!="application/json" ||
+           result.Content.Headers.ContentLength>8192)return false;
+        var raw=await ReadLimitedAsync(result.Content,8192,ct);
+        try{
+            using var document=System.Text.Json.JsonDocument.Parse(raw);
+            if(!document.RootElement.TryGetProperty("next",out var next)||
+               next.ValueKind!=System.Text.Json.JsonValueKind.String)return false;
+            var value=next.GetString();
+            if(string.IsNullOrEmpty(value) ||
+               !Uri.TryCreate(origin,value,out var redirect) ||
+               !SameUpstream(origin,redirect))return false;
+            return true;
+        }catch(System.Text.Json.JsonException){return false;}
+    }
+
     // Standard HTML username/password forms only. Non-standard sign-in
     // (SSO, 2FA, JavaScript-generated fields) remains interactive. Credentials
     // are NEVER emitted to the browser, GET query or another upstream origin.
