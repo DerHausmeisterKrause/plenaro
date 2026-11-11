@@ -373,13 +373,6 @@ using(var body=new MemoryStream())
         Encoding.UTF8.GetString(body.ToArray())=="plenaro-favorite-proxy-ready",
         "single path host passes tokenless DNS/Nginx/TLS health probe");
 }
-var sharedCsp=sharedProbe.Response.Headers["Content-Security-Policy"].ToString();
-var sharedAncestors=sharedCsp.Split(';',StringSplitOptions.TrimEntries)
-    .Single(x=>x.StartsWith("frame-ancestors ",StringComparison.Ordinal));
-Assert(sharedAncestors=="frame-ancestors 'self' https://portal.example.org" &&
-    sharedCsp.Contains("frame-src 'self'",StringComparison.Ordinal) &&
-    !sharedProbe.Response.Headers.ContainsKey("X-Frame-Options"),
-    "shared /wiki/ host permits own nested login frames and Plenaro only");
 sharedProbe.Request.Path="/";
 await sharedProxy.ServeAsync(sharedProbe,CancellationToken.None);
 Assert(sharedProbe.Response.StatusCode==404,
@@ -392,6 +385,15 @@ sharedProbe.Request.Path="/wiki/css/site.css";
 await sharedProxy.ServeAsync(sharedProbe,CancellationToken.None);
 Assert(sharedProbe.Response.StatusCode==401,
     "path resource requires independent valid favorite cookie");
+// Only /<slug>/ routes create the app frame policy. The public healthcheck
+// exits before that policy is applied, so test on an actual favorite path.
+var sharedCsp=sharedProbe.Response.Headers["Content-Security-Policy"].ToString();
+var sharedAncestors=sharedCsp.Split(';',StringSplitOptions.TrimEntries)
+    .Single(x=>x.StartsWith("frame-ancestors ",StringComparison.Ordinal));
+Assert(sharedAncestors=="frame-ancestors 'self' https://portal.example.org" &&
+    sharedCsp.Contains("frame-src 'self'",StringComparison.Ordinal) &&
+    !sharedProbe.Response.Headers.ContainsKey("X-Frame-Options"),
+    "shared /wiki/ host permits own nested login frames and Plenaro only");
 sharedProbe.Request.Path="/cloud/_plenaro/favorite-bootstrap";
 await sharedProxy.ServeAsync(sharedProbe,CancellationToken.None);
 Assert(sharedProbe.Response.StatusCode==401,
