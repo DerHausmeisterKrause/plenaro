@@ -64,12 +64,12 @@ export function WikiSettingsPanel({admin,userId}:{admin:boolean;userId:string}){
     e.preventDefault();if(busy)return;
     setBusy(true);setError('');setNotice('');
     try{
-      if(!apps.some(a=>a.id===newApp))throw new Error('Bitte eine freigegebene Wiki-Anwendung wählen.');
+      if(!available.some(a=>a.id===newAppId))throw new Error('Bitte eine freigegebene Wiki-Anwendung wählen.');
       if(!home.startsWith('/')||home.startsWith('//')||home.includes('#')||
          home.includes('\\')||home.includes('://'))
         throw new Error('Die Startseite muss ein relativer Pfad wie /display/TEAM sein.');
       const added=await createFavorite({
-        appId:newApp,name:name.trim(),path:home,
+        appId:newAppId,name:name.trim(),path:home,
         username:username.trim(),password,autoLogin,enabled:true,
         sortOrder:sources.length
       });
@@ -106,6 +106,7 @@ export function WikiSettingsPanel({admin,userId}:{admin:boolean;userId:string}){
   }
 
   const available=apps.filter(a=>!sources.some(f=>f.appId===a.id));
+  const newAppId=available.some(a=>a.id===newApp)?newApp:available[0]?.id??'';
   const existingWiki=approved.find(a=>a.slug==='wiki');
   return <div className="wiki-settings">
     <section className="content-card um-panel">
@@ -169,7 +170,7 @@ export function WikiSettingsPanel({admin,userId}:{admin:boolean;userId:string}){
         ' Ein Administrator muss zunächst den Wiki-Server freigeben.'}</p>:
       <form className="um-form" onSubmit={e=>void addFavorite(e)}>
         <label htmlFor="wiki-app">Freigegebener Wiki-Server</label>
-        <select id="wiki-app" value={newApp} onChange={e=>setNewApp(e.target.value)}>
+        <select id="wiki-app" value={newAppId} onChange={e=>setNewApp(e.target.value)}>
           {available.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
         <label htmlFor="wiki-name">Name der Wiki-Quelle</label>
