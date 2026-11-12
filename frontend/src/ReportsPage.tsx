@@ -42,8 +42,9 @@ export function ReportsPage() {
   return <div className="page plenaro-reports">
     <div className="page-heading">
       <span className="eyebrow">PLENARO / AUSWERTUNG</span>
-      <h1>Monatsberichte</h1>
-      <p>Deine aufgabenbezogenen Timerzeiten und manuellen Korrekturen. Keine Anwesenheit, Pausen oder Sollzeiten.</p>
+      <h1>Zeitreport</h1>
+      <p>Deine gebuchten Ticketzeiten aus Znuny/OTRS inklusive in Plenaro bestätigter Buchungen.
+        Lokale Aufgaben-Timer werden getrennt ausgewiesen, damit nichts doppelt gezählt wird.</p>
     </div>
 
     <section className="content-card reports-filter" aria-label="Berichtszeitraum">
@@ -61,16 +62,48 @@ export function ReportsPage() {
     {loading && <div className="content-card reports-empty" role="status"><RefreshCw size={18}/> Monatsbericht wird geladen …</div>}
     {!loading && report && <>
       <div className="reports-summary" aria-label="Monatsübersicht">
-        <div className="content-card"><span>Gesamte Aufgabenzeit</span><strong>{duration(report.totalSeconds)}</strong></div>
-        <div className="content-card"><span>Timerzeit</span><strong>{duration(report.timerSeconds)}</strong></div>
-        <div className="content-card"><span>Manuelle Korrekturen</span><strong>{report.adjustmentMinutes > 0 ? '+' : ''}{report.adjustmentMinutes} Min.</strong></div>
-        <div className="content-card"><span>Aufgaben mit Aktivität</span><strong>{report.taskCount}</strong></div>
+        <div className="content-card"><span>Gebuchte Ticketzeit</span><strong>{duration(report.accountedSeconds)}</strong></div>
+        <div className="content-card"><span>Davon direkt aus OTRS</span><strong>{duration(report.remoteSeconds)}</strong></div>
+        <div className="content-card"><span>Nur lokal bestätigte Buchungen</span><strong>{duration(report.localFallbackSeconds)}</strong></div>
+        <div className="content-card"><span>Lokale Aufgabenzeit (separat)</span><strong>{duration(report.totalSeconds)}</strong></div>
       </div>
+      <section className="content-card reports-table-card" aria-label="Gebuchte Ticketzeiten">
+        <h2>Gebuchte Ticketzeiten in Znuny/OTRS</h2>
+        {report.accountingStatus!=='ok'
+          ? <p role="alert" className="um-feedback failure">
+            OTRS-Abgleich unvollständig: {report.accountingMessage}
+            {' '}Für vollständige Zahlen muss der offizielle Znuny-Webservice
+            TimeAccountingGet verfügbar sein. Einstellungen → Ticketsystem prüfen.
+          </p>
+          : <p role="status" className="um-hint">{report.accountingMessage}</p>}
+        <p className="um-hint">Zeitbuchungen zählen nach dem Buchungsdatum, nicht
+          nach dem aktuellen Ticketbesitzer. Direkte OTRS-Buchungen werden
+          ergänzt, bereits über Plenaro nach OTRS übertragene Buchungen nicht
+          doppelt gezählt. Negative OTRS-Korrekturen werden berücksichtigt.</p>
+        {report.accountedTickets.length===0?
+          <p className="reports-empty">Keine bestätigten Ticketbuchungen in diesem Monat verfügbar.
+          {report.accountingStatus==='ok'?'':' Die OTRS-Daten konnten nicht vollständig geprüft werden.'}</p>:
+          <div className="reports-table-scroll"><table className="reports-table">
+            <thead><tr><th>Ticket</th><th>Titel</th><th>OTRS</th>
+              <th>Nur Plenaro</th><th>Gesamt gebucht</th></tr></thead>
+            <tbody>{report.accountedTickets.map(entry=><tr key={entry.ticketNumber}>
+              <td>{entry.ticketNumber}</td><td>{entry.title}</td>
+              <td>{duration(entry.remoteSeconds)}</td>
+              <td>{duration(entry.localOnlySeconds)}</td>
+              <td><strong>{duration(entry.totalSeconds)}</strong></td>
+            </tr>)}</tbody>
+            <tfoot><tr><th>Summe</th><td></td>
+              <td>{duration(report.remoteSeconds)}</td>
+              <td>{duration(report.localFallbackSeconds)}</td>
+              <td>{duration(report.accountedSeconds)}</td>
+            </tr></tfoot>
+          </table></div>}
+      </section>
       <section className="content-card reports-table-card" aria-label="Aufgabenzeiten im Monat">
-        <h2>Aufgaben im {new Intl.DateTimeFormat('de-DE', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+        <h2>Lokale Aufgaben-Timer und Korrekturen im {new Intl.DateTimeFormat('de-DE', { month: 'long', year: 'numeric', timeZone: 'UTC' })
           .format(new Date(month + '-01T12:00:00Z'))}</h2>
         {report.tasks.length === 0
-          ? <p className="reports-empty">In diesem Monat sind keine aufgabenbezogenen Zeiten oder Korrekturen erfasst.</p>
+          ? <p className="reports-empty">In diesem Monat sind keine lokalen Aufgaben-Timer oder Korrekturen erfasst.</p>
           : <div className="reports-table-scroll">
             <table className="reports-table">
               <thead><tr><th>Aufgabe</th><th>Status</th><th>Timer</th><th>Korrektur</th><th>Gesamt</th><th>Sitzungen</th></tr></thead>
@@ -85,7 +118,12 @@ export function ReportsPage() {
             </table>
           </div>}
       </section>
-      <p className="um-hint reports-note">Monatsgrenzen: Europe/Berlin. Übergreifende Timer-Sitzungen werden dem jeweiligen Monat anteilig zugerechnet. Laufende Timer sind bis zum Abrufzeitpunkt enthalten. Korrekturen zählen im Monat ihrer Erfassung. Negative Gesamtdauern pro Aufgabe werden auf null begrenzt; deshalb kann die Summe der Aufgabengesamtzeiten von Timerzeit plus Korrektursumme abweichen. Gelöschte Aufgaben werden nicht als Tätigkeitsposition rekonstruiert.</p>
+      <p className="um-hint reports-note">Die lokalen Aufgaben-Timer sind von gebuchten
+        OTRS-Ticketzeiten getrennt: Sie dürfen nicht ungeprüft addiert werden,
+        weil dieselbe Arbeit in beiden Quellen erfasst sein kann.
+        Die gebuchte Gesamtzeit entspricht der Summe aus OTRS und den
+        bestätigten Plenaro-Buchungen, die im OTRS-Abgleich fehlen.
+        Monatsgrenzen: Europe/Berlin. Übergreifende Timer-Sitzungen werden dem jeweiligen Monat anteilig zugerechnet. Laufende Timer sind bis zum Abrufzeitpunkt enthalten. Korrekturen zählen im Monat ihrer Erfassung. Negative Gesamtdauern pro Aufgabe werden auf null begrenzt; deshalb kann die Summe der Aufgabengesamtzeiten von Timerzeit plus Korrektursumme abweichen. Gelöschte Aufgaben werden nicht als Tätigkeitsposition rekonstruiert.</p>
     </>}
   </div>;
 }
