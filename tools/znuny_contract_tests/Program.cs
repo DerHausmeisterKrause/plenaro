@@ -1368,6 +1368,47 @@ Assert(Plenaro.Api.DayMarkers.BrRequestEndpoints.TryNormalize(
         new("invalid-address",""),out _),
     "BR mail recipients are validated and reject header injection");
 
+// Microsoft Graph transport is tested only through a synthetic handler.
+// A 202 is "accepted", not proof the recipients received the message.
+var brMailCalls=0;
+var brSender=new Plenaro.Api.DayMarkers.BrMailService(
+    new FakeFactory(request=>{
+        brMailCalls++;
+        Assert(request.RequestUri?.AbsoluteUri==
+                "https://graph.microsoft.com/v1.0/me/sendMail" &&
+            request.Headers.Authorization?.Scheme=="Bearer" &&
+            request.Headers.Authorization.Parameter=="synthetic-graph-token",
+            "BR message uses only the signed-in user's delegated Graph sendMail API");
+        using var payload=JsonDocument.Parse(
+            request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+        var message=payload.RootElement.GetProperty("message");
+        Assert(message.GetProperty("subject").GetString()=="Homeoffice am 16.11.2026" &&
+            message.GetProperty("body").GetProperty("content").GetString()
+                ==brText.Body &&
+            message.GetProperty("toRecipients").GetArrayLength()==2,
+            "BR email includes exact template, two personal recipients and no extra fields");
+        return new HttpResponseMessage(HttpStatusCode.Accepted);
+    }),null!,null!);
+await brSender.SendAsync("synthetic-graph-token",
+    new DateOnly(2026,11,16),"Test Nutzer",
+    ["team@example.org","leitung@example.org"],CancellationToken.None);
+Assert(brMailCalls==1,"Graph accepted exactly one BR mail request");
+var brForbiddenCalls=0;
+var brForbiddenSender=new Plenaro.Api.DayMarkers.BrMailService(
+    new FakeFactory(_=>{
+        brForbiddenCalls++;
+        return new HttpResponseMessage(HttpStatusCode.Forbidden);
+    }),null!,null!);
+try{
+    await brForbiddenSender.SendAsync("synthetic",
+        new DateOnly(2026,11,16),"Test Nutzer",
+        ["team@example.org"],CancellationToken.None);
+    throw new Exception("Missing Mail.Send scope unexpectedly treated as success");
+}catch(Plenaro.Api.DayMarkers.BrMailService.MailFailure e){
+    Assert(e.SafeToRetry&&brForbiddenCalls==1,
+        "Graph 403 fails closed and is not retried");
+}
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory
