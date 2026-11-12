@@ -49,19 +49,18 @@ beforeEach(()=>{
   mocks.graphStatus.mockResolvedValue({
     enabled:true,linked:true,vaultReady:true,connected:true
   });
-  vi.stubGlobal('confirm',vi.fn(()=>true));
 });
-afterEach(()=>{cleanup();vi.unstubAllGlobals();});
+afterEach(cleanup);
 
 describe('BR marker confirmation and mail delivery',()=>{
   it('cancelling the question saves no BR marker and sends no email',async()=>{
-    vi.stubGlobal('confirm',vi.fn(()=>false));
     render(<DayMarkersPanel initialDay="2026-11-16"/>);
     const marker=await screen.findByLabelText('BR-Tag markieren');
     fireEvent.click(marker);
     fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
-    expect(window.confirm).toHaveBeenCalledWith(
+    expect(screen.getByRole('dialog').textContent).toContain(
       'Willst du wirklich am 16.11.2026 Homeoffice beantragen?');
+    fireEvent.click(screen.getByRole('button',{name:'Nein'}));
     expect(mocks.saveDayMarker).not.toHaveBeenCalled();
     expect(mocks.sendBrRequest).not.toHaveBeenCalled();
   });
@@ -71,6 +70,8 @@ describe('BR marker confirmation and mail delivery',()=>{
     render(<DayMarkersPanel initialDay="2026-11-16" onSaved={refreshed}/>);
     fireEvent.click(await screen.findByLabelText('BR-Tag markieren'));
     fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
+    expect(mocks.sendBrRequest).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button',{name:'Ja, beantragen'}));
     await waitFor(()=>expect(mocks.preflightHomeofficeMail).toHaveBeenCalledTimes(1));
     await waitFor(()=>expect(mocks.saveDayMarker).toHaveBeenCalledWith(
       '2026-11-16','Normal',true,false));
@@ -82,8 +83,9 @@ describe('BR marker confirmation and mail delivery',()=>{
     render(<DayMarkersPanel initialDay="2026-11-16"/>);
     fireEvent.click(await screen.findByLabelText('HO – Homeoffice'));
     fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
-    expect(window.confirm).toHaveBeenCalledWith(
+    expect(screen.getByRole('dialog').textContent).toContain(
       'Willst du wirklich am 16.11.2026 Homeoffice beantragen?');
+    fireEvent.click(screen.getByRole('button',{name:'Ja, beantragen'}));
     await waitFor(()=>expect(mocks.saveDayMarker).toHaveBeenCalledWith(
       '2026-11-16','Normal',false,true));
     await waitFor(()=>expect(mocks.sendBrRequest).toHaveBeenCalledWith('2026-11-16'));
@@ -95,6 +97,7 @@ describe('BR marker confirmation and mail delivery',()=>{
     render(<DayMarkersPanel initialDay="2026-11-16"/>);
     fireEvent.click(await screen.findByLabelText('HO – Homeoffice'));
     fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
+    fireEvent.click(screen.getByRole('button',{name:'Ja, beantragen'}));
     expect(await screen.findByText(/Homeoffice wurde nicht beantragt/)).toBeTruthy();
     expect(mocks.preflightHomeofficeMail).toHaveBeenCalledTimes(1);
     expect(mocks.saveDayMarker).not.toHaveBeenCalled();
@@ -106,6 +109,7 @@ describe('BR marker confirmation and mail delivery',()=>{
     render(<DayMarkersPanel initialDay="2026-11-16"/>);
     fireEvent.click(await screen.findByLabelText('HO – Homeoffice'));
     fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
+    fireEvent.click(screen.getByRole('button',{name:'Nein'}));
     expect(mocks.saveDayMarker).not.toHaveBeenCalled();
     expect(mocks.sendBrRequest).not.toHaveBeenCalled();
   });
@@ -132,8 +136,10 @@ describe('BR marker confirmation and mail delivery',()=>{
       name:'Homeoffice-Antrag per E-Mail senden'
     });
     fireEvent.click(trigger);
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(mocks.sendBrRequest).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button',{name:'Ja, beantragen'}));
     await waitFor(()=>expect(mocks.sendBrRequest).toHaveBeenCalledTimes(1));
-    expect(window.confirm).toHaveBeenCalledTimes(1);
   });
 
   it('shows unknown mail status rather than offering an automatic retry',async()=>{
