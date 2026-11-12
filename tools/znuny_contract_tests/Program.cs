@@ -1348,6 +1348,26 @@ Assert(binaryResult.Html is null &&
     binaryResult.Streamed.SequenceEqual(syntheticBinary),
     "large non-HTML binary downloads stream unchanged without HTML size cap");
 
+// BR request emulates the HomeOfficeService/OutlookInteropService mail
+// template, using the explicit text requested for this BR-triggered flow.
+// Never connect to Microsoft Graph or send real email from CI.
+var brText=Plenaro.Api.DayMarkers.BrMailService.Compose(
+    new DateOnly(2026,11,16),"Test Nutzer");
+Assert(brText.Subject=="Homeoffice am 16.11.2026" &&
+    brText.Body=="Servus,\\n\\nich mache am 16.11.2026 Homeoffice.\\n\\nmfg.\\nTest Nutzer",
+    "BR request template contains exact date and signed user display name");
+Assert(Plenaro.Api.DayMarkers.BrRequestEndpoints.TryNormalize(
+    new("leitung@example.org","team@example.org"),out var brRecipients) &&
+    brRecipients.Recipient1=="leitung@example.org" &&
+    brRecipients.Recipient2=="team@example.org" &&
+    !Plenaro.Api.DayMarkers.BrRequestEndpoints.TryNormalize(
+        new("leitung@example.org\\r\\nBcc:evil@example.org",""),out _) &&
+    !Plenaro.Api.DayMarkers.BrRequestEndpoints.TryNormalize(
+        new("leitung@example.org;evil@example.org",""),out _) &&
+    !Plenaro.Api.DayMarkers.BrRequestEndpoints.TryNormalize(
+        new("invalid-address",""),out _),
+    "BR mail recipients are validated and reject header injection");
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory
