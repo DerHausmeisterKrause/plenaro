@@ -6,7 +6,7 @@ import {BrRecipientsSettingsPanel} from './BrRecipientsSettingsPanel';
 const mocks=vi.hoisted(()=>({
   getMonthMarkers:vi.fn(),getMarkerSummary:vi.fn(),saveDayMarker:vi.fn(),
   getMarkerBudget:vi.fn(),saveMarkerBudget:vi.fn(),
-  readBrMailStatus:vi.fn(),sendBrRequest:vi.fn(),
+  readBrMailStatus:vi.fn(),sendBrRequest:vi.fn(),preflightHomeofficeMail:vi.fn(),
   readBrRecipients:vi.fn(),saveBrRecipients:vi.fn(),
   graphStatus:vi.fn()
 }));
@@ -24,6 +24,7 @@ vi.mock('./brRequestsApi',()=>({
     return `${day}.${month}.${year}`;
   },
   readBrMailStatus:mocks.readBrMailStatus,sendBrRequest:mocks.sendBrRequest,
+  preflightHomeofficeMail:mocks.preflightHomeofficeMail,
   readBrRecipients:mocks.readBrRecipients,saveBrRecipients:mocks.saveBrRecipients
 }));
 
@@ -38,6 +39,7 @@ beforeEach(()=>{
   });
   mocks.saveDayMarker.mockResolvedValue(undefined);
   mocks.readBrMailStatus.mockResolvedValue({status:'none'});
+  mocks.preflightHomeofficeMail.mockResolvedValue({ready:true});
   mocks.sendBrRequest.mockResolvedValue({status:'accepted',
     message:'Microsoft Graph hat den Versand angenommen.'});
   mocks.readBrRecipients.mockResolvedValue({
@@ -69,6 +71,7 @@ describe('BR marker confirmation and mail delivery',()=>{
     render(<DayMarkersPanel initialDay="2026-11-16" onSaved={refreshed}/>);
     fireEvent.click(await screen.findByLabelText('BR-Tag markieren'));
     fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
+    await waitFor(()=>expect(mocks.preflightHomeofficeMail).toHaveBeenCalledTimes(1));
     await waitFor(()=>expect(mocks.saveDayMarker).toHaveBeenCalledWith(
       '2026-11-16','Normal',true,false));
     await waitFor(()=>expect(mocks.sendBrRequest).toHaveBeenCalledWith('2026-11-16'));
@@ -84,6 +87,18 @@ describe('BR marker confirmation and mail delivery',()=>{
     await waitFor(()=>expect(mocks.saveDayMarker).toHaveBeenCalledWith(
       '2026-11-16','Normal',false,true));
     await waitFor(()=>expect(mocks.sendBrRequest).toHaveBeenCalledWith('2026-11-16'));
+  });
+
+  it('preflights recipients and Mail.Send before any HO marker is saved',async()=>{
+    mocks.preflightHomeofficeMail.mockRejectedValue(
+      new Error('Outlook Mail.Send wurde noch nicht freigegeben.'));
+    render(<DayMarkersPanel initialDay="2026-11-16"/>);
+    fireEvent.click(await screen.findByLabelText('HO – Homeoffice'));
+    fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
+    expect(await screen.findByText(/Homeoffice wurde nicht beantragt/)).toBeTruthy();
+    expect(mocks.preflightHomeofficeMail).toHaveBeenCalledTimes(1);
+    expect(mocks.saveDayMarker).not.toHaveBeenCalled();
+    expect(mocks.sendBrRequest).not.toHaveBeenCalled();
   });
 
   it('does not send a new HO request when the user chooses No',async()=>{
