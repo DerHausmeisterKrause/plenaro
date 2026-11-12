@@ -55,7 +55,8 @@ public static class ZnunyEndpoints
         int SearchLimit = 100,
         int ArticleLimit = 20,
         bool OnlyOpenTickets = true,
-        bool ShowClosedTickets = false
+        bool ShowClosedTickets = false,
+        string TimeAccountingWebserviceName = "TimeAccountingREST"
     );
 
     public sealed record PersonalSettings(
@@ -293,6 +294,11 @@ public static class ZnunyEndpoints
             x.Contains("://",StringComparison.Ordinal) ||
             x.Split('/').Any(p => p is "." or "..")))
             return "Ungültige relative API-Route.";
+        if (s.TimeAccountingWebserviceName is null ||
+            s.TimeAccountingWebserviceName.Length is < 1 or > 80 ||
+            !s.TimeAccountingWebserviceName.All(c=>
+                char.IsAsciiLetterOrDigit(c) || c is '_' or '-'))
+            return "Ungültiger TimeAccounting-Webservice-Name.";
         if (s.TicketSearchMethod is not ("GET" or "POST") ||
             s.TicketGetMethod is not ("GET" or "POST") ||
             s.TicketUpdateMethod is not ("POST" or "PATCH") ||
