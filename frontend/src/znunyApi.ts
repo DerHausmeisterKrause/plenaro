@@ -29,6 +29,7 @@ export type ZnunyServerSettings = {
   articleLimit: number;
   onlyOpenTickets: boolean;
   showClosedTickets: boolean;
+  timeAccountingWebserviceName: string;
 };
 export type ZnunyPersonalSettings = {
   username: string;
