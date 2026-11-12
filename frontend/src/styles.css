@@ -1113,3 +1113,22 @@ h1,h2,h3,p { margin-top: 0; }
   .wiki-browser-toolbar{align-items:flex-start;flex-direction:column}
   .wiki-source-picker{flex-wrap:wrap}
 }
+
+
+/* Confirmed HO/BR request: explicit Yes/No instead of browser-specific OK/Cancel. */
+.homeoffice-dialog-backdrop{
+  position:fixed;inset:0;z-index:1000;
+  background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;
+  padding:18px;
+}
+.homeoffice-dialog{
+  max-width:490px;width:100%;box-shadow:0 20px 64px rgba(0,0,0,.28);
+  padding:22px;display:grid;gap:14px;
+}
+.homeoffice-dialog h3{margin:0}
+.homeoffice-dialog p{margin:0}
+.homeoffice-dialog-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+@media(max-width:480px){
+  .homeoffice-dialog-actions{justify-content:stretch}
+  .homeoffice-dialog-actions>.button{flex:1;justify-content:center}
+}
