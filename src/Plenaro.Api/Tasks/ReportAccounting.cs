@@ -27,7 +27,7 @@ public static class ReportAccounting
         var unpaired=confirmedLocal
             .GroupBy(x=>(x.TicketNumber,x.Seconds))
             .ToDictionary(g=>g.Key,g=>g.Count());
-        var counts=new Dictionary<string,(string Title,long Remote,long Local,int RemoteCount,int LocalCount)>(
+        var counts=new Dictionary<string,(string Title,long Remote,long Unmatched,int RemoteCount,int LocalCount)>(
             StringComparer.Ordinal);
         foreach(var r in remote)
         {
@@ -48,12 +48,12 @@ public static class ReportAccounting
             if(!counts.TryGetValue(l.TicketNumber,out var item))
                 item=(l.Title,0,0,0,0);
             if(string.IsNullOrWhiteSpace(item.Title))item.Title=l.Title;
-            item.Local+=l.Seconds;item.LocalCount++;
+            item.Unmatched+=l.Seconds;item.LocalCount++;
             counts[l.TicketNumber]=item;
         }
         var tickets=counts.Select(kv=>new TicketRow(kv.Key,kv.Value.Title,
-                kv.Value.Remote,kv.Value.Local,
-                kv.Value.Remote+kv.Value.Local,
+                kv.Value.Remote,kv.Value.Unmatched,
+                kv.Value.Remote+kv.Value.Unmatched,
                 kv.Value.RemoteCount,kv.Value.LocalCount))
             .OrderByDescending(x=>Math.Abs(x.TotalSeconds))
             .ThenBy(x=>x.TicketNumber,StringComparer.Ordinal)
