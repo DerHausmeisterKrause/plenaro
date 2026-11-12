@@ -5,6 +5,7 @@ import {
   type BudgetSummary, type DayMarker, type DayType,
 } from './dayMarkersApi';
 import { localDate } from './tasksApi';
+import {GermanDay,readBrMailStatus,sendBrRequest,type BrMailStatus} from './brRequestsApi';
 
 function quotaLabel(limit: number | null, used: number, remaining: number | null) {
   return limit === null
@@ -103,9 +104,11 @@ function monthStep(current: string, delta: number): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-export function DayMarkersPanel() {
-  const [viewMonth, setViewMonth] = useState(() => localDate().slice(0, 7));
-  const [selected, setSelected] = useState(() => localDate());
+export function DayMarkersPanel({initialDay,onSaved}:{
+  initialDay?:string;onSaved?:()=>void;
+}={}) {
+  const [viewMonth, setViewMonth] = useState(() => (initialDay??localDate()).slice(0, 7));
+  const [selected, setSelected] = useState(() => initialDay??localDate());
   const [markers, setMarkers] = useState<DayMarker[]>([]);
   const [summary, setSummary] = useState<BudgetSummary | null>(null);
   const [dayType, setDayType] = useState<DayType>('Normal');
@@ -116,7 +119,14 @@ export function DayMarkersPanel() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [refresh, setRefresh] = useState(0);
+  const [brMailStatus,setBrMailStatus]=useState<BrMailStatus|null>(null);
   const [year, month] = viewMonth.split('-').map(Number);
+
+  useEffect(()=>{
+    if(!initialDay)return;
+    setSelected(initialDay);
+    setViewMonth(initialDay.slice(0,7));
+  },[initialDay]);
 
   useEffect(() => {
     let active = true;
@@ -139,6 +149,34 @@ export function DayMarkersPanel() {
     setIsHo(item?.isHo ?? false);
   }, [selected, markers]);
 
+  useEffect(()=>{
+    let active=true;
+    setBrMailStatus(null);
+    void readBrMailStatus(selected).then(status=>{
+      if(active)setBrMailStatus(status);
+    }).catch(()=>{if(active)setBrMailStatus(null);});
+    return()=>{active=false;};
+  },[selected,refresh]);
+
+  function confirmBr():boolean {
+    return window.confirm(
+      'Willst du wirklich für den '+GermanDay(selected)+' Bereitschaft beantragen?');
+  }
+
+  async function sendMailForBr(){
+    const result=await sendBrRequest(selected);
+    setBrMailStatus({status:'accepted'});
+    setNotice(result.message);
+  }
+
+  async function requestExistingBr(){
+    if(busy||!confirmBr())return;
+    setBusy(true);setError('');setNotice('');
+    try{await sendMailForBr();}
+    catch(e){setError(e instanceof Error?e.message:'BR-Mailversand fehlgeschlagen.');}
+    finally{setBusy(false);}
+  }
+
   const days = useMemo(() => {
     const total = new Date(year, month, 0).getDate();
     return Array.from({ length: total }, (_, index) =>
@@ -155,12 +193,23 @@ export function DayMarkersPanel() {
 
   async function save() {
     if (busy) return;
+    const newBr=isBr&&!markers.some(m=>m.day===selected&&m.isBr);
+    if(newBr&&!confirmBr()){
+      setIsBr(false);
+      return;
+    }
     setBusy(true); setError(''); setNotice('');
     try {
       await saveDayMarker(selected, dayType, isBr, isHo);
-      // Refresh both usage counters and the individual marker from the database.
+      // Only an explicit Yes triggers a mail request; saving other markers
+      // and revisiting an existing BR day never emails anyone.
       setRefresh(v => v + 1);
-      setNotice('Tagesmarker gespeichert.');
+      onSaved?.();
+      if(newBr){
+        try{await sendMailForBr();}
+        catch(e){setError('BR-Marker gespeichert. Der E-Mail-Versand ist nicht bestätigt: '+
+          (e instanceof Error?e.message:'Unbekannter Fehler.'));}
+      }else setNotice('Tagesmarker gespeichert.');
     } catch (e) { setError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen.'); }
     finally { setBusy(false); }
   }
@@ -220,6 +269,16 @@ export function DayMarkersPanel() {
             <Save size={16}/>{busy ? 'Speichere …' : 'Marker speichern'}
           </button>
         </div>
+        {markers.some(m=>m.day===selected&&m.isBr)&&brMailStatus?.status==='none'&&
+          <button type="button" className="button button-secondary" disabled={busy}
+            onClick={()=>void requestExistingBr()}>
+            <CalendarDays size={16}/>Bereitschaftsantrag per E-Mail senden
+          </button>}
+        {brMailStatus?.status==='accepted'&&
+          <p role="status" className="um-hint">BR-Mail wurde für diesen Tag bereits von Microsoft Graph angenommen.</p>}
+        {(brMailStatus?.status==='processing'||brMailStatus?.status==='unknown')&&
+          <p role="alert" className="um-feedback failure">BR-Mailversandstatus nicht bestätigt.
+            Bitte in Gesendete Elemente prüfen; Doppelversand ist gesperrt.</p>}
         <p className="um-hint">„Normal“ ohne BR entfernt alle Marker dieses Tages. Kontingentüberschreitungen werden gewarnt, nicht automatisch blockiert.</p>
       </div>
     </>}

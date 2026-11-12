@@ -380,7 +380,8 @@ export function WeekCalendarPage() {
       </aside>
     </div>
     {showMarkers && <div className="classic-marker-editor">
-      <DayMarkersPanel key={`${weekStart.toISOString()}-${refresh}`}/>
+      <DayMarkersPanel key={`${weekStart.toISOString()}`} initialDay={selectedDay}
+        onSaved={()=>setRefresh(v=>v+1)}/>
       <button type="button" className="button button-secondary" onClick={() => setRefresh(n => n + 1)}>
         Marker im Kalender aktualisieren
       </button>

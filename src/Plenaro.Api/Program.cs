@@ -75,6 +75,7 @@ builder.Services.AddHttpClient("Plenaro.Graph", http =>
     http.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddScoped<GraphCalendarService>();
+builder.Services.AddScoped<BrMailService>();
 builder.Services.AddHttpClient("Plenaro.Znuny", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(10);
@@ -200,6 +201,9 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
         options.Scope.Clear();
         options.Scope.Add("User.Read");
         options.Scope.Add("Calendars.Read");
+        // Explicit OAuth reconnect grants optional delegated mail sending.
+        // Never request Mail.Send during normal Plenaro/Entra sign-in.
+        options.Scope.Add("Mail.Send");
         options.Scope.Add("offline_access");
         options.Events = new OAuthEvents
         {
@@ -503,5 +507,6 @@ app.MapPlenaroWiki();
 ZnunyNativeProxy.Map(app);
 app.MapPlenaroZnunyCentral();
 app.MapPlenaroDayMarkers();
+app.MapPlenaroBrRequests();
 app.MapFallbackToFile("index.html");
 app.Run();
