@@ -804,3 +804,16 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] CI vollständig erfolgreich ([Run #43018570330](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43018570330)); [PR #32](https://github.com/DerHausmeisterKrause/plenaro/pull/32) nach main gemergt.
 - [ ] Echte Confluence-Autoanmeldung (inkl. Cookies, Logout, abgelaufenem Passwort) sowie parallele Benutzer auf Zielhost live abnehmen.
 - [ ] WPF-Restfunktionen Wiki-Suche, Ticket-Wiki-Treffer, Dokumenten- und KI-Index später.
+
+## 12.11.2026 – Phase 5/7: Bestätigte BR-Beantragung per persönlicher E-Mail (PR in Prüfung)
+
+- [x] Desktop-Verhalten geprüft: `HO` löst im WPF `ToggleHomeOfficeAsync` mit Bestätigung, Outlook-Termin und `SendHomeOfficeMail` an bis zu zwei Empfänger aus; `BR` bleibt separater Marker.
+- [x] Benutzerwunsch ausdrücklich als abweichende Web-Semantik umgesetzt: erstmaliges Setzen von `BR` zeigt „Willst du wirklich für den DD.MM.YYYY Bereitschaft beantragen?“; „Nein“ speichert/sendet nichts.
+- [x] Bei „Ja“ BR-Marker für den Tag speichern und erst dann einen E-Mail-Versuch an selbst konfigurierte Empfänger starten; alte BR-Tage und UL/AM/HO senden niemals ungefragt.
+- [x] `Einstellungen → Aufgaben & Kalender`: bis zu zwei persönliche Mail-Empfänger, serverseitige E-Mail-Validierung, getrennte Speicherung je Benutzer und JSONB-Merge.
+- [x] Persönliches Microsoft-Graph `Mail.Send` (optional über explizite OAuth-Neuverbindung); Mailtext „Servus, ich mache am DD.MM.YYYY Homeoffice. mfg. Name“, obwohl BR auslöst – ausdrücklich vom Nutzer so vorgegeben, fachlich noch zu klären.
+- [x] Neue Migration `0028_br_mail_requests.sql`, persönliche Idempotency-Key-Reservierung (user_id+day), kein automatischer Doppelversand bei 202 oder unbekanntem Status.
+- [x] Automatisierte Tests für Bestätigung/Abbruch, zwei Empfänger, Mailtext, Graph-202/403, Wiederholsperre und Empfängervalidierung ergänzt.
+- [ ] GitHub-CI erfolgreich abschließen, PR nach main mergen.
+- [ ] Live-Abnahme: Outlook-Neueinwilligung Mail.Send, Gesendete Elemente, zwei Benutzer, bei Timeout keine Wiederholung.
+- [ ] Fachliche Klärung: BR-Bereitschaftsmarker mit ausdrücklich gewünschtem Homeoffice-Text.
