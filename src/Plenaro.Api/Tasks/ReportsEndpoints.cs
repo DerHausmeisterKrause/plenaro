@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Identity;
 using Npgsql;
 using NpgsqlTypes;
 using Plenaro.Api.Identity;
+using Plenaro.Api.Znuny;
+using Plenaro.Api.Secrets;
 
 namespace Plenaro.Api.Tasks;
 
@@ -23,20 +25,25 @@ public static class ReportsEndpoints
     public sealed record MonthReport(string Month, string TimeZone,
         DateTimeOffset GeneratedAt, long TimerSeconds, long AdjustmentMinutes,
         long TotalSeconds, int SessionCount, int TaskCount,
-        IReadOnlyList<TaskReportRow> Tasks);
+        IReadOnlyList<TaskReportRow> Tasks,
+        long AccountedSeconds,long RemoteSeconds,long LocalFallbackSeconds,
+        int RemoteEntries,int LocalFallbackEntries,
+        string AccountingStatus,string AccountingMessage,
+        IReadOnlyList<ReportAccounting.TicketRow> AccountedTickets);
 
     public static void MapPlenaroReports(this WebApplication app)
     {
         var group = app.MapGroup("/api/v1/reports").RequireAuthorization();
 
         group.MapGet("/month", async (string? month, HttpContext http,
-            UserManager<ApplicationUser> users, IConfiguration config, CancellationToken ct) =>
+            UserManager<ApplicationUser> users, IConfiguration config,
+            SecretVault vault,ZnunyReader reader,CancellationToken ct) =>
         {
             if (!TryMonth(month, out var firstDay))
                 return Results.BadRequest(new { error = "Monat im Format JJJJ-MM (2000–2100) angeben." });
             var user = await users.GetUserAsync(http.User);
             if (user is null || user.IsDisabled) return Results.Unauthorized();
-            var report = await ReadMonthAsync(config, user.Id, firstDay, ct);
+            var report = await ReadMonthAsync(config, user.Id, firstDay, vault, reader, ct);
             return report is null
                 ? Results.Problem("Der Monat enthält zu viele Aufgaben für einen einzelnen Export.",
                     statusCode: StatusCodes.Status413PayloadTooLarge)
@@ -44,13 +51,14 @@ public static class ReportsEndpoints
         });
 
         group.MapGet("/month.csv", async (string? month, HttpContext http,
-            UserManager<ApplicationUser> users, IConfiguration config, CancellationToken ct) =>
+            UserManager<ApplicationUser> users, IConfiguration config,
+            SecretVault vault,ZnunyReader reader,CancellationToken ct) =>
         {
             if (!TryMonth(month, out var firstDay))
                 return Results.BadRequest(new { error = "Monat im Format JJJJ-MM (2000–2100) angeben." });
             var user = await users.GetUserAsync(http.User);
             if (user is null || user.IsDisabled) return Results.Unauthorized();
-            var report = await ReadMonthAsync(config, user.Id, firstDay, ct);
+            var report = await ReadMonthAsync(config, user.Id, firstDay, vault, reader, ct);
             if (report is null)
                 return Results.Problem("Der Monat enthält zu viele Aufgaben für einen einzelnen Export.",
                     statusCode: StatusCodes.Status413PayloadTooLarge);
@@ -71,7 +79,7 @@ public static class ReportsEndpoints
     }
 
     private static async Task<MonthReport?> ReadMonthAsync(IConfiguration config, Guid owner,
-        DateTime monthStart, CancellationToken ct)
+        DateTime monthStart, SecretVault vault,ZnunyReader znuny,CancellationToken ct)
     {
         var zone = TimeZoneInfo.FindSystemTimeZoneById(ZoneId);
         var endLocal = monthStart.AddMonths(1);
@@ -138,10 +146,107 @@ public static class ReportsEndpoints
             }
         }
 
+        var accounted=await ReadAccountingAsync(db,owner,start,end,vault,znuny,ct);
         return new MonthReport(monthStart.ToString("yyyy-MM", CultureInfo.InvariantCulture),
             ZoneId, asOf, rows.Sum(r => r.TimerSeconds),
             rows.Sum(r => r.AdjustmentMinutes), rows.Sum(r => r.TotalSeconds),
-            rows.Sum(r => r.SessionCount), rows.Count, rows);
+            rows.Sum(r => r.SessionCount), rows.Count, rows,
+            accounted.Data.TotalSeconds,accounted.Data.RemoteSeconds,
+            accounted.Data.LocalOnlySeconds,accounted.Data.RemoteEntries,
+            accounted.Data.LocalOnlyEntries,
+            accounted.Status,accounted.Message,accounted.Data.Tickets);
+    }
+
+    private sealed record AccountingLoad(ReportAccounting.MergeResult Data,
+        string Status,string Message);
+
+    private static async Task<AccountingLoad> ReadAccountingAsync(
+        NpgsqlConnection db,Guid owner,DateTime start,DateTime end,
+        SecretVault vault,ZnunyReader znuny,CancellationToken ct)
+    {
+        var local=new List<ReportAccounting.LocalBooking>();
+        // Plenaro's journal has only one authoritative local record per
+        // outgoing booking; pending and explicitly rejected writes are not
+        // treated as successful bookings. Use booked_minutes, not source_seconds.
+        await using(var cmd=new NpgsqlCommand("""
+            SELECT COALESCE(NULLIF(t.ticket_number,''),b.ticket_id),
+                   COALESCE(t.title,''), b.booked_minutes
+            FROM znuny_ticket_time_bookings b
+            JOIN znuny_cached_tickets t ON t.ticket_id=b.ticket_id
+            WHERE b.user_id=@user AND b.status='confirmed'
+              AND COALESCE(b.confirmed_at,b.created_at)>=@from
+              AND COALESCE(b.confirmed_at,b.created_at)<@to
+            ORDER BY b.created_at,b.id
+            LIMIT @limit
+            """,db)){
+            cmd.Parameters.AddWithValue("user",owner);
+            cmd.Parameters.Add("from",NpgsqlDbType.TimestampTz).Value=start;
+            cmd.Parameters.Add("to",NpgsqlDbType.TimestampTz).Value=end;
+            cmd.Parameters.AddWithValue("limit",MaxReportRows+1);
+            await using var cursor=await cmd.ExecuteReaderAsync(ct);
+            while(await cursor.ReadAsync(ct)){
+                if(local.Count>=MaxReportRows)
+                    throw new InvalidOperationException(
+                        "Zu viele bestätigte Znuny-Zeitbuchungen für einen Monatsreport.");
+                local.Add(new ReportAccounting.LocalBooking(cursor.GetString(0),
+                    cursor.GetString(1),checked((long)cursor.GetInt32(2)*60)));
+            }
+        }
+        AccountingLoad Partial(string status,string message)=>
+            new(ReportAccounting.Reconcile([],local),status,message);
+        if(!vault.IsConfigured)
+            return Partial("unavailable",
+                "Secret-Vault fehlt. Znuny-Zeiten konnten nicht vollständig geprüft werden.");
+        string login="";
+        await using(var cmd=new NpgsqlCommand("""
+            SELECT COALESCE(p.username,'')
+            FROM znuny_approved_agent_bindings a
+            LEFT JOIN znuny_user_settings p ON p.user_id=a.user_id
+            WHERE a.user_id=@user
+            """,db)){
+            cmd.Parameters.AddWithValue("user",owner);
+            login=(await cmd.ExecuteScalarAsync(ct) as string??"").Trim();
+        }
+        if(string.IsNullOrWhiteSpace(login))
+            return Partial("not-connected",
+                "Keine freigegebene persönliche Znuny-Agentenanmeldung. Nur lokal bestätigte Buchungen sichtbar.");
+        var password=await vault.GetForIntegrationAsync("user",owner,
+            "znuny.password",ct);
+        if(string.IsNullOrEmpty(password))
+            return Partial("not-connected",
+                "Persönliches Znuny-Passwort fehlt. Nur lokal bestätigte Buchungen sichtbar.");
+        var server=await ZnunyEndpoints.LoadServerAsync(db,ct);
+        if(ZnunyEndpoints.ValidateServer(server) is not null ||
+           new Uri(server.ApiUrl).Host.Equals("SERVER",StringComparison.OrdinalIgnoreCase))
+            return Partial("not-configured",
+                "Znuny-API ist nicht eingerichtet. Bitte die Serveradresse prüfen.");
+
+        try{
+            // Read *all* confirmed entries attributed to this authenticated
+            // Znuny agent. The official TimeAccountingGet operation requires
+            // rw membership in its dedicated timeaccounting_webservice group.
+            var remote=await znuny.ReadAccountedTimeAsync(server,login,password,
+                new DateTimeOffset(start,TimeSpan.Zero),
+                new DateTimeOffset(end,TimeSpan.Zero),
+                new ZnunyReader.Counter(2),ct);
+            var combined=ReportAccounting.Reconcile(remote,local);
+            return new AccountingLoad(combined,"ok",
+                combined.LocalOnlyEntries>0
+                    ? "OTRS-Zeiten geladen. Zusätzliche lokal bestätigte Buchungen wurden ohne doppelte Zuordnung ergänzt."
+                    : "Alle OTRS-Zeitbuchungen dieses Benutzers geladen und mit Plenaro abgeglichen.");
+        }catch(ZnunyReader.RemoteFailure e) when(!ct.IsCancellationRequested){
+            var detail=e.Code switch{
+                "route-not-found" or "time-accounting-config" or "time-accounting-unsupported"=>
+                    "TimeAccountingGet ist im Znuny-Webservice noch nicht freigegeben. Admin → Web Services → TimeAccountingREST prüfen.",
+                "authentication" or "session-rejected" or "remote-rejected"=>
+                    "Znuny verweigert den TimeAccountingGet-Abruf. Persönliche Agentenanmeldung und Gruppenzugriff timeaccounting_webservice (rw) prüfen.",
+                "time-accounting-limit" or "response-too-large"=>
+                    "Znuny lieferte mehr Buchungen als sicher verarbeitet werden können. Der Report ist unvollständig.",
+                _=>"Znuny-Zeitbuchungen konnten nicht vollständig geladen werden ("+e.Code+")."
+            };
+            return Partial("unavailable",detail+
+                " Nur lokal bestätigte Buchungen berücksichtigt.");
+        }
     }
 
     private static byte[] ToCsv(MonthReport report)
@@ -161,6 +266,19 @@ public static class ReportsEndpoints
             .Append(report.AdjustmentMinutes).Append(';')
             .Append(report.TotalSeconds).Append(';')
             .Append(report.SessionCount).AppendLine();
+        csv.AppendLine();
+        csv.Append("OTRS-Abgleich;").Append(CsvCell(report.AccountingStatus))
+            .Append(';').Append(CsvCell(report.AccountingMessage)).AppendLine();
+        csv.AppendLine("OTRS-Ticket;Titel;OTRS-Sekunden;Plenaro-nur-lokal-Sekunden;Gebucht gesamt Sekunden");
+        foreach(var entry in report.AccountedTickets)
+            csv.Append(CsvCell(entry.TicketNumber)).Append(';')
+                .Append(CsvCell(entry.Title)).Append(';')
+                .Append(entry.RemoteSeconds).Append(';')
+                .Append(entry.LocalOnlySeconds).Append(';')
+                .Append(entry.TotalSeconds).AppendLine();
+        csv.Append("SUMME GEBUCHT;;").Append(report.RemoteSeconds).Append(';')
+            .Append(report.LocalFallbackSeconds).Append(';')
+            .Append(report.AccountedSeconds).AppendLine();
 
         // Excel recognizes the UTF-8 BOM. User-authored task titles must never
         // become spreadsheet formulas (=, +, -, @), even after leading whitespace.
