@@ -5,7 +5,7 @@ import {
   type BudgetSummary, type DayMarker, type DayType,
 } from './dayMarkersApi';
 import { localDate } from './tasksApi';
-import {GermanDay,readBrMailStatus,sendBrRequest,type BrMailStatus} from './brRequestsApi';
+import {GermanDay,readBrMailStatus,sendBrRequest,preflightHomeofficeMail,type BrMailStatus} from './brRequestsApi';
 
 function quotaLabel(limit: number | null, used: number, remaining: number | null) {
   return limit === null
@@ -209,6 +209,11 @@ export function DayMarkersPanel({initialDay,onSaved}:{
     }
     setBusy(true); setError(''); setNotice('');
     try {
+      if(askToSend){
+        // Fail before persisting a new HO/BR request when recipients or a
+        // valid delegated Mail.Send connection are missing.
+        await preflightHomeofficeMail();
+      }
       await saveDayMarker(selected, dayType, isBr, isHo);
       // Only explicit Yes for newly marked HO/BR starts a mail request.
       // Other edits and revisiting existing days never trigger a send.
@@ -222,7 +227,10 @@ export function DayMarkersPanel({initialDay,onSaved}:{
             ' Unter Einstellungen → Aufgaben & Kalender kannst du die Empfänger und Outlook-Verbindung prüfen.');
         }
       }else setNotice('Tagesmarker gespeichert.');
-    } catch (e) { setError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen.'); }
+    } catch (e) { setError(
+      (askToSend?'Homeoffice wurde nicht beantragt. ':'')+
+      (e instanceof Error?e.message:'Speichern fehlgeschlagen.')
+    ); }
     finally { setBusy(false); }
   }
 
