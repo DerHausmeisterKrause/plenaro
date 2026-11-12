@@ -8,8 +8,10 @@ function currentMonth(): string {
 }
 
 function duration(seconds: number): string {
-  const safe = Math.max(0, seconds);
-  return (safe / 3600).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' h';
+  const value=Number.isFinite(seconds)?seconds:0;
+  return (value / 3600).toLocaleString('de-DE', {
+    minimumFractionDigits:2,maximumFractionDigits:2
+  })+' h';
 }
 
 export function ReportsPage() {
