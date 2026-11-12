@@ -324,3 +324,16 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [ ] Zeitfenster, Ausfallszenarien und zwei parallele Benutzer real testen; keine unkontrollierten Mehrfachsendungen.
 
 - [x] [PR #34](https://github.com/DerHausmeisterKrause/plenaro/pull/34) nach `main` gemergt; [GitHub-CI #43199978295](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43199978295) vollständig erfolgreich (Backend, Frontend, Tests, Docker-Login). Der echte Microsoft-Graph-Mailversand am Zielhost ist noch offen.
+
+## 12.11.2026 – Zeitreport: vollständige OTRS-Zeitbuchungen und lokale Buchungsjournal-Übernahme (PR folgt)
+
+- [x] WPF-`ReportsViewModel` mit Web-`ReportsEndpoints` abgeglichen: Der Webreport verwendete nur lokale Timer/Korrekturen und ignorierte alle Znuny-Buchungen.
+- [x] Offizielle Znuny-7-`TimeAccountingGet`-Operation für jeden gebundenen Agenten angebunden (REST `TimeAccountingREST`, persönliche Credentials, nur freigegebene HTTPS-Origin, sicheres Response-Limit).
+- [x] Serverseitige Buchungszeit in Sekunden aus `TimeUnit` (Minuten, einschließlich negativer Korrekturen), Monatsgrenzen Europe/Berlin.
+- [x] Lokal bestätigtes `znuny_ticket_time_bookings`-Journal mit der vollständigen OTRS-Buchungsliste abgeglichen (Ticketnummer + Zeitwert mit Vielfachzählung); fehlende lokale bestätigte Buchungen ergänzen, übertragene Buchungen nicht doppelt zählen.
+- [x] Zeitreport-UI und CSV um OTRS-Buchungspositionen, Remote-Summe, nur-lokal-Summe und sichtbare Unvollständigkeitswarnung erweitert. Lokale Aufgaben-Timer getrennt, keine ungeprüfte Doppelsumme.
+- [x] Znuny-Admin-Einstellungen um sicheren Namen des TimeAccounting-Webservices ergänzt, ohne vorhandene Ticket-API-Routen zu ändern.
+- [x] Synthetische Tests für REST-Request, Benutzerbindung, negative Remote-Zeitwerte, doppelte Einträge und fehlende lokale Buchungen ergänzt.
+- [ ] PR-CI erfolgreich und GitHub-Merge.
+- [ ] Znuny `TimeAccountingREST` + `timeaccounting_webservice` (rw) bei der konkreten Instanz einrichten; Live-Test mit direkten OTRS-Zeiten, Plenaro-Buchungen und verschiedenen Benutzern.
+- [ ] Noch offen: WPF-Monats-Nachbuchung als separater Web-Datensatz und optionale Übersicht lokaler, noch nicht nach OTRS übertragener Ticket-Timer.

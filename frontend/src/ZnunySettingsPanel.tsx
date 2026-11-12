@@ -17,6 +17,7 @@ const routes: Array<[TextServerKey,string]> = [
   ['ticketGetRouteTemplate','TicketGet-Routenvorlage'],
   ['ticketUpdateRoute','TicketUpdate-Routenvorlage (Antworten, Schließen, Zeitbuchung)'],
   ['agentListRoute','Agentenliste-Route'],
+  ['timeAccountingWebserviceName','TimeAccounting-Webservice (Name)'],
   ['ticketCreateRoute','TicketCreate-Route (noch nicht aktiv)'],
   ['dynamicFieldOptionsRoute','DynamicFieldOptions-Route'],
 ];
@@ -197,6 +198,11 @@ export function ZnunySettingsPanel({ admin }: { admin: boolean }) {
     {server && <section className="content-card um-panel">
       <div className="um-section-title"><ShieldCheck size={20}/><h3>Znuny-Server-API</h3></div>
       <p>Serverweite Einstellungen – nur Administratoren können sie verändern. Standardmäßig sind die Platzhalteradressen aus dem Desktop-Programm hinterlegt.</p>
+      <p className="um-hint">Für die vollständigen Zeitreports in Znuny unter
+        Admin → Web Services den offiziellen REST-Service
+        TimeAccountingREST mit Operation TimeAccountingGet bereitstellen.
+        Der Agent benötigt das Gruppenrecht timeaccounting_webservice (rw).
+        Der Dienst nutzt die bereits konfigurierte HTTPS-Znuny-Origin.</p>
       <form className="um-form znuny-settings-form" onSubmit={e => void saveServer(e)}>
         <label htmlFor="znuny-api-url">API-Basisadresse</label>
         <input id="znuny-api-url" type="url" required disabled={!admin} maxLength={2048}

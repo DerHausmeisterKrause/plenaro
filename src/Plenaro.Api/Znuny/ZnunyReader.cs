@@ -62,6 +62,67 @@ public sealed class ZnunyReader(IHttpClientFactory factory)
         throw new RemoteFailure("session-rejected");
     }
 
+    public sealed record AccountedEntry(string TicketNumber,string TicketTitle,
+        DateTimeOffset Created,long Seconds);
+
+    // Official Znuny TimeAccountingGet: shows ALL accounting entries written
+    // by the authenticated agent. Separate REST webservice with an
+    // administrator-approved name on the already approved Znuny origin.
+    // TimeUnit is MINUTES (decimal), may be negative for corrections.
+    public async Task<IReadOnlyList<AccountedEntry>> ReadAccountedTimeAsync(
+        ServerSettings settings,string username,string password,
+        DateTimeOffset start,DateTimeOffset end,Counter counter,CancellationToken ct)
+    {
+        if(string.IsNullOrWhiteSpace(username)||string.IsNullOrEmpty(password))
+            throw new RemoteFailure("missing-user-credentials");
+        var uri=new Uri(settings.ApiUrl);
+        var route=uri.AbsolutePath;
+        var marker="/Webservice/";
+        var index=route.LastIndexOf(marker,StringComparison.OrdinalIgnoreCase);
+        if(index<0 || ZnunyEndpoints.ValidateServer(settings) is not null)
+            throw new RemoteFailure("time-accounting-config");
+        var root=uri.GetLeftPart(UriPartial.Authority)+route[..index]+marker+
+            Uri.EscapeDataString(settings.TimeAccountingWebserviceName)+
+            "/TimeAccountingGet";
+        using var request=new HttpRequestMessage(HttpMethod.Post,root){
+            Content=new StringContent(JsonSerializer.Serialize(new{
+                UserLogin=username,Password=password,
+                TimeAccountingUserLogin=username,
+                TimeAccountingStart=FormatRemote(start),
+                TimeAccountingEnd=FormatRemote(end.AddSeconds(-1))
+            }),Encoding.UTF8,"application/json")
+        };
+        using var doc=await SendAsync(request,counter,ct,2097152);
+        var json=doc.RootElement;
+        if(!json.TryGetProperty("TimeAccountingResult",out var list) ||
+           list.ValueKind!=JsonValueKind.Array)throw new RemoteFailure(
+               "time-accounting-unsupported");
+        if(list.GetArrayLength()>5000)throw new RemoteFailure(
+            "time-accounting-limit");
+        var result=new List<AccountedEntry>();
+        foreach(var row in list.EnumerateArray())
+        {
+            if(row.ValueKind!=JsonValueKind.Object)
+                throw new RemoteFailure("time-accounting-invalid-row");
+            var ticket=String(row,"TicketNumber",100);
+            var created=ParseRemote(String(row,"Created",80));
+            var amount=String(row,"TimeUnit",32);
+            if(string.IsNullOrWhiteSpace(ticket)||created is null||
+               !decimal.TryParse(amount,NumberStyles.Number,
+                   CultureInfo.InvariantCulture,out var minutes)||
+               Math.Abs(minutes)>100000m)
+                throw new RemoteFailure("time-accounting-invalid-row");
+            // The provider can return boundary rows: [start,end) is the
+            // authoritative report window, regardless of API inclusivity.
+            if(created<start||created>=end)continue;
+            result.Add(new AccountedEntry(ticket,
+                String(row,"TicketTitle",500),created.Value,
+                decimal.ToInt64(decimal.Round(minutes*60,0,
+                    MidpointRounding.AwayFromZero))));
+        }
+        return result;
+    }
+
     public async Task<IReadOnlyList<string>> SearchAsync(
         ServerSettings settings,string session,string mode,
         DateTimeOffset? after,DateTimeOffset? before,
