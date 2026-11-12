@@ -248,7 +248,13 @@ export function DayMarkersPanel({initialDay,onSaved}:{
       <span><strong>BR {String(month).padStart(2, '0')}/{year}</strong> {quotaLabel(summary.monthlyBrDays, summary.usedBrDays, summary.remainingBrDays)}</span>
     </div>}
     {summary && <QuotaWarnings summary={summary}/>}
-    {error && <p role="alert" className="um-feedback failure">{error}</p>}
+    {error && <div role="alert" className="um-feedback failure">
+      {error}
+      {/(Mail\.Send|Outlook|Microsoft|M365)/i.test(error)&&
+        <p><a href="/api/v1/graph/connect/start">
+          Microsoft-365-Verbindung bei Bedarf einmalig erneuern
+        </a></p>}
+    </div>}
     {notice && <p role="status" className="um-feedback success">{notice}</p>}
     {loading ? <p role="status">Lade Tagesmarker …</p> : <>
       <div className="day-marker-calendar" aria-label={`Tagesmarker ${viewMonth}`}>
