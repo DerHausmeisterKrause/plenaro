@@ -158,9 +158,9 @@ export function DayMarkersPanel({initialDay,onSaved}:{
     return()=>{active=false;};
   },[selected,refresh]);
 
-  function confirmBr():boolean {
+  function confirmHomeoffice():boolean {
     return window.confirm(
-      'Willst du wirklich für den '+GermanDay(selected)+' Bereitschaft beantragen?');
+      'Willst du wirklich am '+GermanDay(selected)+' Homeoffice beantragen?');
   }
 
   async function sendMailForBr(){
@@ -170,7 +170,7 @@ export function DayMarkersPanel({initialDay,onSaved}:{
   }
 
   async function requestExistingBr(){
-    if(busy||!confirmBr())return;
+    if(busy||!confirmHomeoffice())return;
     setBusy(true);setError('');setNotice('');
     try{await sendMailForBr();}
     catch(e){setError(e instanceof Error?e.message:'BR-Mailversand fehlgeschlagen.');}
@@ -193,22 +193,34 @@ export function DayMarkersPanel({initialDay,onSaved}:{
 
   async function save() {
     if (busy) return;
-    const newBr=isBr&&!markers.some(m=>m.day===selected&&m.isBr);
-    if(newBr&&!confirmBr()){
-      setIsBr(false);
+    const existing=markers.find(m=>m.day===selected);
+    // Classic WPF asks before applying HO. Keep the previously requested
+    // BR-triggered mail route compatible as well. One request per user/day.
+    const newlyRequested=(isHo&&!existing?.isHo)||
+      (isBr&&!existing?.isBr);
+    const askToSend=newlyRequested &&
+      brMailStatus?.status!=='accepted' &&
+      brMailStatus?.status!=='unknown' &&
+      brMailStatus?.status!=='processing';
+    if(askToSend&&!confirmHomeoffice()){
+      setIsBr(existing?.isBr??false);
+      setIsHo(existing?.isHo??false);
       return;
     }
     setBusy(true); setError(''); setNotice('');
     try {
       await saveDayMarker(selected, dayType, isBr, isHo);
-      // Only an explicit Yes triggers a mail request; saving other markers
-      // and revisiting an existing BR day never emails anyone.
+      // Only explicit Yes for newly marked HO/BR starts a mail request.
+      // Other edits and revisiting existing days never trigger a send.
       setRefresh(v => v + 1);
       onSaved?.();
-      if(newBr){
+      if(askToSend){
         try{await sendMailForBr();}
-        catch(e){setError('BR-Marker gespeichert. Der E-Mail-Versand ist nicht bestätigt: '+
-          (e instanceof Error?e.message:'Unbekannter Fehler.'));}
+        catch(e){
+          setError('Tagesmarker gespeichert, aber keine bestätigte E-Mail: '+
+            (e instanceof Error?e.message:'Unbekannter Fehler.')+
+            ' Unter Einstellungen → Aufgaben & Kalender kannst du die Empfänger und Outlook-Verbindung prüfen.');
+        }
       }else setNotice('Tagesmarker gespeichert.');
     } catch (e) { setError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen.'); }
     finally { setBusy(false); }
@@ -217,7 +229,7 @@ export function DayMarkersPanel({initialDay,onSaved}:{
   return <section className="content-card day-marker-panel" aria-labelledby="marker-heading">
     <div className="day-marker-head">
       <div><h2 id="marker-heading">Tagesmarker · UL / AM / BR</h2>
-        <p className="um-hint">Tage auswählen und markieren. BR kann unabhängig von UL oder AM gesetzt werden.</p></div>
+        <p className="um-hint">Tage auswählen und markieren. Beim erstmaligen HO- oder BR-Marker fragt Plenaro nach dem Homeoffice-Antrag. Nur nach „Ja“ wird eine Mail versucht.</p></div>
       <div className="day-marker-navigation">
         <button type="button" className="button button-secondary" aria-label="Vorheriger Monat"
           onClick={() => goMonth(monthStep(viewMonth, -1))}><ChevronLeft size={16}/></button>
@@ -269,15 +281,15 @@ export function DayMarkersPanel({initialDay,onSaved}:{
             <Save size={16}/>{busy ? 'Speichere …' : 'Marker speichern'}
           </button>
         </div>
-        {markers.some(m=>m.day===selected&&m.isBr)&&brMailStatus?.status==='none'&&
+        {markers.some(m=>m.day===selected&&(m.isBr||m.isHo))&&brMailStatus?.status==='none'&&
           <button type="button" className="button button-secondary" disabled={busy}
             onClick={()=>void requestExistingBr()}>
-            <CalendarDays size={16}/>Bereitschaftsantrag per E-Mail senden
+            <CalendarDays size={16}/>Homeoffice-Antrag per E-Mail senden
           </button>}
         {brMailStatus?.status==='accepted'&&
-          <p role="status" className="um-hint">BR-Mail wurde für diesen Tag bereits von Microsoft Graph angenommen.</p>}
+          <p role="status" className="um-hint">Homeoffice-Mail wurde für diesen Tag bereits von Microsoft Graph angenommen.</p>}
         {(brMailStatus?.status==='processing'||brMailStatus?.status==='unknown')&&
-          <p role="alert" className="um-feedback failure">BR-Mailversandstatus nicht bestätigt.
+          <p role="alert" className="um-feedback failure">Homeoffice-Mailversandstatus nicht bestätigt.
             Bitte in Gesendete Elemente prüfen; Doppelversand ist gesperrt.</p>}
         <p className="um-hint">„Normal“ ohne BR entfernt alle Marker dieses Tages. Kontingentüberschreitungen werden gewarnt, nicht automatisch blockiert.</p>
       </div>
