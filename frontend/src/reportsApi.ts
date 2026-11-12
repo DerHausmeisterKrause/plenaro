@@ -8,6 +8,16 @@ export type ReportRow = {
   sessionCount: number;
 };
 
+export type AccountedTicketRow = {
+  ticketNumber:string;
+  title:string;
+  remoteSeconds:number;
+  localOnlySeconds:number;
+  totalSeconds:number;
+  remoteCount:number;
+  localOnlyCount:number;
+};
+
 export type MonthReport = {
   month: string;
   timeZone: string;
@@ -18,6 +28,14 @@ export type MonthReport = {
   sessionCount: number;
   taskCount: number;
   tasks: ReportRow[];
+  accountedSeconds: number;
+  remoteSeconds: number;
+  localFallbackSeconds: number;
+  remoteEntries: number;
+  localFallbackEntries: number;
+  accountingStatus: 'ok' | 'not-connected' | 'not-configured' | 'unavailable';
+  accountingMessage: string;
+  accountedTickets: AccountedTicketRow[];
 };
 
 function reportUrl(month: string, csv = false): string {
@@ -31,7 +49,8 @@ export async function readMonthReport(month: string, signal?: AbortSignal): Prom
   });
   if (!result.ok) throw new Error(result.status === 401
     ? 'Deine Sitzung ist abgelaufen. Bitte erneut anmelden.'
-    : 'Der Monatsbericht konnte nicht geladen werden.');
+    : (await result.json().catch(()=>({})) as {detail?:string;error?:string}).error ||
+      'Der Monatsbericht konnte nicht geladen werden.');
   return await result.json() as MonthReport;
 }
 
@@ -45,7 +64,7 @@ export async function downloadMonthCsv(month: string): Promise<void> {
   try {
     const link = document.createElement('a');
     link.href = url;
-    link.download = `plenaro-aufgaben-${month}.csv`;
+    link.download = `plenaro-zeitreport-${month}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
