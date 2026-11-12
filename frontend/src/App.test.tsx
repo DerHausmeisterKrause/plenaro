@@ -229,6 +229,12 @@ beforeEach(() => {
         month: '2026-10', timeZone: 'Europe/Berlin', generatedAt: '2026-10-30T21:00:00Z',
         timerSeconds: 3600, adjustmentMinutes: 15, totalSeconds: 4500,
         sessionCount: 1, taskCount: 1,
+        accountedSeconds:2700,remoteSeconds:1800,localFallbackSeconds:900,
+        remoteEntries:2,localFallbackEntries:1,accountingStatus:'ok',
+        accountingMessage:'Alle OTRS-Zeitbuchungen geladen.',
+        accountedTickets:[{ticketNumber:'20260042',title:'Direkt in OTRS gebucht',
+          remoteSeconds:1800,localOnlySeconds:900,totalSeconds:2700,
+          remoteCount:2,localOnlyCount:1}],
         tasks: [{ taskId: '00000000-0000-0000-0000-000000000003', title: 'Zeittest',
           status: 'active', timerSeconds: 3600, adjustmentMinutes: 15,
           totalSeconds: 4500, sessionCount: 1 }],
@@ -929,10 +935,12 @@ describe('Plenaro web shell', () => {
     expect(screen.getByRole('button', { name: 'BR' })).toBeTruthy();
   });
 
-  it('zeigt echte Monatsaufgabenzeiten und bietet CSV-Export an', async () => {
+  it('zeigt lokale Aufgaben und zusammengeführte OTRS-Zeitbuchungen mit CSV', async () => {
     renderAt('/reports');
-    expect(await screen.findByRole('heading', { name: 'Monatsberichte' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Zeitreport' })).toBeTruthy();
     expect(await screen.findByText('Zeittest')).toBeTruthy();
+    expect(await screen.findByText('Direkt in OTRS gebucht')).toBeTruthy();
+    expect(screen.getByText('Gebuchte Ticketzeit')).toBeTruthy();
     expect(screen.getByRole('button', { name: /CSV exportieren/ })).toBeTruthy();
     expect(screen.getByLabelText('Monat auswählen')).toBeTruthy();
   });
