@@ -1409,6 +1409,60 @@ try{
         "Graph 403 fails closed and is not retried");
 }
 
+// No actual customer names, credentials, tickets or OTRS server are accessed.
+// The official TimeAccountingGet returns a per-agent array without stable IDs.
+// Two equal time entries are distinct; one local copy must never add twice.
+var accountingConfig=new Plenaro.Api.Znuny.ZnunyEndpoints.ServerSettings(
+    WebUrl:"https://znuny.example.org/index.pl",
+    ApiUrl:"https://znuny.example.org/znuny/nph-genericinterface.pl/Webservice/GenericTicketConnectorREST");
+var accountingCalls=0;
+var accountedReader=new Plenaro.Api.Znuny.ZnunyReader(
+    new FakeFactory(req=>{
+        accountingCalls++;
+        Assert(req.RequestUri?.AbsoluteUri==
+            "https://znuny.example.org/znuny/nph-genericinterface.pl/Webservice/TimeAccountingREST/TimeAccountingGet" &&
+            req.Method==HttpMethod.Post,
+            "time accounting calls only the approved Znuny HTTPS origin");
+        using var payload=JsonDocument.Parse(
+            req.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+        var data=payload.RootElement;
+        Assert(data.GetProperty("UserLogin").GetString()=="test-agent" &&
+            data.GetProperty("TimeAccountingUserLogin").GetString()=="test-agent" &&
+            data.GetProperty("Password").GetString()=="synthetic-secret" &&
+            data.GetProperty("TimeAccountingStart").GetString()=="2026-11-01 00:00:00" &&
+            data.GetProperty("TimeAccountingEnd").GetString()=="2026-11-30 23:59:59",
+            "Znuny accounting uses ONLY personal agent and exact Berlin month bounds");
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent(
+                """{"TimeAccountingResult":[{"TicketNumber":"20260042","TicketTitle":"Example","Created":"2026-11-16 12:00:00","TimeUnit":"15.00"},{"TicketNumber":"20260042","TicketTitle":"Example","Created":"2026-11-16 13:00:00","TimeUnit":"15.00"},{"TicketNumber":"20260043","TicketTitle":"Other","Created":"2026-11-17 09:00:00","TimeUnit":"-5.00"}]}""",
+                Encoding.UTF8,"application/json")
+        };
+    }));
+var timeRemote=await accountedReader.ReadAccountedTimeAsync(
+    accountingConfig,"test-agent","synthetic-secret",
+    new DateTimeOffset(2026,11,1,0,0,0,TimeSpan.FromHours(1)),
+    new DateTimeOffset(2026,12,1,0,0,0,TimeSpan.FromHours(1)),
+    new Plenaro.Api.Znuny.ZnunyReader.Counter(2),CancellationToken.None);
+Assert(accountingCalls==1&&timeRemote.Count==3 &&
+    timeRemote.Sum(x=>x.Seconds)==1500,
+    "Znuny TimeAccountingGet parses decimal minutes and signed corrections");
+var merged=Plenaro.Api.Tasks.ReportAccounting.Reconcile(timeRemote,[
+    new("20260042","Example",900),
+    new("20260042","Example",900),
+    new("20260042","Example",2700)
+]);
+Assert(merged.RemoteSeconds==1500 &&
+    merged.LocalOnlySeconds==2700 &&
+    merged.TotalSeconds==4200 &&
+    merged.RemoteEntries==3&&merged.LocalOnlyEntries==1 &&
+    merged.Tickets.Count==2,
+    "only locally missing confirmed OTRS booking supplements remote time");
+var incomplete=Plenaro.Api.Tasks.ReportAccounting.Reconcile([],[
+    new("20260042","Example",900),new("20260042","Example",900)
+]);
+Assert(incomplete.TotalSeconds==1800&&incomplete.LocalOnlyEntries==2,
+    "when Znuny unavailable local confirmed journal is retained but never claimed complete");
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory
