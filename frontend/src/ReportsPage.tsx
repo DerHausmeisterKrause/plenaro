@@ -65,7 +65,7 @@ export function ReportsPage() {
     {!loading && report && <>
       <div className="reports-summary" aria-label="Monatsübersicht">
         <div className="content-card"><span>Gebuchte Ticketzeit</span><strong>{duration(report.accountedSeconds)}</strong></div>
-        <div className="content-card"><span>Davon direkt aus OTRS</span><strong>{duration(report.remoteSeconds)}</strong></div>
+        <div className="content-card"><span>In Znuny/OTRS gebucht</span><strong>{duration(report.remoteSeconds)}</strong></div>
         <div className="content-card"><span>Nur lokal bestätigte Buchungen</span><strong>{duration(report.localFallbackSeconds)}</strong></div>
         <div className="content-card"><span>Lokale Aufgabenzeit (separat)</span><strong>{duration(report.totalSeconds)}</strong></div>
       </div>
