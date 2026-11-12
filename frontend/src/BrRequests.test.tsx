@@ -7,12 +7,16 @@ const mocks=vi.hoisted(()=>({
   getMonthMarkers:vi.fn(),getMarkerSummary:vi.fn(),saveDayMarker:vi.fn(),
   getMarkerBudget:vi.fn(),saveMarkerBudget:vi.fn(),
   readBrMailStatus:vi.fn(),sendBrRequest:vi.fn(),
-  readBrRecipients:vi.fn(),saveBrRecipients:vi.fn()
+  readBrRecipients:vi.fn(),saveBrRecipients:vi.fn(),
+  graphStatus:vi.fn()
 }));
 vi.mock('./dayMarkersApi',()=>({
   getMonthMarkers:mocks.getMonthMarkers,getMarkerSummary:mocks.getMarkerSummary,
   saveDayMarker:mocks.saveDayMarker,getMarkerBudget:mocks.getMarkerBudget,
   saveMarkerBudget:mocks.saveMarkerBudget
+}));
+vi.mock('./graphApi',()=>({
+  graphStatus:mocks.graphStatus
 }));
 vi.mock('./brRequestsApi',()=>({
   GermanDay:(date:string)=>{
@@ -40,6 +44,9 @@ beforeEach(()=>{
     recipient1:'team@example.org',recipient2:'leitung@example.org'
   });
   mocks.saveBrRecipients.mockResolvedValue(undefined);
+  mocks.graphStatus.mockResolvedValue({
+    enabled:true,linked:true,vaultReady:true,connected:true
+  });
   vi.stubGlobal('confirm',vi.fn(()=>true));
 });
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
@@ -52,7 +59,7 @@ describe('BR marker confirmation and mail delivery',()=>{
     fireEvent.click(marker);
     fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
     expect(window.confirm).toHaveBeenCalledWith(
-      'Willst du wirklich für den 16.11.2026 Bereitschaft beantragen?');
+      'Willst du wirklich am 16.11.2026 Homeoffice beantragen?');
     expect(mocks.saveDayMarker).not.toHaveBeenCalled();
     expect(mocks.sendBrRequest).not.toHaveBeenCalled();
   });
@@ -66,6 +73,26 @@ describe('BR marker confirmation and mail delivery',()=>{
       '2026-11-16','Normal',true,false));
     await waitFor(()=>expect(mocks.sendBrRequest).toHaveBeenCalledWith('2026-11-16'));
     expect(refreshed).toHaveBeenCalledTimes(1);
+  });
+
+  it('triggers the requested yes/no confirmation for a newly marked HO day',async()=>{
+    render(<DayMarkersPanel initialDay="2026-11-16"/>);
+    fireEvent.click(await screen.findByLabelText('HO – Homeoffice'));
+    fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Willst du wirklich am 16.11.2026 Homeoffice beantragen?');
+    await waitFor(()=>expect(mocks.saveDayMarker).toHaveBeenCalledWith(
+      '2026-11-16','Normal',false,true));
+    await waitFor(()=>expect(mocks.sendBrRequest).toHaveBeenCalledWith('2026-11-16'));
+  });
+
+  it('does not send a new HO request when the user chooses No',async()=>{
+    vi.stubGlobal('confirm',vi.fn(()=>false));
+    render(<DayMarkersPanel initialDay="2026-11-16"/>);
+    fireEvent.click(await screen.findByLabelText('HO – Homeoffice'));
+    fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
+    expect(mocks.saveDayMarker).not.toHaveBeenCalled();
+    expect(mocks.sendBrRequest).not.toHaveBeenCalled();
   });
 
   it('never resends when editing an existing BR marker',async()=>{
@@ -87,7 +114,7 @@ describe('BR marker confirmation and mail delivery',()=>{
     }]);
     render(<DayMarkersPanel initialDay="2026-11-16"/>);
     const trigger=await screen.findByRole('button',{
-      name:'Bereitschaftsantrag per E-Mail senden'
+      name:'Homeoffice-Antrag per E-Mail senden'
     });
     fireEvent.click(trigger);
     await waitFor(()=>expect(mocks.sendBrRequest).toHaveBeenCalledTimes(1));
@@ -100,14 +127,30 @@ describe('BR marker confirmation and mail delivery',()=>{
     }]);
     mocks.readBrMailStatus.mockResolvedValue({status:'unknown'});
     render(<DayMarkersPanel initialDay="2026-11-16"/>);
-    expect(await screen.findByText(/BR-Mailversandstatus nicht bestätigt/)).toBeTruthy();
+    expect(await screen.findByText(/Homeoffice-Mailversandstatus nicht bestätigt/)).toBeTruthy();
     expect(screen.queryByRole('button',{
-      name:'Bereitschaftsantrag per E-Mail senden'
+      name:'Homeoffice-Antrag per E-Mail senden'
     })).toBeNull();
   });
 });
 
 describe('BR mail recipients belong to each personal account',()=>{
+  it('does not display a repeated connection button when M365 is linked',async()=>{
+    render(<BrRecipientsSettingsPanel/>);
+    await screen.findByLabelText('E-Mail-Empfänger 1');
+    expect(await screen.findByText(/Microsoft 365 ist verbunden/)).toBeTruthy();
+    expect(screen.queryByText('Einmalig Outlook verbinden')).toBeNull();
+    expect(mocks.graphStatus).toHaveBeenCalledTimes(1);
+  });
+  it('shows one-time connect only if no saved Microsoft token exists',async()=>{
+    mocks.graphStatus.mockResolvedValue({
+      enabled:true,linked:true,vaultReady:true,connected:false
+    });
+    render(<BrRecipientsSettingsPanel/>);
+    await screen.findByLabelText('E-Mail-Empfänger 1');
+    expect(await screen.findByText('Einmalig Outlook verbinden')).toBeTruthy();
+  });
+
   it('loads and saves both addresses under personal settings',async()=>{
     render(<BrRecipientsSettingsPanel/>);
     const first=await screen.findByLabelText('E-Mail-Empfänger 1');
