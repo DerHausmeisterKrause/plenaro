@@ -1354,14 +1354,14 @@ Assert(binaryResult.Html is null &&
 var brText=Plenaro.Api.DayMarkers.BrMailService.Compose(
     new DateOnly(2026,11,16),"Test Nutzer");
 Assert(brText.Subject=="Homeoffice am 16.11.2026" &&
-    brText.Body=="Servus,\\n\\nich mache am 16.11.2026 Homeoffice.\\n\\nmfg.\\nTest Nutzer",
+    brText.Body=="Servus,\n\nich mache am 16.11.2026 Homeoffice.\n\nmfg.\nTest Nutzer",
     "BR request template contains exact date and signed user display name");
 Assert(Plenaro.Api.DayMarkers.BrRequestEndpoints.TryNormalize(
     new("leitung@example.org","team@example.org"),out var brRecipients) &&
     brRecipients.Recipient1=="leitung@example.org" &&
     brRecipients.Recipient2=="team@example.org" &&
     !Plenaro.Api.DayMarkers.BrRequestEndpoints.TryNormalize(
-        new("leitung@example.org\\r\\nBcc:evil@example.org",""),out _) &&
+        new("leitung@example.org\r\nBcc:evil@example.org",""),out _) &&
     !Plenaro.Api.DayMarkers.BrRequestEndpoints.TryNormalize(
         new("leitung@example.org;evil@example.org",""),out _) &&
     !Plenaro.Api.DayMarkers.BrRequestEndpoints.TryNormalize(
