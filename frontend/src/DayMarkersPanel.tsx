@@ -5,7 +5,7 @@ import {
   type BudgetSummary, type DayMarker, type DayType,
 } from './dayMarkersApi';
 import { localDate } from './tasksApi';
-import {GermanDay,readBrMailStatus,sendBrRequest,type BrMailStatus} from './brRequestsApi';
+import {GermanDay,readBrMailStatus,sendBrRequest,preflightHomeofficeMail,type BrMailStatus} from './brRequestsApi';
 
 function quotaLabel(limit: number | null, used: number, remaining: number | null) {
   return limit === null
@@ -120,6 +120,7 @@ export function DayMarkersPanel({initialDay,onSaved}:{
   const [notice, setNotice] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [brMailStatus,setBrMailStatus]=useState<BrMailStatus|null>(null);
+  const [confirmMode,setConfirmMode]=useState<'save'|'send'|null>(null);
   const [year, month] = viewMonth.split('-').map(Number);
 
   useEffect(()=>{
@@ -158,22 +159,18 @@ export function DayMarkersPanel({initialDay,onSaved}:{
     return()=>{active=false;};
   },[selected,refresh]);
 
-  function confirmBr():boolean {
-    return window.confirm(
-      'Willst du wirklich für den '+GermanDay(selected)+' Bereitschaft beantragen?');
-  }
-
   async function sendMailForBr(){
     const result=await sendBrRequest(selected);
     setBrMailStatus({status:'accepted'});
     setNotice(result.message);
   }
 
-  async function requestExistingBr(){
-    if(busy||!confirmBr())return;
+  async function requestExistingBr(confirmed=false){
+    if(busy)return;
+    if(!confirmed){setConfirmMode('send');return;}
     setBusy(true);setError('');setNotice('');
     try{await sendMailForBr();}
-    catch(e){setError(e instanceof Error?e.message:'BR-Mailversand fehlgeschlagen.');}
+    catch(e){setError(e instanceof Error?e.message:'Homeoffice-Mailversand fehlgeschlagen.');}
     finally{setBusy(false);}
   }
 
@@ -191,33 +188,52 @@ export function DayMarkersPanel({initialDay,onSaved}:{
     setError(''); setNotice('');
   }
 
-  async function save() {
+  async function save(confirmed=false) {
     if (busy) return;
-    const newBr=isBr&&!markers.some(m=>m.day===selected&&m.isBr);
-    if(newBr&&!confirmBr()){
-      setIsBr(false);
+    const existing=markers.find(m=>m.day===selected);
+    // Classic WPF asks before applying HO. Keep the previously requested
+    // BR-triggered mail route compatible as well. One request per user/day.
+    const newlyRequested=(isHo&&!existing?.isHo)||
+      (isBr&&!existing?.isBr);
+    const askToSend=newlyRequested &&
+      brMailStatus?.status!=='accepted' &&
+      brMailStatus?.status!=='unknown' &&
+      brMailStatus?.status!=='processing';
+    if(askToSend&&!confirmed){
+      setConfirmMode('save');
       return;
     }
     setBusy(true); setError(''); setNotice('');
     try {
+      if(askToSend){
+        // Fail before persisting a new HO/BR request when recipients or a
+        // valid delegated Mail.Send connection are missing.
+        await preflightHomeofficeMail();
+      }
       await saveDayMarker(selected, dayType, isBr, isHo);
-      // Only an explicit Yes triggers a mail request; saving other markers
-      // and revisiting an existing BR day never emails anyone.
+      // Only explicit Yes for newly marked HO/BR starts a mail request.
+      // Other edits and revisiting existing days never trigger a send.
       setRefresh(v => v + 1);
       onSaved?.();
-      if(newBr){
+      if(askToSend){
         try{await sendMailForBr();}
-        catch(e){setError('BR-Marker gespeichert. Der E-Mail-Versand ist nicht bestätigt: '+
-          (e instanceof Error?e.message:'Unbekannter Fehler.'));}
+        catch(e){
+          setError('Tagesmarker gespeichert, aber keine bestätigte E-Mail: '+
+            (e instanceof Error?e.message:'Unbekannter Fehler.')+
+            ' Unter Einstellungen → Aufgaben & Kalender kannst du die Empfänger und Outlook-Verbindung prüfen.');
+        }
       }else setNotice('Tagesmarker gespeichert.');
-    } catch (e) { setError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen.'); }
+    } catch (e) { setError(
+      (askToSend?'Homeoffice wurde nicht beantragt. ':'')+
+      (e instanceof Error?e.message:'Speichern fehlgeschlagen.')
+    ); }
     finally { setBusy(false); }
   }
 
   return <section className="content-card day-marker-panel" aria-labelledby="marker-heading">
     <div className="day-marker-head">
       <div><h2 id="marker-heading">Tagesmarker · UL / AM / BR</h2>
-        <p className="um-hint">Tage auswählen und markieren. BR kann unabhängig von UL oder AM gesetzt werden.</p></div>
+        <p className="um-hint">Tage auswählen und markieren. Beim erstmaligen HO- oder BR-Marker fragt Plenaro nach dem Homeoffice-Antrag. Nur nach „Ja“ wird eine Mail versucht.</p></div>
       <div className="day-marker-navigation">
         <button type="button" className="button button-secondary" aria-label="Vorheriger Monat"
           onClick={() => goMonth(monthStep(viewMonth, -1))}><ChevronLeft size={16}/></button>
@@ -232,7 +248,13 @@ export function DayMarkersPanel({initialDay,onSaved}:{
       <span><strong>BR {String(month).padStart(2, '0')}/{year}</strong> {quotaLabel(summary.monthlyBrDays, summary.usedBrDays, summary.remainingBrDays)}</span>
     </div>}
     {summary && <QuotaWarnings summary={summary}/>}
-    {error && <p role="alert" className="um-feedback failure">{error}</p>}
+    {error && <div role="alert" className="um-feedback failure">
+      {error}
+      {/(Mail\.Send|Outlook|Microsoft|M365)/i.test(error)&&
+        <p><a href="/api/v1/graph/connect/start">
+          Microsoft-365-Verbindung bei Bedarf einmalig erneuern
+        </a></p>}
+    </div>}
     {notice && <p role="status" className="um-feedback success">{notice}</p>}
     {loading ? <p role="status">Lade Tagesmarker …</p> : <>
       <div className="day-marker-calendar" aria-label={`Tagesmarker ${viewMonth}`}>
@@ -265,22 +287,50 @@ export function DayMarkersPanel({initialDay,onSaved}:{
         {summary && isBr && !markers.some(m => m.day === selected && m.isBr) &&
           summary.brExhausted && <p className="um-feedback failure" role="alert">Achtung: Das BR-Monatskontingent ist bereits ausgeschöpft.</p>}
         <div className="day-marker-buttons">
-          <button type="button" className="button button-primary" disabled={busy} onClick={() => void save()}>
+          <button type="button" className="button button-primary" disabled={busy} onClick={() => void save(false)}>
             <Save size={16}/>{busy ? 'Speichere …' : 'Marker speichern'}
           </button>
         </div>
-        {markers.some(m=>m.day===selected&&m.isBr)&&brMailStatus?.status==='none'&&
+        {markers.some(m=>m.day===selected&&(m.isBr||m.isHo))&&brMailStatus?.status==='none'&&
           <button type="button" className="button button-secondary" disabled={busy}
-            onClick={()=>void requestExistingBr()}>
-            <CalendarDays size={16}/>Bereitschaftsantrag per E-Mail senden
+            onClick={()=>void requestExistingBr(false)}>
+            <CalendarDays size={16}/>Homeoffice-Antrag per E-Mail senden
           </button>}
         {brMailStatus?.status==='accepted'&&
-          <p role="status" className="um-hint">BR-Mail wurde für diesen Tag bereits von Microsoft Graph angenommen.</p>}
+          <p role="status" className="um-hint">Homeoffice-Mail wurde für diesen Tag bereits von Microsoft Graph angenommen.</p>}
         {(brMailStatus?.status==='processing'||brMailStatus?.status==='unknown')&&
-          <p role="alert" className="um-feedback failure">BR-Mailversandstatus nicht bestätigt.
+          <p role="alert" className="um-feedback failure">Homeoffice-Mailversandstatus nicht bestätigt.
             Bitte in Gesendete Elemente prüfen; Doppelversand ist gesperrt.</p>}
         <p className="um-hint">„Normal“ ohne BR entfernt alle Marker dieses Tages. Kontingentüberschreitungen werden gewarnt, nicht automatisch blockiert.</p>
       </div>
     </>}
+      {confirmMode&&<div className="homeoffice-dialog-backdrop">
+        <section className="homeoffice-dialog content-card" role="dialog"
+          aria-modal="true" aria-labelledby="homeoffice-confirm-title">
+          <h3 id="homeoffice-confirm-title">Homeoffice beantragen</h3>
+          <p>Willst du wirklich am <strong>{GermanDay(selected)}</strong> Homeoffice beantragen?</p>
+          <p className="um-hint">Bei „Ja“ prüft Plenaro deine E-Mail-Empfänger
+            und die Microsoft-365-Verbindung. Anschließend wird die E-Mail
+            über dein persönliches Postfach gesendet.</p>
+          <div className="homeoffice-dialog-actions">
+            <button type="button" className="button button-secondary"
+              onClick={()=>{
+                if(confirmMode==='save'){
+                  const previous=markers.find(m=>m.day===selected);
+                  setIsBr(previous?.isBr??false);
+                  setIsHo(previous?.isHo??false);
+                }
+                setConfirmMode(null);
+              }}>Nein</button>
+            <button type="button" className="button button-primary"
+              onClick={()=>{
+                const mode=confirmMode;
+                setConfirmMode(null);
+                if(mode==='save')void save(true);
+                else void requestExistingBr(true);
+              }}>Ja, beantragen</button>
+          </div>
+        </section>
+      </div>}
   </section>;
 }

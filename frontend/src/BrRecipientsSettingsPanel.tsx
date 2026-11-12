@@ -1,6 +1,7 @@
 import {useEffect,useState,type FormEvent} from 'react';
 import {Mail,Save} from 'lucide-react';
 import {readBrRecipients,saveBrRecipients,type BrRecipients} from './brRequestsApi';
+import {graphStatus,type GraphStatus} from './graphApi';
 
 export function BrRecipientsSettingsPanel(){
   const [form,setForm]=useState<BrRecipients>({recipient1:'',recipient2:''});
@@ -8,14 +9,26 @@ export function BrRecipientsSettingsPanel(){
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
+  const [outlook,setOutlook]=useState<GraphStatus|null>(null);
+  const [outlookError,setOutlookError]=useState('');
 
   useEffect(()=>{
     let mounted=true;
-    void readBrRecipients().then(p=>{
-      if(mounted){setForm(p);setLoading(false);}
-    }).catch(e=>{
-      if(mounted){setError(e instanceof Error?e.message:'Empfänger konnten nicht geladen werden.');
-        setLoading(false);}
+    void Promise.all([readBrRecipients(),graphStatus()]).then(([recipients,status])=>{
+      if(!mounted)return;
+      setForm(recipients);setOutlook(status);setLoading(false);
+    }).catch(async e=>{
+      if(!mounted)return;
+      // The recipient editor must remain available if Microsoft/Graph is
+      // unavailable. Show connection failure separately from DB settings.
+      setOutlookError(e instanceof Error?e.message:'Microsoft-Status unbekannt.');
+      try{
+        const recipients=await readBrRecipients();
+        if(mounted)setForm(recipients);
+      }catch(reason){
+        if(mounted)setError(reason instanceof Error?reason.message:'Empfänger konnten nicht geladen werden.');
+      }
+      if(mounted)setLoading(false);
     });
     return()=>{mounted=false;};
   },[]);
@@ -48,11 +61,27 @@ export function BrRecipientsSettingsPanel(){
         placeholder="team@firma.de" autoComplete="off"
         value={form.recipient2}
         onChange={e=>setForm({...form,recipient2:e.target.value})}/>
-      <p className="um-hint">Der Versand erfolgt über dein persönlich verbundenes
-        Microsoft-365-Postfach. Dafür benötigt Plenaro die delegierte Berechtigung
-        Mail.Send. Nach einem Update muss Microsoft 365 möglicherweise erneut verbunden werden.</p>
-      <a className="button button-secondary" href="/api/v1/graph/connect/start">
-        Outlook verbinden / Mail.Send freigeben</a>
+      <p className="um-hint">Die Mail wird aus deinem persönlichen Microsoft-365-Postfach
+        mit der einmalig administrativ freigegebenen delegierten Berechtigung
+        Mail.Send versendet. Bei bestehender gültiger Verbindung ist keine
+        weitere Benutzerfreigabe vor jedem Antrag erforderlich.</p>
+      {outlook?.connected?
+        <p role="status" className="um-feedback success">Microsoft 365 ist verbunden.
+          Der Versand verwendet deine bestehende Verbindung automatisch.
+          Ob Mail.Send vom Token tatsächlich freigegeben ist, prüft Plenaro beim Senden.</p>:
+        outlook?.enabled&&outlook.linked?
+          <div className="um-feedback failure" role="status">
+            Für dein Microsoft-Konto ist derzeit keine gespeicherte Outlook-Verbindung vorhanden.
+            <a className="button button-secondary" href="/api/v1/graph/connect/start">
+              Einmalig Outlook verbinden</a>
+          </div>:
+          outlook?.enabled?
+            <p className="um-feedback failure" role="status">
+              Microsoft-Konto ist noch nicht verknüpft. Bitte zuerst Entra/Outlook
+              unter Einstellungen verbinden.</p>:
+            <p className="um-hint">Eine Outlook-Verbindung wurde noch nicht erkannt.</p>}
+      {outlookError&&<p role="status" className="um-hint">
+        Microsoft-Verbindungsstatus konnte nicht geprüft werden: {outlookError}</p>}
       <p className="um-hint">Ein BR-Marker allein sendet keine E-Mail. Beim erstmaligen
         Markieren fragt Plenaro nach deiner Bestätigung. Bereits angenommene
         oder unklare Versandversuche werden nicht automatisch wiederholt.</p>

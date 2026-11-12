@@ -71,6 +71,32 @@ public static class BrRequestEndpoints
                 await cmd.ExecuteScalarAsync(ct) as string??"none"));
         });
 
+        // No mail is sent and no request is reserved here. Perform this
+        // check AFTER user confirms but BEFORE saving the day marker, so
+        // a missing mailbox, recipient or delegated Mail.Send token cannot
+        // result in a misleading "requested" day without any send attempt.
+        group.MapPost("/preflight",async(HttpContext http,
+            IAntiforgery anti,UserManager<ApplicationUser> users,
+            IConfiguration config,BrMailService sender,CancellationToken ct)=>{
+            if(!await ValidCsrf(http,anti))return CsrfError();
+            var user=await Owner(http,users);
+            if(user is null)return Results.Unauthorized();
+            await using var db=await Open(config,ct);
+            var input=await Recipients(db,user.Id,ct);
+            if(!TryNormalize(input,out var recipients))
+                return Results.BadRequest(new{error="Die persönlichen E-Mail-Empfänger sind ungültig."});
+            if(string.IsNullOrWhiteSpace(recipients.Recipient1)&&
+               string.IsNullOrWhiteSpace(recipients.Recipient2))
+                return Results.Conflict(new{
+                    error="Bitte zuerst unter Einstellungen → Aufgaben & Kalender mindestens einen E-Mail-Empfänger hinterlegen."});
+            try{
+                _=await sender.PrepareTokenAsync(user.Id,ct);
+                return Results.Ok(new{ready=true});
+            }catch(BrMailService.MailFailure failure){
+                return Results.Conflict(new{error=failure.Message,code="mail-consent"});
+            }
+        }).RequireRateLimiting("znuny-native-start");
+
         group.MapPost("/{day}/send",async(string day,HttpContext http,
             IAntiforgery anti,UserManager<ApplicationUser> users,
             IConfiguration config,BrMailService sender,CancellationToken ct)=>{
@@ -84,13 +110,13 @@ public static class BrRequestEndpoints
             // this exact user, never for an arbitrary client-supplied date.
             await using(var marker=new NpgsqlCommand("""
                 SELECT EXISTS(SELECT 1 FROM day_markers
-                  WHERE user_id=@uid AND day=@day AND is_br)
+                  WHERE user_id=@uid AND day=@day AND (is_br OR is_ho))
                 """,db)){
                 marker.Parameters.AddWithValue("uid",user.Id);
                 marker.Parameters.Add("day",NpgsqlDbType.Date).Value=parsed;
                 if(await marker.ExecuteScalarAsync(ct) is not true)
                     return Results.Conflict(new{
-                        error="Bitte zuerst den BR-Marker für diesen Tag speichern."});
+                        error="Bitte zuerst den HO- oder BR-Marker für diesen Tag speichern."});
             }
             var configRecipients=await Recipients(db,user.Id,ct);
             if(!TryNormalize(configRecipients,out var recipients))
