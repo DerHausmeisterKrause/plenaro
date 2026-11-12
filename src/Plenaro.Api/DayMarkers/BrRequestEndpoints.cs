@@ -84,13 +84,13 @@ public static class BrRequestEndpoints
             // this exact user, never for an arbitrary client-supplied date.
             await using(var marker=new NpgsqlCommand("""
                 SELECT EXISTS(SELECT 1 FROM day_markers
-                  WHERE user_id=@uid AND day=@day AND is_br)
+                  WHERE user_id=@uid AND day=@day AND (is_br OR is_ho))
                 """,db)){
                 marker.Parameters.AddWithValue("uid",user.Id);
                 marker.Parameters.Add("day",NpgsqlDbType.Date).Value=parsed;
                 if(await marker.ExecuteScalarAsync(ct) is not true)
                     return Results.Conflict(new{
-                        error="Bitte zuerst den BR-Marker für diesen Tag speichern."});
+                        error="Bitte zuerst den HO- oder BR-Marker für diesen Tag speichern."});
             }
             var configRecipients=await Recipients(db,user.Id,ct);
             if(!TryNormalize(configRecipients,out var recipients))
