@@ -120,6 +120,7 @@ export function DayMarkersPanel({initialDay,onSaved}:{
   const [notice, setNotice] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [brMailStatus,setBrMailStatus]=useState<BrMailStatus|null>(null);
+  const [confirmMode,setConfirmMode]=useState<'save'|'send'|null>(null);
   const [year, month] = viewMonth.split('-').map(Number);
 
   useEffect(()=>{
@@ -158,22 +159,18 @@ export function DayMarkersPanel({initialDay,onSaved}:{
     return()=>{active=false;};
   },[selected,refresh]);
 
-  function confirmHomeoffice():boolean {
-    return window.confirm(
-      'Willst du wirklich am '+GermanDay(selected)+' Homeoffice beantragen?');
-  }
-
   async function sendMailForBr(){
     const result=await sendBrRequest(selected);
     setBrMailStatus({status:'accepted'});
     setNotice(result.message);
   }
 
-  async function requestExistingBr(){
-    if(busy||!confirmHomeoffice())return;
+  async function requestExistingBr(confirmed=false){
+    if(busy)return;
+    if(!confirmed){setConfirmMode('send');return;}
     setBusy(true);setError('');setNotice('');
     try{await sendMailForBr();}
-    catch(e){setError(e instanceof Error?e.message:'BR-Mailversand fehlgeschlagen.');}
+    catch(e){setError(e instanceof Error?e.message:'Homeoffice-Mailversand fehlgeschlagen.');}
     finally{setBusy(false);}
   }
 
@@ -191,7 +188,7 @@ export function DayMarkersPanel({initialDay,onSaved}:{
     setError(''); setNotice('');
   }
 
-  async function save() {
+  async function save(confirmed=false) {
     if (busy) return;
     const existing=markers.find(m=>m.day===selected);
     // Classic WPF asks before applying HO. Keep the previously requested
@@ -202,9 +199,8 @@ export function DayMarkersPanel({initialDay,onSaved}:{
       brMailStatus?.status!=='accepted' &&
       brMailStatus?.status!=='unknown' &&
       brMailStatus?.status!=='processing';
-    if(askToSend&&!confirmHomeoffice()){
-      setIsBr(existing?.isBr??false);
-      setIsHo(existing?.isHo??false);
+    if(askToSend&&!confirmed){
+      setConfirmMode('save');
       return;
     }
     setBusy(true); setError(''); setNotice('');
@@ -285,13 +281,13 @@ export function DayMarkersPanel({initialDay,onSaved}:{
         {summary && isBr && !markers.some(m => m.day === selected && m.isBr) &&
           summary.brExhausted && <p className="um-feedback failure" role="alert">Achtung: Das BR-Monatskontingent ist bereits ausgeschöpft.</p>}
         <div className="day-marker-buttons">
-          <button type="button" className="button button-primary" disabled={busy} onClick={() => void save()}>
+          <button type="button" className="button button-primary" disabled={busy} onClick={() => void save(false)}>
             <Save size={16}/>{busy ? 'Speichere …' : 'Marker speichern'}
           </button>
         </div>
         {markers.some(m=>m.day===selected&&(m.isBr||m.isHo))&&brMailStatus?.status==='none'&&
           <button type="button" className="button button-secondary" disabled={busy}
-            onClick={()=>void requestExistingBr()}>
+            onClick={()=>void requestExistingBr(false)}>
             <CalendarDays size={16}/>Homeoffice-Antrag per E-Mail senden
           </button>}
         {brMailStatus?.status==='accepted'&&
@@ -302,5 +298,33 @@ export function DayMarkersPanel({initialDay,onSaved}:{
         <p className="um-hint">„Normal“ ohne BR entfernt alle Marker dieses Tages. Kontingentüberschreitungen werden gewarnt, nicht automatisch blockiert.</p>
       </div>
     </>}
+      {confirmMode&&<div className="homeoffice-dialog-backdrop">
+        <section className="homeoffice-dialog content-card" role="dialog"
+          aria-modal="true" aria-labelledby="homeoffice-confirm-title">
+          <h3 id="homeoffice-confirm-title">Homeoffice beantragen</h3>
+          <p>Willst du wirklich am <strong>{GermanDay(selected)}</strong> Homeoffice beantragen?</p>
+          <p className="um-hint">Bei „Ja“ prüft Plenaro deine E-Mail-Empfänger
+            und die Microsoft-365-Verbindung. Anschließend wird die E-Mail
+            über dein persönliches Postfach gesendet.</p>
+          <div className="homeoffice-dialog-actions">
+            <button type="button" className="button button-secondary"
+              onClick={()=>{
+                if(confirmMode==='save'){
+                  const previous=markers.find(m=>m.day===selected);
+                  setIsBr(previous?.isBr??false);
+                  setIsHo(previous?.isHo??false);
+                }
+                setConfirmMode(null);
+              }}>Nein</button>
+            <button type="button" className="button button-primary"
+              onClick={()=>{
+                const mode=confirmMode;
+                setConfirmMode(null);
+                if(mode==='save')void save(true);
+                else void requestExistingBr(true);
+              }}>Ja, beantragen</button>
+          </div>
+        </section>
+      </div>}
   </section>;
 }
