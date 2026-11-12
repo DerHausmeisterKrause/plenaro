@@ -5,6 +5,7 @@ import { PersonalPreferencesPanel, WorkspacePreferencesPanel } from './SettingsP
 import { SecretsSettings } from './SecretsSettings';
 import { EntraAdminSettings } from './EntraAdminSettings';
 import { DayMarkerBudgetSettings } from './DayMarkersPanel';
+import { BrRecipientsSettingsPanel } from './BrRecipientsSettingsPanel';
 import { ReminderSettingsPanel } from './ReminderSettingsPanel';
 import { ZnunySettingsPanel } from './ZnunySettingsPanel';
 import {FavoriteSettingsPanel,FavoriteAppsAdminPanel} from './FavoritesPage';
@@ -340,7 +341,7 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved, onFavori
       <PersonalPreferencesPanel onSaved={onPersonalSaved}/>
       <WorkspacePreferencesPanel admin={admin} onSaved={onWorkspaceSaved}/>
     </div>}
-    {section === 'planning' && <><DayMarkerBudgetSettings/><ReminderSettingsPanel/></>}
+    {section === 'planning' && <><DayMarkerBudgetSettings/><BrRecipientsSettingsPanel/><ReminderSettingsPanel/></>}
     {section === 'import' && <ClassicImportPanel/>}
     {section === 'microsoft' && <>
       {admin && <EntraAdminSettings/>}
