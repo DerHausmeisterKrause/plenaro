@@ -33,6 +33,8 @@ export const saveBrRecipients=(data:BrRecipients)=>
   request<void>('/api/v1/br-requests/settings','PUT',data);
 export const readBrMailStatus=(day:string)=>
   request<BrMailStatus>('/api/v1/br-requests/'+encodeURIComponent(day)+'/status');
+export const preflightHomeofficeMail=()=>
+  request<{ready:boolean}>('/api/v1/br-requests/preflight','POST',{});
 export const sendBrRequest=(day:string)=>
   request<BrSendResult>('/api/v1/br-requests/'+encodeURIComponent(day)+'/send','POST',{});
 export function GermanDay(day:string):string{
