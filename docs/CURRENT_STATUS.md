@@ -1,3 +1,37 @@
+## 17.11.2026 – Dashboard-Znuny: sporadische HTTP 429 (Phase 6, PR #46)
+
+**Ursache im Code nachgewiesen:** `UseRateLimiter()` stand vor
+`UseAuthentication()`. Alle Policies mit `ClaimTypes.NameIdentifier`
+fielen daher auf die Remote-IP zurück. Anwender hinter derselben
+Client-IP/NAT oder bei nicht korrekt aufgelöster Proxy-IP teilten sich
+ein Kontingent von nur 40 Lesezugriffen in fünf Minuten – besonders
+problematisch bei mehreren Dashboard-Tabs, Ticketnachrichten und
+Inline-Bildern. Die echten Ticketlisten/Agenda werden aus dem zentralen
+Cache gelesen; nicht jede Dashboard-Ansicht verursacht remote OTRS-Aufrufe.
+
+- [x] Reihenfolge korrigiert: Routing → Authentication → RateLimiter →
+  Authorization. Angemeldete Benutzer werden anhand ihres stabilen
+  Plenaro-IDs partitioniert, IP-Fallback nur für nicht angemeldete
+  Anfragen. Login-Rate-Limit bleibt absichtlich IP-basiert.
+- [x] Rate-Limits für interaktive Ticketlesevorgänge auf 80/5 Min.
+  je Benutzer angepasst; Inline-Anhänge/Bilder erhalten ein eigenständiges
+  Limit von 120/5 Min. pro Benutzer. Znuny-Schreiblimits bleiben separat
+  und unverändert, keine automatischen Schreibwiederholungen.
+- [x] Von Plenaro ausgelöste 429 erhalten `X-Plenaro-RateLimit:
+  application`, nach Möglichkeit `Retry-After` und eine sichere
+  Fehlermeldung. Das Frontend unterscheidet diese Meldung von einem
+  äußeren NGINX-/Proxy-429; normales Dashboard wird nicht automatisch
+  wiederholt oder mit leeren Daten überschrieben.
+- [x] Backend-Regressionstest: zwei authentifizierte Nutzer mit
+  derselben Proxy-IP müssen unterschiedliche Zähler erhalten; dieselbe
+  Nutzer-ID über verschiedene IPs denselben Zähler; Anonyme IP-Partition.
+- [x] Frontend-Regressionstests für 429-Quellen und erfolgreiche Abfrage.
+- [ ] CI und PR-Merge bestätigen, anschließend auf echtem Docker-Host
+  aktualisieren und mit zwei parallel angemeldeten Benutzern überprüfen.
+- [ ] Falls danach noch 429: Im F12-Netzwerk den **Pfad**, die Antwortheader
+  `X-Plenaro-RateLimit` und `Retry-After` (ohne Tokens) prüfen.
+  Weitere 429 von einem äußeren NGINX sind separat zu beheben.
+
 # Plenaro 2.0 – aktueller Arbeitsstand
 
 **Stand: 17.11.2026 · aktive Entwicklungsphasen: 6 (Znuny/OTRS-Abnahme) und 7 (Wiki/Favoriten/Sicherheit)**
