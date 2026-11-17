@@ -992,7 +992,7 @@ describe('Plenaro web shell', () => {
       String(url)==='/api/v1/settings/global'&&
       (opts as RequestInit)?.method==='PUT'&&
       JSON.parse(String((opts as RequestInit).body)).fetchOtrsAccounting===false
-    )).toBe(true));
+    )).toBe(true);
   });
 
   it('zeigt Normal, UL, AM, HO und BR als Tagesmarker ohne Microsoft', async () => {
