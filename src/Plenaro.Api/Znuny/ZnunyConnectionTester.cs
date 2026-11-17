@@ -69,7 +69,10 @@ public sealed class ZnunyConnectionTester(IHttpClientFactory clients)
         catch (JsonException) { return new(false,"invalid-response"); }
     }
 
-    public static SocketsHttpHandler SecureHandler(bool publicOnly=false) => new()
+    // Preserve the existing zero-argument method group used by DI.
+    public static SocketsHttpHandler SecureHandler()=>SecureHandler(false);
+
+    public static SocketsHttpHandler SecureHandler(bool publicOnly) => new()
     {
         AllowAutoRedirect = false,
         UseCookies = false,
