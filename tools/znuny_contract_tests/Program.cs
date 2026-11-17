@@ -315,6 +315,72 @@ Assert(personalHtml.Contains(
 Assert((string?)injectPersonal.Invoke(null,new object[]{
     personalHtml,"/site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})==personalHtml,
     "personal favorite shim is idempotent");
+var injectPersonalOrigin=typeof(FavoriteProxy).GetMethod(
+    "InjectPersonalSitePathShimWithOrigin",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+var atossShim=(string)injectPersonalOrigin.Invoke(null,new object[]{
+    fixtureHtml,"/site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    new Uri("https://atoss.example.org/")})!;
+Assert(atossShim.Contains(
+        "const upstreamOrigin = \"https://atoss.example.org\";",StringComparison.Ordinal) &&
+    atossShim.Contains("function rewriteSrcset",StringComparison.Ordinal) &&
+    atossShim.Contains("patchAssetUrlProperty(HTMLImageElement.prototype, \"srcset\")",
+        StringComparison.Ordinal) &&
+    atossShim.Contains("patchAssetUrlProperty(HTMLSourceElement.prototype, \"srcset\")",
+        StringComparison.Ordinal) &&
+    atossShim.Contains("patchAssetUrlProperty(HTMLFormElement.prototype, \"action\")",
+        StringComparison.Ordinal) &&
+    atossShim.Contains("const observer = new MutationObserver",StringComparison.Ordinal) &&
+    atossShim.Contains("history[key] = function",StringComparison.Ordinal) &&
+    atossShim.Contains("input = rewrite(input)",StringComparison.Ordinal) &&
+    atossShim.IndexOf("data-plenaro-browser-shim",StringComparison.Ordinal)<
+        atossShim.IndexOf("var matcher",StringComparison.Ordinal) &&
+    !shimmed.Contains("atoss.example.org",StringComparison.Ordinal),
+    "personal image/lazy-src/form/SPA compatibility stays scoped to personal favorite only");
+
+var personalRecovery=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+personalRecovery.Request.Method="GET";
+personalRecovery.Request.Scheme="https";
+personalRecovery.Request.Host=new Microsoft.AspNetCore.Http.HostString(
+    "apps-plenaro.example.org");
+personalRecovery.Request.Path="/login/redirect";
+personalRecovery.Request.QueryString=new Microsoft.AspNetCore.Http.QueryString("?target=%2F");
+personalRecovery.Request.Headers.Accept="text/html";
+personalRecovery.Request.Headers["Sec-Fetch-Dest"]="iframe";
+personalRecovery.Request.Headers["Sec-Fetch-Site"]="same-origin";
+personalRecovery.Request.Headers.Referer=
+    "https://apps-plenaro.example.org/site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/login";
+Assert(FavoritePathRouting.TryRecoverPersonalIframeNavigation(
+    personalRecovery.Request,out var personalRecovered) &&
+    personalRecovered=="/site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/login/redirect?target=%2F",
+    "personal SPA navigation with same-origin iframe referrer reroutes into its own session");
+personalRecovery.Request.Headers["Sec-Fetch-Dest"]="image";
+Assert(!FavoritePathRouting.TryRecoverPersonalIframeNavigation(
+    personalRecovery.Request,out _),
+    "root image, scripts and API requests cannot inherit a personal session");
+personalRecovery.Request.Headers["Sec-Fetch-Dest"]="iframe";
+personalRecovery.Request.Method="POST";
+Assert(!FavoritePathRouting.TryRecoverPersonalIframeNavigation(
+    personalRecovery.Request,out _),
+    "root login POST is never redirected or replayed");
+personalRecovery.Request.Method="GET";
+personalRecovery.Request.Headers.Referer=
+    "https://apps-plenaro.example.org/wiki/login.action";
+Assert(!FavoritePathRouting.TryRecoverPersonalIframeNavigation(
+    personalRecovery.Request,out _),
+    "wiki login navigation is never taken over by personal favorites");
+personalRecovery.Request.Headers.Referer=
+    "https://other.example.org/site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/login";
+Assert(!FavoritePathRouting.TryRecoverPersonalIframeNavigation(
+    personalRecovery.Request,out _),
+    "cross-origin navigation cannot acquire a personal favorite scope");
+personalRecovery.Request.Headers.Referer=
+    "https://apps-plenaro.example.org/site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/login";
+personalRecovery.Request.Path="/_plenaro/favorite-bootstrap";
+Assert(!FavoritePathRouting.TryRecoverPersonalIframeNavigation(
+    personalRecovery.Request,out _),
+    "bootstrap and reserved internal paths cannot be recovered by iframe navigation");
+
 // Browser navigations must not silently display an empty white 502 frame.
 // The diagnostic is static and never contains the user's upstream URL.
 var writeProxyError=typeof(FavoriteProxy).GetMethod("ProxyNavigationErrorAsync",
@@ -599,6 +665,9 @@ var sharedAncestors=sharedCsp.Split(';',StringSplitOptions.TrimEntries)
     .Single(x=>x.StartsWith("frame-ancestors ",StringComparison.Ordinal));
 Assert(sharedAncestors=="frame-ancestors 'self' https://portal.example.org" &&
     sharedCsp.Contains("frame-src 'self'",StringComparison.Ordinal) &&
+    sharedCsp.Contains("img-src 'self' data: blob: https:",StringComparison.Ordinal) &&
+    sharedCsp.Contains("font-src 'self' data: https:",StringComparison.Ordinal) &&
+    !sharedCsp.Contains("script-src https:",StringComparison.Ordinal) &&
     !sharedProbe.Response.Headers.ContainsKey("X-Frame-Options"),
     "shared /wiki/ host permits own nested login frames and Plenaro only");
 sharedProbe.Request.Path="/cloud/_plenaro/favorite-bootstrap";
@@ -718,9 +787,31 @@ Assert(CorrectMime("/assets/site.css","application/octet-stream")=="text/css" &&
     CorrectMime("/js/app.mjs","text/plain")=="text/javascript" &&
     CorrectMime("/js/app.js",null)=="text/javascript" &&
     CorrectMime("/fonts/cache.wasm","application/octet-stream")=="application/wasm" &&
-    CorrectMime("/img/photo.png","application/octet-stream") is null &&
+    CorrectMime("/img/photo.png","application/octet-stream")=="image/png" &&
+    CorrectMime("/images/avatar.jpeg","text/plain")=="image/jpeg" &&
+    CorrectMime("/cdn/profile.webp",null)=="image/webp" &&
+    CorrectMime("/cdn/banner.avif","binary/octet-stream")=="image/avif" &&
+    CorrectMime("/x/sample.svg","application/octet-stream")=="image/svg+xml" &&
     CorrectMime("/css/site.css","text/css") is null,
     "X-Content-Type-Options nosniff can serve CSS/JS with generic upstream MIME");
+var upstreamRefererMethod=typeof(FavoriteProxy).GetMethod(
+    "UpstreamReferer",BindingFlags.NonPublic|BindingFlags.Static)!;
+Uri? MapFavoriteReferrer(string? value)=>
+    upstreamRefererMethod.Invoke(null,new object?[]{
+        new Uri("https://apps-plenaro.example.org/site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/"),
+        new Uri("https://atoss.example.org/"),
+        "/site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",value}) as Uri;
+Assert(MapFavoriteReferrer(
+        "https://apps-plenaro.example.org/site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/login?x=1")
+        ?.AbsoluteUri=="https://atoss.example.org/login?x=1" &&
+    MapFavoriteReferrer(
+        "https://apps-plenaro.example.org/site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        ?.AbsoluteUri=="https://atoss.example.org/" &&
+    MapFavoriteReferrer("https://apps-plenaro.example.org/") is null &&
+    MapFavoriteReferrer("https://apps-plenaro.example.org/wiki/") is null &&
+    MapFavoriteReferrer("https://other.example.org/site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/") is null,
+    "GET resources do not crash on root referers or leak another favorite's path");
+
 var slashRoot=new Microsoft.AspNetCore.Http.DefaultHttpContext();
 slashRoot.Request.Method="GET";
 slashRoot.Request.Scheme="https";
