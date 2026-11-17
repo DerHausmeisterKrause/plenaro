@@ -1,4 +1,4 @@
-## 17.11.2026 – Dashboard-Znuny: sporadische HTTP 429 (Phase 6, PR #46)
+## 17.11.2026 – Dashboard-Znuny: sporadische HTTP 429 (Phase 6, PR #46 gemergt)
 
 **Ursache im Code nachgewiesen:** `UseRateLimiter()` stand vor
 `UseAuthentication()`. Alle Policies mit `ClaimTypes.NameIdentifier`
@@ -26,8 +26,8 @@ Cache gelesen; nicht jede Dashboard-Ansicht verursacht remote OTRS-Aufrufe.
   derselben Proxy-IP müssen unterschiedliche Zähler erhalten; dieselbe
   Nutzer-ID über verschiedene IPs denselben Zähler; Anonyme IP-Partition.
 - [x] Frontend-Regressionstests für 429-Quellen und erfolgreiche Abfrage.
-- [ ] CI und PR-Merge bestätigen, anschließend auf echtem Docker-Host
-  aktualisieren und mit zwei parallel angemeldeten Benutzern überprüfen.
+- [x] [PR #46](https://github.com/DerHausmeisterKrause/plenaro/pull/46) in `main` gemergt; [CI #44075326407](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44075326407) vollständig grün (Backend, Frontend, Znuny-Vertragstests, NGINX und Docker-Smoke).
+- [ ] Auf echtem Docker-Host aktualisieren und mit zwei parallel angemeldeten Benutzern überprüfen.
 - [ ] Falls danach noch 429: Im F12-Netzwerk den **Pfad**, die Antwortheader
   `X-Plenaro-RateLimit` und `Retry-After` (ohne Tokens) prüfen.
   Weitere 429 von einem äußeren NGINX sind separat zu beheben.
