@@ -138,6 +138,62 @@ Assert(LoginLink("""<a href="/employee/signin">Sign in</a>""")
     LoginLink("""<a href="javascript:alert(1)">Login</a>""") is null,
     "only one unambiguous same-origin HTML login link is followed; SSO/JS targets rejected");
 
+// A protected one-shot startup traverses a same-host login redirect,
+// fetches its HTML/CSRF form and performs exactly one POST; no browser HTML
+// or cross-origin SSO provider receives a saved password.
+var htmlLoginMethod=typeof(FavoriteProxy).GetMethod(
+    "TryLoginAsync",BindingFlags.Static|BindingFlags.NonPublic)!;
+var httpTrace=new List<string>();
+using(var loginClient=new HttpClient(new MockHandler(req=>{
+    var path=req.RequestUri?.AbsolutePath??"";
+    httpTrace.Add(req.Method.Method+" "+path);
+    if(req.Method==HttpMethod.Get&&path=="/")
+        return new HttpResponseMessage(HttpStatusCode.Redirect){
+            Headers={Location=new Uri("/login",UriKind.Relative)}
+        };
+    if(req.Method==HttpMethod.Get&&path=="/login")
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent(atossStyleForm,Encoding.UTF8,"text/html")
+        };
+    if(req.Method==HttpMethod.Post&&path=="/j_security_check"){
+        var sent=req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+        Assert(sent.Contains("z_id=test.user") &&
+            sent.Contains("csrf_token=csrf123") &&
+            req.Headers.Referrer?.AbsoluteUri=="https://atoss.example.org/login",
+            "redirect discovery sends only same-origin CSRF-preserving login POST");
+        return new HttpResponseMessage(HttpStatusCode.SeeOther){
+            Headers={Location=new Uri("/home",UriKind.Relative)}
+        };
+    }
+    if(req.Method==HttpMethod.Get&&path=="/home")
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent("home")
+        };
+    throw new InvalidOperationException("Unexpected classic login HTTP request");
+}))){
+    await (Task)htmlLoginMethod.Invoke(null,new object[]{
+        loginClient,new Uri("https://atoss.example.org/"),
+        new Uri("https://atoss.example.org/"),"test.user","demo-pass",
+        CancellationToken.None})!;
+}
+Assert(string.Join("|",httpTrace)==
+    "GET /|GET /login|POST /j_security_check|GET /home",
+    "classic auto login follows same-origin redirect and posts only once");
+var deniedLoginCalls=0;
+using(var crossHostClient=new HttpClient(new MockHandler(req=>{
+    deniedLoginCalls++;
+    return new HttpResponseMessage(HttpStatusCode.Redirect){
+        Headers={Location=new Uri("https://sso.other.example.org/login")}
+    };
+}))){
+    await (Task)htmlLoginMethod.Invoke(null,new object[]{
+        crossHostClient,new Uri("https://atoss.example.org/"),
+        new Uri("https://atoss.example.org/"),"test.user","demo-pass",
+        CancellationToken.None})!;
+}
+Assert(deniedLoginCalls==1,
+    "cross-host SSO redirects never receive saved personal credentials");
+
 // The new wildcard app router is opt-in and never relaxes the
 // established same-origin CSRF gate for the main Plenaro application.
 var favoriteConfig=new ConfigurationBuilder().AddInMemoryCollection(
