@@ -21,7 +21,8 @@ public static class SettingsEndpoints
     public sealed record WorkspaceSettings(
         string InstanceName = "Plenaro",
         string SupportEmail = "",
-        string DefaultWeekStart = "monday");
+        string DefaultWeekStart = "monday",
+        bool FetchOtrsAccounting = true);
 
     public sealed record PersonalSettings(
         string Theme = "light",
@@ -122,6 +123,20 @@ public static class SettingsEndpoints
             await cmd.ExecuteNonQueryAsync(ct);
             return Results.NoContent();
         }).RequireAuthorization("AdminOnly");
+    }
+
+    // Default ON preserves the established report behavior for instances
+    // that have not yet saved the new checkbox.
+    public static async Task<bool> FetchOtrsAccountingEnabledAsync(
+        NpgsqlConnection db,CancellationToken ct)
+    {
+        await using var cmd=new NpgsqlCommand("""
+            SELECT setting_value->>'fetchOtrsAccounting'
+            FROM system_settings WHERE setting_key=@key
+            """,db);
+        cmd.Parameters.AddWithValue("key",GlobalKey);
+        var setting=await cmd.ExecuteScalarAsync(ct) as string;
+        return !bool.TryParse(setting,out var enabled)||enabled;
     }
 
     private static string RequiredConnectionString(IConfiguration configuration) =>
