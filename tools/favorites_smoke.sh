@@ -13,7 +13,7 @@ two='{"name":"My Search","url":"https://example.com/search","username":"","autoL
 test "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$url/personal" -H 'Content-Type: application/json' -d "$one")" = "401"
 # CSRF and HTTPS/DNS validation remain mandatory.
 test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$url/personal" -H 'Content-Type: application/json' -d "$one")" = "400"
-test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$url/personal" "${header[@]}" -d '{"name":"Unsafe","url":"http://127.0.0.1/","username":"","autoLogin":false,"enabled":true,"sortOrder":0}') " = "400"
+test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$url/personal" "${header[@]}" -d '{"name":"Unsafe","url":"http://127.0.0.1/","username":"","autoLogin":false,"enabled":true,"sortOrder":0}')" = "400"
 ID=$(curl -fsS -b "$COOKIE" -X POST "$url/personal" "${header[@]}" -d "$one" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
 test -n "$ID"
 curl -fsS -b "$COOKIE" "$url/" | python3 -c 'import json,sys;a=json.load(sys.stdin);assert len(a)==1 and a[0]["name"]=="Personal Wiki Link" and a[0]["url"]=="https://example.org/docs/guide" and a[0]["slug"].startswith("site-") and not a[0]["hasPassword"] and "password" not in a[0]'
