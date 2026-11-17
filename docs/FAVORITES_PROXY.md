@@ -1,3 +1,15 @@
+# Stand 17.11.2026 – Self-Service-Favoriten und eigenständige Wissensdatenbank
+
+**Aktueller Stand:** Webseiten werden unter `Einstellungen → Webseiten / Favoriten` direkt mit Namen und vollständiger HTTPS-Adresse pro Benutzer angelegt und sortiert. Eine Einzel-Freigabe durch die Administration ist nicht mehr erforderlich. Für persönliche Proxys gelten strengere Netzwerkgrenzen: keine lokalen/privaten IP-Ziele, nur öffentlich routbare HTTPS-Endpunkte. Das verhindert eine SSRF-Verbindung aus Plenaro in das interne Netzwerk.
+
+**Wissensdatenbank:** Die zentrale Serveradresse bleibt unter `Einstellungen → Wissensdatenbank` adminseitig verwaltet. Benutzer speichern nur ihre persönlichen Wiki-Anmeldedaten. `wiki_user_connections` ist getrennt von `user_favorites`; die Wiki-Seite erzeugt beim Einrichten **keinen Favoriten**. Der erprobte FavoriteProxy, Confluence-Autologin, die Einmal-Bootstrap-URL, die Sitzungstrennung und die browserseitigen Wiki-Pfadkorrekturen bleiben bestehen.
+
+**Migration:** Frühere Favoriten behalten ID, Reihenfolge und Passwort. Vorhandene Wiki-Favoriten werden aus der Favoritenliste entfernt und als eigenständige Wiki-Verbindung übernommen. Ein vorhandenes Wiki-Passwort wird über den alten Vault-Schlüsselnamen gelesen und beim ersten Login unter dem neuen Schlüsselnamen `wiki.password` sicher neu verschlüsselt.
+
+Die nachfolgenden historischen Abschnitte dokumentieren ältere PRs und deren inzwischen ersetzte Kopplung zwischen Wiki und Favoriten. Sie beschreiben **nicht** mehr die aktuelle Bedienung.
+
+---
+
 ## Confluence-Login weiterhin als abgelehnter Frame: Root-Navigation und NGINX-Header prüfen
 
 In der bereinigten Login-Aufzeichnung findet nach dem erfolgreichen
