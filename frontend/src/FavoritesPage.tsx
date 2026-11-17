@@ -126,7 +126,8 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
         <p className="um-hint">Die Adresse kannst du selbst eintragen oder später
           ändern. Der Plenaro-Proxy öffnet die Webseite mit einer getrennten
           Sitzung. Aus Sicherheitsgründen sind lokale Server-, Netzwerk- und
-          Metadaten-Adressen im persönlichen Proxy gesperrt.</p>
+          Metadaten-Adressen im persönlichen Proxy gesperrt. Interne HTTPS-Ziele
+          aus dem Servernetz sind erlaubt.</p>
         <label htmlFor="fav-user">Anmeldename (optional)</label>
         <input id="fav-user" value={form.username} autoComplete="off" maxLength={180}
           onChange={e=>setForm({...form,username:e.target.value})}/>
@@ -148,10 +149,13 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
           checked={form.autoLogin} onChange={e=>
             setForm({...form,autoLogin:e.target.checked})}/>
           Automatische Anmeldung über ein übliches HTML-Loginformular versuchen</label>
-        <p className="um-hint">Passwörter bleiben verschlüsselt gespeichert.
-          SSO, MFA und spezielle Loginverfahren können eine interaktive
-          Anmeldung erforderlich machen. Manche Webseiten verbieten die
-          Darstellung in eingebetteten Fenstern.</p>
+        <p className="um-hint">Plenaro versucht dabei, die Anmeldung auf dem Server
+          über HTTPS auszuführen. Das Passwort wird nicht in die eingebettete
+          Webseite oder in den Browser übertragen. Bei dynamischen JavaScript-
+          Loginfeldern (z. B. manchen ATOSS-Oberflächen), SSO und MFA kann
+          Plenaro die Felder deshalb nicht automatisch ausfüllen. In diesem Fall
+          bitte im Favoriten manuell anmelden. Manche Webseiten verbieten zudem
+          die Darstellung in eingebetteten Fenstern.</p>
         <ErrorMessage message={error}/>
         {info&&<p role="status" className="um-feedback success">{info}</p>}
         <div className="favorites-toolbar">
