@@ -64,6 +64,80 @@ Assert(!AllowedPeer("127.0.0.1") &&
     "loopback, link-local, cloud metadata and unspecified destinations stay blocked");
 
 
+// Classic personal favorites perform a bounded *server-side* login
+// attempt; the original WPF WebView2 DOM autofill is not available in a
+// shared-origin HTML proxy, and plaintext credentials must stay off it.
+var loginFormBuilder=typeof(FavoriteProxy).GetMethod(
+    "BuildHtmlLoginRequest",BindingFlags.Static|BindingFlags.NonPublic)!;
+HttpRequestMessage? BuildLogin(string html,string url="https://atoss.example.org/")=>
+    (HttpRequestMessage?)loginFormBuilder.Invoke(null,new object[]{
+        html,new Uri(url),new Uri("https://atoss.example.org/"),
+        "test.user","demo-pass"
+    });
+const string atossStyleForm="""
+<html><head></head><body>
+<form method="POST" action="/j_security_check">
+ <input type="hidden" name="csrf_token" value="csrf123">
+ <input class="z-focustextbox-real" id="userBox"
+        type="text" name="z_id" placeholder="Benutzername">
+ <input class="z-focustextbox-real" type="password"
+        name="j_password" placeholder="Kennwort">
+ <input type="submit" name="loginButton" value="Anmelden">
+</form></body></html>
+""";
+using(var login=BuildLogin(atossStyleForm)){
+    Assert(login is not null && login.Method==HttpMethod.Post &&
+        login.RequestUri?.AbsoluteUri=="https://atoss.example.org/j_security_check" &&
+        login.Headers.Referrer?.AbsoluteUri=="https://atoss.example.org/" &&
+        login.Headers.GetValues("Origin").Single()=="https://atoss.example.org",
+        "unusual enterprise form names use human-readable username label and same-host post");
+    var payload=await login.Content!.ReadAsStringAsync();
+    Assert(payload.Contains("z_id=test.user") &&
+        payload.Contains("j_password=demo-pass") &&
+        payload.Contains("csrf_token=csrf123") &&
+        payload.Contains("loginButton=Anmelden"),
+        "enterprise login POST carries CSRF, custom username/password names and submit button");
+}
+using(var conventional=BuildLogin(
+    """<form method='post' action='/login'><input type='text' name='j_username'><input type='password' name='j_password'></form>""")){
+    Assert(conventional is not null &&
+        (await conventional.Content!.ReadAsStringAsync()).Contains("j_username=test.user"),
+        "single unknown text input plus password is unambiguous");
+}
+using(var autoc=BuildLogin(
+    """<form method='post' action='/auth'><input type='text' name='X1' autocomplete='username'><input type='text' name='captcha'><input type='password' name='Password'></form>""")){
+    Assert(autoc is not null &&
+        (await autoc.Content!.ReadAsStringAsync()).Contains("X1=test.user"),
+        "autocomplete=username wins over a second text/captcha field");
+}
+Assert(BuildLogin(
+    """<form method='get' action='/login'><input name='user'><input name='pw' type='password'></form>""") is null &&
+    BuildLogin(
+    """<form method='post' action='https://evil.example.org/login'><input name='user'><input name='pw' type='password'></form>""") is null &&
+    BuildLogin(
+    """<form method='post' action='/reset'><input name='user'><input name='pw' type='password'></form>""") is null &&
+    BuildLogin(
+    """<form method='post' action='/login'><input name='user'><input name='pw' type='password'><input name='confirm' type='password'></form>""") is null &&
+    BuildLogin(
+    """<form method='post' action='/register'><input name='user'><input name='pw' type='password'></form>""") is null &&
+    BuildLogin(
+    """<form method='post' action='/login'><input name='user'><input name='pw' type='password' autocomplete='new-password'></form>""") is null &&
+    BuildLogin(
+    """<div id='client-rendered-login'></div>""") is null,
+    "never submit GET, cross-origin, password-reset, multiple-password, registration or JS-only forms");
+var loginLinkFinder=typeof(FavoriteProxy).GetMethod(
+    "FindHtmlLoginLink",BindingFlags.Static|BindingFlags.NonPublic)!;
+Uri? LoginLink(string html)=>(Uri?)loginLinkFinder.Invoke(null,new object[]{
+    html,new Uri("https://atoss.example.org/"),
+    new Uri("https://atoss.example.org/")
+});
+Assert(LoginLink("""<a href="/employee/signin">Sign in</a>""")
+        ?.AbsoluteUri=="https://atoss.example.org/employee/signin" &&
+    LoginLink("""<a href="https://evil.example.org/login">Login</a>""") is null &&
+    LoginLink("""<a href="/login">Anmelden</a><a href="/signin">Einloggen</a>""") is null &&
+    LoginLink("""<a href="javascript:alert(1)">Login</a>""") is null,
+    "only one unambiguous same-origin HTML login link is followed; SSO/JS targets rejected");
+
 // The new wildcard app router is opt-in and never relaxes the
 // established same-origin CSRF gate for the main Plenaro application.
 var favoriteConfig=new ConfigurationBuilder().AddInMemoryCollection(
