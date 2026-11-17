@@ -946,7 +946,7 @@ Diese Änderung **ersetzt** die in PR #41 dokumentierte Pflicht, einzelne Origin
 - [ ] **Issue #40 zuerst schließen**, bevor WPF-artiges Browser-Autofill Klartextpasswörter in beliebige Drittseiten am geteilten Host schreiben dürfte.
 
 
-## 17.11.2026 – Phase 7: WPF-ATOSS-Autofill im Browser mit Host-Isolation (PR #45)
+## 17.11.2026 – Phase 7: WPF-ATOSS-Autofill im Browser mit Host-Isolation (PR #45 – gemergt)
 
 - [x] WPF-Referenz `Services/WebShortcutBrowserSessionManager.cs` geprüft: exakte ATOSS-ZK-Selektoren, native Eingabesetter, Events, wiederholte DOM-Abfragen, Frame-Kontext und Submit-Logik nachvollzogen.
 - [x] Für persönliche Favoriten existierende Wildcard-DNS-/Hostvorlage automatisch als dedizierte Browser-Origin verwenden; Wiki bleibt auf Shared-Path, Pfad-Fallback ohne Domain bleibt bestehen.
@@ -955,5 +955,6 @@ Diese Änderung **ersetzt** die in PR #41 dokumentierte Pflicht, einzelne Origin
 - [x] Doppelte Server-/DOM-Loginversuche bei dediziertem Host vermieden; `Origin-Agent-Cluster: ?1` zur Absicherung der Browser-Origins.
 - [x] C#-Contract-Tests für Host-Routing, Passwort-Escaping und Isolations-Gates sowie Browser-JSdom-Tests mit verzögert gerenderten ATOSS-Loginfeldern, Ereignissen und Ausschlüssen ergänzt.
 - [x] UI-Warnung, wenn trotz aktiver Auto-Anmeldung nur der unsichere Shared-Path-Host verfügbar ist.
-- [ ] CI-/PR-Merge bestätigen; anschließend technische Wildcard-Host-/TLS-Voraussetzungen am Zielhost und echten ATOSS-Login live prüfen.
+- [x] [PR #45](https://github.com/DerHausmeisterKrause/plenaro/pull/45) in `main` gemergt; [CI #44062037953](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44062037953) grün, inklusive C#-Vertragstest, ATOSS-DOM-/Frame-Laufzeittest und Docker-Smoke.
+- [ ] Technische Wildcard-Host-/TLS-Voraussetzungen am Zielhost und echten ATOSS-Login live prüfen.
 - [ ] Issue #40: alte Shared-Path-Favoriten weiterhin auf dedizierte Origins migrieren; fremde SSO-/MFA-Provider werden nicht automatisch proxied.
