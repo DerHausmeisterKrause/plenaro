@@ -75,7 +75,7 @@ Zusätzlich gibt es in jedem Favoriten den Link **„Originalseite öffnen“**.
 
 # Stand 17.11.2026 – Self-Service-Favoriten und eigenständige Wissensdatenbank
 
-**Aktueller Stand:** Webseiten werden unter `Einstellungen → Webseiten / Favoriten` direkt mit Namen und vollständiger HTTPS-Adresse pro Benutzer angelegt und sortiert. Eine Einzel-Freigabe durch die Administration ist nicht mehr erforderlich. Für persönliche Proxys gelten strengere Netzwerkgrenzen: keine lokalen/privaten IP-Ziele, nur öffentlich routbare HTTPS-Endpunkte. Das verhindert eine SSRF-Verbindung aus Plenaro in das interne Netzwerk.
+**Aktueller Stand:** Webseiten werden unter `Einstellungen → Webseiten / Favoriten` direkt mit Namen und vollständiger HTTPS-Adresse pro Benutzer angelegt und sortiert. Eine Einzel-Freigabe durch die Administration ist nicht mehr erforderlich. Persönliche HTTPS-Webseiten dürfen inzwischen auch interne LAN-Ziele erreichen, ohne dass sie vom Administrator einzeln freigegeben werden müssen. Loopback, Link-Local und bekannte Metadaten-Adressen bleiben gesperrt; das Risiko serverseitiger Zugriffe auf andere interne HTTPS-Dienste wird durch Zugriffskontrolle und Firewall-Segmentierung begrenzt.
 
 **Wissensdatenbank:** Die zentrale Serveradresse bleibt unter `Einstellungen → Wissensdatenbank` adminseitig verwaltet. Benutzer speichern nur ihre persönlichen Wiki-Anmeldedaten. `wiki_user_connections` ist getrennt von `user_favorites`; die Wiki-Seite erzeugt beim Einrichten **keinen Favoriten**. Der erprobte FavoriteProxy, Confluence-Autologin, die Einmal-Bootstrap-URL, die Sitzungstrennung und die browserseitigen Wiki-Pfadkorrekturen bleiben bestehen.
 
