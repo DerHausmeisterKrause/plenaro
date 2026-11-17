@@ -846,7 +846,7 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [ ] Znuny `TimeAccountingREST` + `timeaccounting_webservice` (rw) bei der konkreten Instanz einrichten; Live-Test mit direkten OTRS-Zeiten, Plenaro-Buchungen und verschiedenen Benutzern.
 - [ ] Noch offen: WPF-Monats-Nachbuchung als separater Web-Datensatz und optionale Übersicht lokaler, noch nicht nach OTRS übertragener Ticket-Timer.
 
-## 17.11.2026 – Phase 5: Zeit-Schnellkorrektur im Znuny-Ticket wiederhergestellt (PR folgt)
+## 17.11.2026 – Phase 5: Zeit-Schnellkorrektur im Znuny-Ticket wiederhergestellt (PR #36 – gemergt)
 
 - [x] WPF-Referenz geprüft: `Views/TaskDetailPanel.xaml` enthält zwei Reihen +15/+30/+1h sowie -15/-30/-1h, verbunden mit `TodayViewModel.AdjustBookedMinutes`; `TaskService.AddTicketMinutes` begrenzt negative Zeiten bei 0.
 - [x] Dieselben sechs Presets in `ZnunyTicketTimerPanel` direkt unter Start/Stop wiederhergestellt, positive Buttons grau, negative rot.
@@ -854,5 +854,20 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] Vorhandene Sekunden beim Hinzufügen/Abziehen ganzer Minuten erhalten; Untergrenze 0, Obergrenze 240 Stunden.
 - [x] Während API-Änderungen, manueller HH:MM:SS-Eingabe, beim Laden und bei offenen ungeklärten OTRS-Zeitbuchungen Presets sperren.
 - [x] Frontendtests für alle sechs Schaltflächen, korrekte API-Nutzlast, laufendes Buchungsjournal, Grenzwerte und Pending-Sperre ergänzt.
-- [ ] CI-Lauf erfolgreich und PR nach `main` mergen.
+- [x] [PR #36](https://github.com/DerHausmeisterKrause/plenaro/pull/36) erfolgreich gemergt; [CI #44032906303](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44032906303) vollständig grün.
 - [ ] Live-Test nach Docker-Deployment auf einem echten Znuny-Ticket; insbesondere laufender Timer und bestätigte Altbuchungen.
+
+## 17.11.2026 – Phase 5/7: Angepinnte Tickets und globaler OTRS-Report-Schalter (PR folgt)
+
+- [x] WPF-Referenz `TodayViewModel.TogglePinTaskCommand` + `TaskService.SetPinned` abgeglichen: Pin-Status persistent, angepinnte Tickets kommen zuerst.
+- [x] Neue PostgreSQL-Migration `0029_znuny_ticket_pins.sql`: Pins pro Benutzer und Ticket getrennt, bei Ticket-/Benutzerlöschung automatisch bereinigt.
+- [x] Authentifizierter CSRF-geschützter `PUT /api/v1/znuny/tickets/pins`-Endpunkt: Nur eigene aktuelle, zugewiesene Tickets anpinnen; eigene Pins wieder entfernen; kein Schreibzugriff auf OTRS.
+- [x] Zentrale `/api/v1/znuny/tickets`-Sortierung `mine`: angepinnte Tickets **vor** Sortierung/Paginierung, danach bisherige Filter-/Sortierreihenfolge. Pin-Kennung wird pro Benutzer zurückgegeben.
+- [x] Eigener Pin-Schalter mit Zustandsanzeige unter **Aktuelle Aufgaben** und **Meine Tickets**, keine ineinander verschachtelten Buttons; Benutzer-Pins beeinflussen keine andere Person.
+- [x] Globale `workspace.general.fetchOtrsAccounting`-Einstellung **nur vom Admin änderbar**, Standard aktiv zur Wahrung des bisherigen Betriebsverhaltens.
+- [x] Deaktiviert: Report lädt **nur** lokale bestätigte Plenaro-Ticketbuchungen und getrennt die lokalen Timer; keine Znuny-TimeAccountingGet-Anfrage, kein Lesen persönlicher Znuny-Token oder API-Konfiguration.
+- [x] Aktiviert: Vorhandene Live-Abfrage `TimeAccountingGet` und das deduplizierte Zusammenführen mit Plenaro-Buchungen unverändert.
+- [x] JSON- und CSV-Monatsreport verwenden dieselbe serverseitige Einstellung und denselben Auswertungspfad; Browser meldet einen administrativ deaktivierten OTRS-Abgleich als normalen Betriebszustand, nicht als Verbindungsfehler.
+- [x] UI-Integrationstests für Anpinnen/Abpinnen und Admin-Schalter ergänzt.
+- [ ] PR CI inkl. Browser-, Backend-, Sicherheits- und Docker-Tests vollständig erfolgreich, danach Merge.
+- [ ] Live-Test: 2 Benutzer, Pin-Reihenfolge auch über Seiten hinweg; Report mit Schalter an/aus vergleichen und **Netzwerk-/Znuny-Logs** prüfen, dass bei Aus wirklich kein OTRS-Zeitabruf erfolgt.
