@@ -178,7 +178,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                 if(favorite.Slug!="wiki"||!favorite.AutoLogin||!vault.IsConfigured)
                     throw new InvalidOperationException("Wiki-Autologin fehlt.");
                 var secret=await vault.GetForIntegrationAsync("user",user,
-                    FavoritesEndpoints.PasswordName(favorite.Id),ct);
+                    "wiki.password",ct);
                 if(string.IsNullOrEmpty(secret)||
                    string.IsNullOrWhiteSpace(favorite.Username)||
                    !await TryConfluenceWikiLoginAsync(client,root,
