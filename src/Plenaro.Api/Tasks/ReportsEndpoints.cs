@@ -7,6 +7,7 @@ using NpgsqlTypes;
 using Plenaro.Api.Identity;
 using Plenaro.Api.Znuny;
 using Plenaro.Api.Secrets;
+using Plenaro.Api.Settings;
 
 namespace Plenaro.Api.Tasks;
 
@@ -194,6 +195,14 @@ public static class ReportsEndpoints
         }
         AccountingLoad Partial(string status,string message)=>
             new(ReportAccounting.Reconcile([],local),status,message);
+        // STRICT GLOBAL GATE: when disabled, do not read any Znuny credentials,
+        // build a Znuny request, or connect to Znuny. This applies to both the
+        // JSON report and CSV, which reuse ReadMonthAsync.
+        if(!await SettingsEndpoints.FetchOtrsAccountingEnabledAsync(db,ct))
+            return Partial("disabled",
+                "Der Administrator hat den OTRS-Zeitabruf deaktiviert. "+
+                "Es werden ausschließlich lokal bestätigte Ticketbuchungen "+
+                "sowie getrennt angezeigte lokale Aufgaben-Timer verwendet.");
         if(!vault.IsConfigured)
             return Partial("unavailable",
                 "Secret-Vault fehlt. Znuny-Zeiten konnten nicht vollständig geprüft werden.");
