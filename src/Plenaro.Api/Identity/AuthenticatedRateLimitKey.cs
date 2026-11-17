@@ -13,7 +13,7 @@ public static class AuthenticatedRateLimitKey
     public static string For(HttpContext context)
     {
         var id=context.User.Identity?.IsAuthenticated==true
-            ?context.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
             :null;
         if(!string.IsNullOrWhiteSpace(id))
             return "user:"+id;
