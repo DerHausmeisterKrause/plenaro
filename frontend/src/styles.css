@@ -830,6 +830,17 @@ h1,h2,h3,p { margin-top: 0; }
 .classic-wpf-preset-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
   gap:8px;max-width:290px;margin:4px auto;width:100%; }
 .classic-wpf-preset-grid button { min-width:0; }
+/* WPF timer presets: three subtle positive pills over three red negative pills. */
+.znuny-time-quick-button {
+  border:0;border-radius:999px;min-width:0;min-height:26px;padding:3px 9px;
+  font:inherit;font-size:12px;font-weight:750;line-height:1.4;color:#fff;
+  text-align:center;cursor:pointer;transition:filter .12s ease;
+}
+.znuny-time-quick-button.is-positive {background:#334155;}
+.znuny-time-quick-button.is-negative {background:#c81e1e;}
+.znuny-time-quick-button:hover:not(:disabled) {filter:brightness(1.18);}
+.znuny-time-quick-button:focus-visible {outline:2px solid var(--blue);outline-offset:3px;}
+.znuny-time-quick-button:disabled {opacity:.45;cursor:not-allowed;}
 .classic-wpf-timer-manual {display:grid;grid-template-columns:1fr;gap:6px;margin-top:9px;}
 .classic-wpf-timer-manual input {width:100%;}
 .classic-wpf-timer-manual button {justify-self:start;}
