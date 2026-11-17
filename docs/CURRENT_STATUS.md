@@ -403,3 +403,12 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [ ] **Bewusstes Sicherheitsrisiko:** Jeder Plenaro-Nutzer kann serverseitig interne HTTPS-Dienste erreichen; Firewall/Segmentierung und vertrauenswürdige Benutzer sicherstellen. Dedizierte Browser-Origin je frei angelegtem Favoriten bleibt als [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40) offen.
 
 Historie: Die Origin-Allowlist aus [PR #41](https://github.com/DerHausmeisterKrause/plenaro/pull/41) ist durch diese Änderung abgelöst.
+
+## 17.11.2026 – Persönliche Favoriten: Bilder und Login-Kompatibilität (PR in Prüfung)
+
+- [x] Favoriten-Proxy auf dynamische Bildquellen, initiale/JS-generierte Login-Routen, fehlende Same-Origin-Auth-/CSRF-Header, Bild-MIME und unkontrollierten Referer-Teilstring geprüft.
+- [x] Gewöhnliche Bild-/Font-CDNs unter HTTPS erlaubt; dynamische persönliche `site-*`-Bildquellen, Original-Origin-URLs, `form.action`, SPA-History und `innerHTML` auf persönlichen Proxy-Pfad korrigiert; zentralen Wiki-Shim nicht erweitert.
+- [x] Scoped iframe-Login-GETs unter persönlichem Favoriten wieder erreichbar; andere Favoriten, Root-POST, unbefugte Origins und Bootstrap-Routen bleiben isoliert.
+- [x] Contract-Tests und Betriebsdokumentation ergänzt.
+- [ ] CI/PR-Merge, danach betroffene Webseiten wie ATOSS live mit Bildern und Anmeldung abnehmen; externe SSO-/MFA-Systeme sind nicht automatisch kompatibel.
+- [ ] Sicherheitspriorität [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40) bleibt offen.

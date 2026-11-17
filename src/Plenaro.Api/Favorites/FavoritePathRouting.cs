@@ -97,6 +97,46 @@ public static class FavoritePathRouting
         return true;
     }
 
+    // Some JavaScript login flows navigate a nested iframe to /login or /
+    // using window.location, which cannot be intercepted by the early
+    // browser path shim. Recover ONLY an iframe navigation that has a
+    // same-origin browser Referer from a personal /site-<UUID>/ page.
+    // Redirect back inside that same favorite; normal cookie/owner checks
+    // still apply to the redirected URL. Never handle API/assets, root POST
+    // forms, cross-origin requests, other favorite links, or bootstrap paths.
+    public static bool TryRecoverPersonalIframeNavigation(
+        HttpRequest request,out string destination)
+    {
+        destination="";
+        if(!HttpMethods.IsGet(request.Method) || !request.IsHttps ||
+           request.Host.Port.GetValueOrDefault(443)!=443 ||
+           request.Headers["Sec-Fetch-Dest"].ToString()!="iframe" ||
+           request.Headers["Sec-Fetch-Site"].ToString()!="same-origin" ||
+           !request.Headers.Accept.ToString().Contains("text/html",
+               StringComparison.OrdinalIgnoreCase) ||
+           !request.Headers.TryGetValue("Referer",out var refValues) ||
+           refValues.Count!=1 ||
+           !Uri.TryCreate(refValues.ToString(),UriKind.Absolute,out var referer) ||
+           referer.Scheme!=Uri.UriSchemeHttps || referer.Port!=443 ||
+           !referer.Host.Equals(request.Host.Host,
+               StringComparison.OrdinalIgnoreCase))
+            return false;
+        if(!TrySplitPath(referer.AbsolutePath,out var slug,out _) ||
+           !slug.StartsWith("site-",StringComparison.Ordinal) ||
+           !Guid.TryParseExact(slug[5..],"N",out _))
+            return false;
+        var path=request.Path.Value;
+        if(string.IsNullOrEmpty(path) || path.Length>2048 ||
+           path.StartsWith("/_plenaro",StringComparison.OrdinalIgnoreCase) ||
+           path.StartsWith("/wiki/",StringComparison.OrdinalIgnoreCase) ||
+           path.Equals("/wiki",StringComparison.OrdinalIgnoreCase) ||
+           path.StartsWith("/site-",StringComparison.OrdinalIgnoreCase) ||
+           path.StartsWith("//",StringComparison.Ordinal))
+            return false;
+        destination=CookiePath(slug)+path+request.QueryString.ToUriComponent();
+        return true;
+    }
+
     public static string CookiePath(string slug)=>"/"+slug;
     public static string AppPath(string slug,string path)=>
         CookiePath(slug)+(path.StartsWith('/')?path:"/"+path);

@@ -255,6 +255,14 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                 ctx.Response.Headers["X-Plenaro-Login-Reroute"]="wiki-root";
                 return;
             }
+            if(FavoritePathRouting.TryRecoverPersonalIframeNavigation(
+                ctx.Request,out var recovered)){
+                ctx.Response.StatusCode=StatusCodes.Status307TemporaryRedirect;
+                ctx.Response.Headers.Location=recovered;
+                ctx.Response.Headers.CacheControl="no-store";
+                ctx.Response.Headers["X-Plenaro-Favorite-Reroute"]="personal-iframe";
+                return;
+            }
             if(!FavoritePathRouting.TrySplitPath(ctx.Request.Path.Value,
                 out slug,out appPath)){
                 ctx.Response.StatusCode=404;return;
@@ -278,7 +286,10 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             "default-src 'self' data: blob:; "+
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
             "style-src 'self' 'unsafe-inline'; "+
-            "img-src 'self' data: blob:; font-src 'self' data:; "+
+            // Image/font CDNs may differ from the app's HTTPS origin.
+            // No external script or CSS origins are permitted here.
+            // The frame itself uses referrerPolicy=no-referrer.
+            "img-src 'self' data: blob: https:; font-src 'self' data: https:; "+
             "connect-src 'self'; frame-src 'self'; worker-src 'self' blob:; "+
             "form-action 'self'; base-uri 'self'; object-src 'none'; "+
             // Confluence can load nested same-origin frames after login.

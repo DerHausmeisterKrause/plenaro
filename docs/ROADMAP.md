@@ -921,3 +921,14 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [ ] **Sicherheitspriorität:** Jeder authentifizierte Nutzer kann durch den Server erreichbare private HTTPS-Netzwerkziele ansprechen. Firewall/Netzsegmentierung und Berechtigungsmodell absichern; [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40) (echte Browser-Origin-Isolation) offen.
 
 Diese Änderung **ersetzt** die in PR #41 dokumentierte Pflicht, einzelne Origins in der `.env` freizugeben.
+
+## 17.11.2026 – Phase 7: Persönliche Favoriten – Bilder und interaktive Logins (PR in Prüfung)
+
+- [x] Gemeinsam genutzten Favoriten-Pfadhost analysiert: dynamische Root-/Origin-URLs, `srcset`, `innerHTML`, clientseitige Login-Navigation, Bild-MIME und fehlende Auth-/CSRF-Header als potenzielle Ursachen.
+- [x] Persönlichen Browser-Shim für genau die freigegebene Upstream-Origin sowie responsive/dynamische Bilder, Formulare, SPA-Pfade und DOM-Änderungen erweitert; Wiki-Shim und unberechtigte Fremdhosts bleiben unberührt.
+- [x] HTTPS-Bilder/-Fonts aus CDN per eng erweitertem CSP `img-src`/`font-src` zulassen, externe JS-/CSS-Quellen nicht pauschal freigeben; MIME-Fallback für häufige Bilder ergänzt.
+- [x] Same-origin-Login-/CSRF-Header gezielt weitergeben, Referer sicher auf den eigenen Favoritenpfad begrenzen und nur dokumentierte iframe-Navigation per 307 zurückführen.
+- [x] Synthetische Contract-Tests für personal vs. Wiki, Bild-MIME, sichere Reroutes, Referer-/Cookie-Grenzen und CSP ergänzt.
+- [ ] GitHub-CI und PR-Merge bestätigen.
+- [ ] Live-Abnahme gegen ATOSS und weitere betroffene Apps: Bilder, interaktiver Login, Session/Cookie, 2 Benutzer, Konsole/Netzwerkanfragen, externe SSO-Grenzen; keine produktiven Anmeldedaten in GitHub.
+- [ ] [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40) dedizierte Browser-Origin pro freiem Favoriten; Sicherheit eigener und fremder Skripte noch nicht final gewährleistet.

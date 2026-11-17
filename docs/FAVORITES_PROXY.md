@@ -1,3 +1,53 @@
+## 17.11.2026 – Bilder, dynamische Assets und Login-Navigation bei eigenen Favoriten
+
+**Beobachtung:** Manche selbst eingetragene Firmenwebseiten (beispielsweise
+ATOSS) zeigen unvollständige Bilder oder lassen den Login nicht zuverlässig
+durchlaufen. Diese Änderung adressiert konkrete Kompatibilitätslücken im
+Shared-Pfadhost `apps-plenaro.../site-<UUID>/`, **ohne** pauschal
+fremde Hosts serverseitig zu proxyn.
+
+- Bei `site-*` kann der frühe Browser-Shim jetzt **exakt die konfigurierte
+  HTTPS-Origin** in dynamischen `fetch`, `XMLHttpRequest`, `Request`,
+  `img.src`, `img.srcset`, `source.srcset`, lazy `data-src`,
+  `form.action` und SPA-`history.pushState/replaceState`-Navigationen
+  umschreiben. Fremde Server/Protokolle werden nicht auf den Server-Proxy
+  umgeleitet. Der zentrale Wiki-Shim bleibt bewusst auf die bisherigen
+  Pfade begrenzt.
+- Dynamisch per `innerHTML` eingefügte Bild-/Formularelemente werden
+  bei persönlichen Favoriten nachträglich pfadkorrigiert; CookieJar,
+  Eigentümerprüfung und Bootstrap-Routen bleiben unverändert.
+- HTTPS-Bilder und -Fonts von externen CDNs werden in der iframe-CSP
+  zugelassen, **nicht** beliebige externe Skripte oder CSS. Keine HTTP-
+  Mixed-Content-Freigabe; Frames behalten `Referrer-Policy: no-referrer`.
+- Generische `text/plain`-/`application/octet-stream`-Antworten werden
+  bei bekannten Bild-Dateiendungen als `image/png`, `image/jpeg`,
+  `image/webp`, `image/avif`, `image/gif`, `image/svg+xml`,
+  `image/x-icon` oder `image/bmp` ausgeliefert, ohne Bilddaten zu ändern.
+- Auth-/CSRF-Header aus Browser-API-Aufrufen werden **nur an den bereits
+  fixierten HTTPS-Origin** weitergeleitet; Browser-Cookies werden nie an
+  fremde Upstreams übertragen. Ein GET aus einem anderen Favoriten oder
+  der gemeinsamen Root wird nicht als Upstream-Referer interpretiert.
+- Nur ein vom Browser als `same-origin` ausgewiesener
+  **iframe-Dokument-GET** mit Referer aus genau einem bestehenden
+  `/site-<UUID>/` erhält bei root-absoluter Login-Navigation einen
+  `307` zurück unter seinen eigenen Favoritenpfad.
+  Cross-Origin-Navigation, POST, Assets, andere Favoriten, Wiki und
+  `/_plenaro` erhalten diese Ausnahme **nicht**.
+
+**Grenzen:** Der Proxy simuliert keinen vollständigen Browser. Anwendungen
+mit externer SSO-/OAuth-Login-Domain, CAPTCHA, MFA, WebSockets,
+Service-Worker-Abhängigkeit oder Anti-Embedding können weiterhin
+scheitern. Eine komplette Unterstützung des konkreten ATOSS-Systems ist
+ohne echten Browser-Network-Test nicht behauptbar. Bei Fehlern:
+Browser-Netzwerk (nur URL-Pfad, Status, Response-Headers, Console),
+keine Login-POST-Bodies, Cookies, Token oder HAR-Dateien mit
+Zugangsdaten veröffentlichen. Die weiterhin offene
+[Origin-Isolation #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40)
+ist eine eigenständige Sicherheitsvoraussetzung, bevor frei gewählte
+fremde JS-Anwendungen generell unbedenklich eingebettet werden können.
+
+---
+
 ## Persönliche interne HTTPS-Favoriten ohne .env-Freigabeliste (Stand 17.11.2026)
 
 Mit der aktuellen Korrektur dürfen authentifizierte Nutzer unter

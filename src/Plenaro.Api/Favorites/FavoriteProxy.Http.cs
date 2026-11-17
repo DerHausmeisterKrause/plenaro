@@ -249,19 +249,27 @@ public sealed partial class FavoriteProxy
           const base = "__PREFIX__";
           const routes = ["/rest/", "/s/"];
           const allRootPaths = __ALL_ROOT_PATHS__;
+          // Only the personal favorite knows its own approved HTTPS upstream.
+          // Allow exact-origin browser URLs to be routed through its proxy;
+          // never rewrite unrelated domains or pass them server-side.
+          const upstreamOrigin = __UPSTREAM_ORIGIN__;
           function rewrite(value) {
             if (typeof value !== "string" &&
                 !(typeof URL !== "undefined" && value instanceof URL))
               return value;
             const raw = String(value);
             if (!raw.startsWith("/") &&
-                !raw.startsWith(window.location.origin + "/"))
+                !raw.startsWith(window.location.origin + "/") &&
+                !(allRootPaths && upstreamOrigin &&
+                  raw.startsWith(upstreamOrigin + "/")))
               return value;
             if (raw.startsWith("//")) return value;
             let url;
             try { url = new URL(raw, window.location.href); }
             catch (_) { return value; }
-            if (url.origin !== window.location.origin ||
+            if ((url.origin !== window.location.origin &&
+                 !(allRootPaths && upstreamOrigin &&
+                   url.origin === upstreamOrigin)) ||
                 url.pathname === base || url.pathname.startsWith(base + "/") ||
                 url.pathname.startsWith("/_plenaro/") ||
                 (!allRootPaths &&
@@ -308,28 +316,54 @@ public sealed partial class FavoriteProxy
               return nativeBeacon.call(this, rewrite(url), data);
             };
           }
-          const setAttr = Element.prototype.setAttribute;
-          function isAsset(node) {
-            return node && node.nodeType === 1 &&
-              /^(SCRIPT|LINK|IMG)$/.test(node.tagName);
+          // Modern image galleries often use srcset, <picture>/<source>,
+          // lazy-load data-src and dynamically assigned form actions.
+          // These routes are app-scoped; never modify external CDN origins.
+          function rewriteSrcset(value) {
+            if (typeof value !== "string") return value;
+            return value.replace(
+              /(^|,\s*)(\/(?!\/)[^\s,]+|https?:\/\/[^\s,]+)/g,
+              function (_match, leading, candidate) {
+                return leading + rewrite(candidate);
+              });
           }
+          function controlledAttribute(node, name) {
+            if (!node || node.nodeType !== 1) return false;
+            const attr = String(name).toLowerCase();
+            const tag = node.tagName;
+            if (tag === "SCRIPT") return attr === "src";
+            if (tag === "LINK") return attr === "href";
+            if (tag === "IMG") return attr === "src" ||
+                (allRootPaths && ["srcset","data-src","data-srcset",
+                  "data-original"].includes(attr));
+            if (!allRootPaths) return false;
+            if (tag === "SOURCE") return attr === "src" || attr === "srcset";
+            if (tag === "VIDEO") return attr === "poster" || attr === "src";
+            if (tag === "FORM") return attr === "action";
+            return false;
+          }
+          function correctAttribute(node, name, value) {
+            if (!controlledAttribute(node, name)) return value;
+            return /srcset/i.test(name) ? rewriteSrcset(value) : rewrite(value);
+          }
+          const setAttr = Element.prototype.setAttribute;
           Element.prototype.setAttribute = function (name, value) {
-            if (isAsset(this) && /^(src|href)$/i.test(name))
-              value = rewrite(value);
-            return setAttr.call(this, name, value);
+            return setAttr.call(this, name, correctAttribute(this, name, value));
           };
           function adjust(node) {
-            if (!isAsset(node)) return;
-            const attr = node.tagName === "LINK" ? "href" : "src";
-            const current = node.getAttribute(attr);
-            if (current !== null) {
-              const corrected = rewrite(current);
-              if (corrected !== current) setAttr.call(node, attr, corrected);
+            if (!node || node.nodeType !== 1) return;
+            const names = ["src","href","srcset","poster","action",
+              "data-src","data-srcset","data-original"];
+            for (const name of names) {
+              if (!controlledAttribute(node, name)) continue;
+              const current = node.getAttribute(name);
+              if (current === null) continue;
+              const corrected = correctAttribute(node, name, current);
+              if (corrected !== current)
+                setAttr.call(node, name, corrected);
             }
           }
-          // src=/s/... and href=/s/... property assignments do not
-          // necessarily call the JavaScript setAttribute override. Hook the
-          // native setters without replacing the native descriptor/getter.
+          // URL property setters do not necessarily call setAttribute.
           function patchAssetUrlProperty(prototype, property) {
             if (!prototype) return;
             const descriptor = Object.getOwnPropertyDescriptor(prototype, property);
@@ -338,7 +372,8 @@ public sealed partial class FavoriteProxy
             Object.defineProperty(prototype, property, {
               get: descriptor.get,
               set: function (value) {
-                return descriptor.set.call(this, rewrite(value));
+                return descriptor.set.call(this,
+                  correctAttribute(this, property, value));
               },
               enumerable: descriptor.enumerable,
               configurable: true
@@ -348,8 +383,32 @@ public sealed partial class FavoriteProxy
             patchAssetUrlProperty(HTMLScriptElement.prototype, "src");
           if (typeof HTMLLinkElement !== "undefined")
             patchAssetUrlProperty(HTMLLinkElement.prototype, "href");
-          if (typeof HTMLImageElement !== "undefined")
+          if (typeof HTMLImageElement !== "undefined") {
             patchAssetUrlProperty(HTMLImageElement.prototype, "src");
+            if (allRootPaths)
+              patchAssetUrlProperty(HTMLImageElement.prototype, "srcset");
+          }
+          if (allRootPaths) {
+            if (typeof HTMLSourceElement !== "undefined") {
+              patchAssetUrlProperty(HTMLSourceElement.prototype, "src");
+              patchAssetUrlProperty(HTMLSourceElement.prototype, "srcset");
+            }
+            if (typeof HTMLVideoElement !== "undefined")
+              patchAssetUrlProperty(HTMLVideoElement.prototype, "poster");
+            if (typeof HTMLFormElement !== "undefined")
+              patchAssetUrlProperty(HTMLFormElement.prototype, "action");
+            // SPA login/navigation often changes history rather than the
+            // document. Keep the new same-origin path beneath /site-<id>/.
+            for (const key of ["pushState","replaceState"]) {
+              const original = history[key];
+              if (typeof original !== "function") continue;
+              history[key] = function (state, unused, url) {
+                if (url !== undefined && url !== null)
+                  url = rewrite(url);
+                return original.call(this, state, unused, url);
+              };
+            }
+          }
           const append = Node.prototype.appendChild;
           Node.prototype.appendChild = function (node) {
             adjust(node);
@@ -360,6 +419,35 @@ public sealed partial class FavoriteProxy
             adjust(node);
             return insert.call(this, node, reference);
           };
+          // innerHTML/template fragments bypass setAttribute and DOM setters.
+          // Correct their resource URLs once they enter the document.
+          if (allRootPaths && typeof MutationObserver === "function") {
+            const observer = new MutationObserver(function (mutations) {
+              for (const change of mutations) {
+                if (change.type === "attributes") {
+                  adjust(change.target);
+                } else {
+                  for (const node of change.addedNodes) {
+                    adjust(node);
+                    if (node.querySelectorAll)
+                      node.querySelectorAll(
+                        "img,source,script,link,video,form"
+                      ).forEach(adjust);
+                  }
+                }
+              }
+            });
+            const watch = function () {
+              if (!document.documentElement) return;
+              observer.observe(document.documentElement, {
+                subtree:true, childList:true, attributes:true,
+                attributeFilter:["src","srcset","href","poster",
+                  "action","data-src","data-srcset","data-original"]
+              });
+            };
+            if (document.documentElement) watch();
+            else document.addEventListener("DOMContentLoaded",watch,{once:true});
+          }
         })();
         </script>
         """;
@@ -370,7 +458,13 @@ public sealed partial class FavoriteProxy
     private static string InjectPersonalSitePathShim(string html,string pathPrefix)=>
         InjectPathShim(html,pathPrefix,true);
 
-    private static string InjectPathShim(string html,string pathPrefix,bool allRootPaths)
+    private static string InjectPersonalSitePathShimWithOrigin(
+        string html,string pathPrefix,Uri upstream)=>
+        InjectPathShim(html,pathPrefix,true,
+            upstream.GetLeftPart(UriPartial.Authority));
+
+    private static string InjectPathShim(string html,string pathPrefix,
+        bool allRootPaths,string? upstreamOrigin=null)
     {
         if(pathPrefix.Length==0 ||
            html.Contains("data-plenaro-browser-shim",StringComparison.Ordinal))
@@ -381,7 +475,10 @@ public sealed partial class FavoriteProxy
             throw new InvalidOperationException("Invalid shim path.");
         var script=BrowserPathShim.Replace("__PREFIX__",pathPrefix,
             StringComparison.Ordinal).Replace("__ALL_ROOT_PATHS__",
-                allRootPaths?"true":"false",StringComparison.Ordinal);
+                allRootPaths?"true":"false",StringComparison.Ordinal)
+            .Replace("__UPSTREAM_ORIGIN__",
+                JsonSerializer.Serialize(allRootPaths?upstreamOrigin:null),
+                StringComparison.Ordinal);
         return Regex.Replace(html,@"<head\b[^>]*>",
             match=>match.Value+script,RegexOptions.IgnoreCase|
             RegexOptions.CultureInvariant,TimeSpan.FromSeconds(1));
@@ -478,6 +575,13 @@ public sealed partial class FavoriteProxy
             ".json"=>"application/json",
             ".webmanifest"=>"application/manifest+json",
             ".svg"=>"image/svg+xml",
+            ".png" or ".apng"=>"image/png",
+            ".jpg" or ".jpeg" or ".jpe"=>"image/jpeg",
+            ".webp"=>"image/webp",
+            ".gif"=>"image/gif",
+            ".avif"=>"image/avif",
+            ".ico"=>"image/x-icon",
+            ".bmp"=>"image/bmp",
             ".wasm"=>"application/wasm",
             _=>null
         };
@@ -551,6 +655,25 @@ public sealed partial class FavoriteProxy
              (pathPrefix.Length>0&&!value.AbsolutePath.StartsWith(
                 pathPrefix+"/",StringComparison.Ordinal))))return false;
         return true;
+    }
+
+    // Never derive an upstream Referer from another favorite, the shared
+    // browser root, or a path shorter than the current /site-<id>/ prefix.
+    // For GET resources those references are optional; for writes the
+    // AllowedMutation gate already requires the current favorite.
+    private static Uri? UpstreamReferer(Uri external,Uri upstream,
+        string pathPrefix,string? raw)
+    {
+        if(!Uri.TryCreate(raw,UriKind.Absolute,out var from)||
+           !SameUpstream(external,from))return null;
+        var path=from.AbsolutePath;
+        if(pathPrefix.Length>0){
+            if(path==pathPrefix)path="/";
+            else if(path.StartsWith(pathPrefix+"/",StringComparison.Ordinal))
+                path=path[pathPrefix.Length..];
+            else return null;
+        }
+        return new Uri(upstream,(path.Length==0?"/":path)+from.Query);
     }
 
     private static async Task<byte[]> ReadLimitedAsync(HttpContent content,
@@ -650,9 +773,13 @@ public sealed partial class FavoriteProxy
             if(ctx.Request.ContentLength is { } len)
                 req.Content.Headers.ContentLength=len;
         }
+        // Same-origin JavaScript login/API calls sometimes carry bearer or
+        // CSRF headers. The destination is already pinned to this favorite's
+        // exact HTTPS origin; never forward browser cookies or Host headers.
         foreach(var header in new[]{"Accept","Accept-Language","User-Agent",
             "X-Requested-With","X-Requested-By","If-None-Match","If-Modified-Since",
-            "Range"}){
+            "Range","Authorization","X-CSRF-Token","X-CSRFToken","X-XSRF-TOKEN",
+            "X-Atlassian-Token"}){
             if(ctx.Request.Headers.TryGetValue(header,out var values))
                 req.Headers.TryAddWithoutValidation(header,values.ToArray());
         }
@@ -662,14 +789,10 @@ public sealed partial class FavoriteProxy
                 StringComparison.OrdinalIgnoreCase))
             req.Headers.TryAddWithoutValidation("Origin",
                 session.Upstream.GetLeftPart(UriPartial.Authority));
-        if(ctx.Request.Headers.TryGetValue("Referer",out var refValue)&&
-           Uri.TryCreate(refValue.ToString(),UriKind.Absolute,out var from)&&
-           SameUpstream(external,from)){
-            var refPath=pathPrefix.Length>0
-                ? from.AbsolutePath[pathPrefix.Length..] : from.AbsolutePath;
-            req.Headers.Referrer=new Uri(session.Upstream,
-                (refPath.Length==0?"/":refPath)+from.Query);
-        }
+        if(ctx.Request.Headers.TryGetValue("Referer",out var refValue) &&
+           UpstreamReferer(external,session.Upstream,pathPrefix,
+               refValue.ToString()) is { } upstreamReferer)
+            req.Headers.Referrer=upstreamReferer;
         try{
             using var res=await session.Client.SendAsync(req,
                 HttpCompletionOption.ResponseHeadersRead,ct);
@@ -749,7 +872,8 @@ public sealed partial class FavoriteProxy
                     : Rewrite(html,session.Upstream,external,pathPrefix);
                 if(isHtml&&pathPrefix.Length>0){
                     if(session.Slug.StartsWith("site-",StringComparison.Ordinal))
-                        transformed=InjectPersonalSitePathShim(transformed,pathPrefix);
+                        transformed=InjectPersonalSitePathShimWithOrigin(
+                            transformed,pathPrefix,session.Upstream);
                     else if(FavoritePathRouting.BrowserShimEnabled(
                         configuration["PLENARO_FAVORITES_BROWSER_SHIM_SLUGS"],
                         session.Slug))
