@@ -43,6 +43,102 @@ try{
 }catch(InvalidOperationException){invalidFavoritesDomainRejected=true;}
 Assert(invalidFavoritesDomainRejected,"invalid base domains fail closed");
 
+// WPF WebView2 DOM autofill may receive a password only when each
+// personal site has its own browser origin (Issue #40). Explicit path-host
+// sharing is never sufficient, even though browser cookies are path-scoped.
+const string personalSlug="site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const string uniqueHost="site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-plenaro.example.org";
+var isolatedConfig=new ConfigurationBuilder().AddInMemoryCollection(
+    new Dictionary<string,string?>{
+        ["Security:RequireHttps"]="true",
+        ["PLENARO_PUBLIC_ORIGIN"]="https://portal.example.org",
+        ["PLENARO_ZNUNY_PROXY_ORIGIN"]="https://tickets.example.org",
+        ["PLENARO_FAVORITES_PATH_ORIGIN"]="https://apps-plenaro.example.org",
+        ["PLENARO_FAVORITES_HOST_TEMPLATE"]="{slug}-plenaro.example.org"
+    }).Build();
+var originResolver=typeof(FavoriteProxy).GetMethod(
+    "ProxyOrigin",BindingFlags.Instance|BindingFlags.NonPublic)!;
+var isolatedProxy=new FavoriteProxy(isolatedConfig);
+var isolatedPersonal=(Uri?)originResolver.Invoke(isolatedProxy,
+    new object[]{personalSlug});
+var sharedWiki=(Uri?)originResolver.Invoke(isolatedProxy,
+    new object[]{"wiki"});
+Assert(isolatedPersonal?.Host==uniqueHost &&
+    isolatedPersonal.AbsolutePath=="/" &&
+    sharedWiki?.AbsoluteUri=="https://apps-plenaro.example.org/wiki/",
+    "configured wildcard isolates personal favorites by default, retains wiki shared routing");
+var sharedOnlyConfig=new ConfigurationBuilder().AddInMemoryCollection(
+    new Dictionary<string,string?>{
+        ["Security:RequireHttps"]="true",
+        ["PLENARO_PUBLIC_ORIGIN"]="https://portal.example.org",
+        ["PLENARO_ZNUNY_PROXY_ORIGIN"]="https://tickets.example.org",
+        ["PLENARO_FAVORITES_PATH_ORIGIN"]="https://apps-plenaro.example.org"
+    }).Build();
+var sharedPersonal=(Uri?)originResolver.Invoke(
+    new FavoriteProxy(sharedOnlyConfig),new object[]{personalSlug});
+Assert(sharedPersonal?.AbsoluteUri==
+    "https://apps-plenaro.example.org/"+personalSlug+"/",
+    "without dedicated wildcard, existing personal path routing remains working");
+
+var autoFillType=typeof(FavoriteProxy).Assembly.GetType(
+    "Plenaro.Api.Favorites.FavoriteDomAutoLogin")!;
+var eligibleMethod=autoFillType.GetMethod("Eligible",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+bool DomAllowed(string slug,bool auto,bool path,string? username,
+    string host,string? expected)=>(bool)eligibleMethod.Invoke(null,
+    new object?[]{slug,auto,path,username,host,expected})!;
+Assert(DomAllowed(personalSlug,true,false,"demo",uniqueHost,uniqueHost) &&
+    !DomAllowed(personalSlug,true,true,"demo",
+        "apps-plenaro.example.org",uniqueHost) &&
+    !DomAllowed(personalSlug,false,false,"demo",uniqueHost,uniqueHost) &&
+    !DomAllowed(personalSlug,true,false,"",uniqueHost,uniqueHost) &&
+    !DomAllowed(personalSlug,true,false,"demo","wiki-plenaro.example.org",uniqueHost) &&
+    !DomAllowed("wiki",true,false,"demo","wiki-plenaro.example.org",
+        "wiki-plenaro.example.org") &&
+    !DomAllowed("site-abcd",true,false,"demo",uniqueHost,uniqueHost) &&
+    !DomAllowed(personalSlug,true,false,"demo",uniqueHost,null),
+    "browser autofill rejects shared paths, other origins and missing ownership");
+
+var injectDom=autoFillType.GetMethod("Inject",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+const string syntheticSecret="safe</script><script>danger()</script>";
+var injectedDom=(string)injectDom.Invoke(null,new object[]{
+    "<!doctype html><html><head><title>Login</title></head><body></body></html>",
+    "demo.user",syntheticSecret,uniqueHost,
+    "ABCDEF0123456789ABCDEF0123456789"})!;
+Assert(injectedDom.Contains("data-plenaro-dom-autofill",StringComparison.Ordinal) &&
+    injectedDom.Contains("input.z-focustextbox-real",StringComparison.Ordinal) &&
+    injectedDom.Contains("HTMLInputElement.prototype",StringComparison.Ordinal) &&
+    injectedDom.Contains("setInputValue",StringComparison.Ordinal) &&
+    injectedDom.Contains("MutationObserver",StringComparison.Ordinal) &&
+    injectedDom.Contains("requestSubmit",StringComparison.Ordinal) &&
+    injectedDom.Contains("const expectedHost = \""+uniqueHost+"\";",
+        StringComparison.Ordinal) &&
+    injectedDom.Contains("const username = \"demo.user\";",
+        StringComparison.Ordinal) &&
+    !injectedDom.Contains(syntheticSecret,StringComparison.Ordinal) &&
+    !injectedDom.Contains("<script>danger()",StringComparison.Ordinal),
+    "WPF-style script inserts before app scripts, sanitizes credentials and uses DOM events");
+var twice=(string)injectDom.Invoke(null,new object[]{
+    injectedDom,"demo.user","test",uniqueHost,
+    "ABCDEF0123456789ABCDEF0123456789"})!;
+Assert(twice==injectedDom,"dedicated autofill injection is idempotent");
+var noHead=(string)injectDom.Invoke(null,new object[]{
+    "<html><body><input type='password'></body></html>",
+    "demo.user","secret",uniqueHost,
+    "ABCDEF0123456789ABCDEF0123456789"})!;
+Assert(noHead.Contains("<body><script data-plenaro-dom-autofill>",
+    StringComparison.Ordinal),"headless ATOSS login HTML gets its own bootstrap");
+var unsafeRejected=false;
+try{
+    injectDom.Invoke(null,new object[]{
+        "<html><head></head></html>",
+        "demo.user","secret","untrusted<script>",
+        "ABCDEF0123456789ABCDEF0123456789"});
+}catch(TargetInvocationException e) when(
+    e.InnerException is InvalidOperationException){unsafeRejected=true;}
+Assert(unsafeRejected,"unsafe host cannot be rendered into login script");
+
 // The secure proxy must accept private LAN peers (including IPv6 ULA),
 // but never loopback, link-local, any/unspecified, multicast or metadata
 // addresses. This is checked again when the actual TCP connection opens.
