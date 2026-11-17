@@ -307,13 +307,19 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             session.Expired||session.Slug!=slug||
             !_users.TryGetValue((session.User,session.Favorite),out var active)||
             active!=key){
-            ctx.Response.StatusCode=401;return;
+            await ProxyNavigationErrorAsync(ctx,401,"proxy-session-expired",
+                "Die Favoriten-Sitzung ist nicht mehr gültig. "+
+                "Klicke in Plenaro auf „Neu verbinden“.",ct);
+            return;
         }
         // Reject when the account, favorite or organizational approval
         // was revoked, even when the existing proxy cookie is still valid.
         if(!await StillApprovedAsync(ctx,session,ct)){
             Remove(key,session);
-            ctx.Response.StatusCode=403;return;
+            await ProxyNavigationErrorAsync(ctx,403,"proxy-session-revoked",
+                "Die Favoriten-Verbindung wurde geändert oder deaktiviert. "+
+                "Bitte die Webseite neu öffnen.",ct);
+            return;
         }
         // The app proxy host never enters the normal Plenaro route pipeline.
         // /api and /health belong to the approved upstream app here, while
