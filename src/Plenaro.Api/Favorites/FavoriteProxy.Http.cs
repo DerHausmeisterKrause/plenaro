@@ -76,63 +76,176 @@ public sealed partial class FavoriteProxy
         }catch(System.Text.Json.JsonException){return false;}
     }
 
-    // Standard HTML username/password forms only. Non-standard sign-in
-    // (SSO, 2FA, JavaScript-generated fields) remains interactive. Credentials
-    // are NEVER emitted to the browser, GET query or another upstream origin.
+    // Desktop parity for classic HTML forms: detect username fields by
+    // autocomplete/name/id/placeholder, including single unfamiliar text
+    // inputs such as the real login fields used by some enterprise apps.
+    // This remains a server-to-server POST: credentials never enter the
+    // favorite iframe/HTML/browser. Do not attempt JS forms, SSO or MFA
+    // by guessing an API endpoint or injecting a password into script.
+    private static bool UsernameHint(string attrs)
+    {
+        var autocomplete=Attribute(attrs,"autocomplete")??"";
+        if(autocomplete.Split(' ',StringSplitOptions.RemoveEmptyEntries)
+            .Any(x=>x.Equals("username",StringComparison.OrdinalIgnoreCase) ||
+                    x.Equals("email",StringComparison.OrdinalIgnoreCase)))return true;
+        var signature=string.Join(" ",new[]{
+            Attribute(attrs,"name"),Attribute(attrs,"id"),
+            Attribute(attrs,"placeholder"),Attribute(attrs,"aria-label")
+        }.Where(x=>x is not null));
+        return Regex.IsMatch(signature,
+            @"user(?:name|id|login)?|benutzer(?:name|kennung)?|e-?mail|login(?:name|id)?|account(?:name|id)?|mitarbeiter(?:nummer|id)?",
+            RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,
+            TimeSpan.FromMilliseconds(100));
+    }
+
+    private static bool PasswordHint(string attrs)
+    {
+        var type=Attribute(attrs,"type")??"text";
+        var autocomplete=Attribute(attrs,"autocomplete")??"";
+        return type.Equals("password",StringComparison.OrdinalIgnoreCase) &&
+            !autocomplete.Split(' ',StringSplitOptions.RemoveEmptyEntries)
+                .Any(x=>x.Equals("new-password",StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Build one safe request, or none. Never send credentials via GET,
+    // to another host, to a registration/reset form, or to a form with
+    // multiple password fields (possible password-change dialog).
+    // A form requires an actual named HTML input; JS-only fields are not
+    // synthesizable without an interactive browser.
+    private static HttpRequestMessage? BuildHtmlLoginRequest(
+        string html,Uri page,Uri origin,string username,string password)
+    {
+        foreach(Match form in FormRegex.Matches(html)){
+            var formAttrs=form.Groups["attrs"].Value;
+            if(!string.Equals(Attribute(formAttrs,"method"),"post",
+                StringComparison.OrdinalIgnoreCase))continue;
+            var action=Attribute(formAttrs,"action")??page.AbsoluteUri;
+            if(!Uri.TryCreate(page,action,out var target)||
+               !SameUpstream(origin,target)||
+               Regex.IsMatch(target.AbsolutePath,
+                   @"(?:^|/)(?:register|registration|signup|sign-up|reset|forgot|change-password)(?:/|$)",
+                   RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,
+                   TimeSpan.FromMilliseconds(100)))continue;
+            var candidates=new List<(string Name,string Attrs,bool Hinted)>();
+            var result=new List<KeyValuePair<string,string>>();
+            string? passwordName=null;
+            var passwordCount=0;
+            foreach(Match input in InputRegex.Matches(form.Groups["body"].Value)){
+                var attrs=input.Groups["attrs"].Value;
+                if(Attribute(attrs,"disabled") is not null)continue;
+                var name=Attribute(attrs,"name");
+                if(string.IsNullOrWhiteSpace(name))continue;
+                var type=(Attribute(attrs,"type")??"text").Trim().ToLowerInvariant();
+                if(type=="password"){
+                    if(!PasswordHint(attrs))continue;
+                    passwordCount++;
+                    passwordName=name;
+                }else if(type is "text" or "email" or "tel"){
+                    if((Attribute(attrs,"autocomplete")??"")
+                        .Contains("one-time-code",StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    candidates.Add((name,attrs,UsernameHint(attrs)||
+                        type=="email"));
+                }else if(type=="hidden"){
+                    // Preserve the page's original CSRF/anti-forgery token.
+                    result.Add(new(name,Attribute(attrs,"value")??""));
+                }
+            }
+            if(passwordCount!=1||passwordName is null)continue;
+            var hinted=candidates.Where(x=>x.Hinted).ToArray();
+            // Prefer one clearly identified username field; if none is
+            // identified, only one plain text/email input is unambiguous.
+            var chosen=hinted.Length==1?hinted[0]:
+                hinted.Length==0&&candidates.Count==1?candidates[0]:default;
+            if(string.IsNullOrEmpty(chosen.Name))continue;
+            result.Add(new(chosen.Name,username));
+            result.Add(new(passwordName,password));
+            // One login submit button's name/value can be significant.
+            var submitFields=InputRegex.Matches(form.Groups["body"].Value)
+                .Cast<Match>().Select(m=>m.Groups["attrs"].Value)
+                .Where(a=>string.Equals(Attribute(a,"type"),"submit",
+                    StringComparison.OrdinalIgnoreCase) &&
+                    Attribute(a,"name") is not null).ToArray();
+            if(submitFields.Length==1)
+                result.Add(new(Attribute(submitFields[0],"name")!,
+                    Attribute(submitFields[0],"value")??""));
+            var request=new HttpRequestMessage(HttpMethod.Post,target){
+                Content=new FormUrlEncodedContent(result)
+            };
+            request.Headers.Referrer=page;
+            request.Headers.TryAddWithoutValidation("Origin",
+                origin.GetLeftPart(UriPartial.Authority));
+            return request;
+        }
+        return null;
+    }
+
+    private static readonly Regex LoginLinkRegex=new(
+        @"<a\b(?<attrs>[^>]*)>(?<text>.*?)</a\s*>",
+        RegexOptions.Compiled|RegexOptions.Singleline|RegexOptions.IgnoreCase,
+        TimeSpan.FromSeconds(1));
+
+    // The saved URL might be the app landing page rather than the login
+    // document. Follow only ONE explicit same-origin "Log in" HTML link,
+    // never guessed paths or a user-controlled cross-domain SSO redirect.
+    private static Uri? FindHtmlLoginLink(string html,Uri page,Uri origin)
+    {
+        var matches=new HashSet<string>(StringComparer.Ordinal);
+        foreach(Match link in LoginLinkRegex.Matches(html)){
+            var href=Attribute(link.Groups["attrs"].Value,"href");
+            if(string.IsNullOrWhiteSpace(href)||
+               !Uri.TryCreate(page,href,out var target)||
+               !SameUpstream(origin,target) || target==page)continue;
+            var label=Regex.Replace(link.Groups["text"].Value,
+                "<[^>]*>","",RegexOptions.CultureInvariant,
+                TimeSpan.FromMilliseconds(100));
+            var path=target.AbsolutePath;
+            if(!Regex.IsMatch(label,
+                   @"\b(anmelden|einloggen|login|log in|sign in)\b",
+                   RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,
+                   TimeSpan.FromMilliseconds(100)) &&
+               !Regex.IsMatch(path,
+                   @"(?:^|/)(?:login|signin|sign-in)(?:/|\.|$)",
+                   RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,
+                   TimeSpan.FromMilliseconds(100)))continue;
+            matches.Add(target.AbsoluteUri);
+        }
+        return matches.Count==1?new Uri(matches.Single()):null;
+    }
+
+    // Bounded classic HTML auto-login: one landing GET, optionally one
+    // discovered login-page GET, exactly ONE POST and optional same-origin
+    // redirect follow. Cookies are retained by the private HttpClient.
     private static async Task TryLoginAsync(HttpClient client,Uri origin,Uri entry,
         string username,string password,CancellationToken ct)
     {
-        using var initial=new HttpRequestMessage(HttpMethod.Get,entry);
-        using var response=await client.SendAsync(initial,
-            HttpCompletionOption.ResponseHeadersRead,ct);
-        if(!response.IsSuccessStatusCode ||
-           response.Content.Headers.ContentLength>262144)return;
-        var bytes=await ReadLimitedAsync(response.Content,262144,ct);
-        var html=Encoding.UTF8.GetString(bytes);
-        if(!LooksLikeHtml(html))return;
-        foreach(Match form in FormRegex.Matches(html)){
-            if(Attribute(form.Groups["attrs"].Value,"method") is { } method &&
-                !method.Equals("post",StringComparison.OrdinalIgnoreCase))
-                continue;
-            var names=new List<KeyValuePair<string,string>>();
-            var userFound=false;
-            var passwordFound=false;
-            foreach(Match input in InputRegex.Matches(form.Groups["body"].Value)){
-                var attrs=input.Groups["attrs"].Value;
-                var name=Attribute(attrs,"name");
-                if(string.IsNullOrEmpty(name))continue;
-                var type=Attribute(attrs,"type")?.ToLowerInvariant()??"text";
-                if(type=="password"){
-                    names.Add(new(name,password));passwordFound=true;
-                }else if(type=="text"||type=="email"||type==""){
-                    if(name.Equals("User",StringComparison.OrdinalIgnoreCase)||
-                       name.Equals("username",StringComparison.OrdinalIgnoreCase)||
-                       name.Equals("login",StringComparison.OrdinalIgnoreCase)||
-                       name.Equals("UserLogin",StringComparison.OrdinalIgnoreCase)||
-                       name.Equals("email",StringComparison.OrdinalIgnoreCase)){
-                        names.Add(new(name,username));userFound=true;
-                    }
-                }else if(type=="hidden"||type=="submit"){
-                    names.Add(new(name,Attribute(attrs,"value")??""));
-                }
-            }
-            if(!userFound||!passwordFound)continue;
-            var action=Attribute(form.Groups["attrs"].Value,"action")??"/";
-            if(!Uri.TryCreate(entry,action,out var target)||
-                !SameUpstream(origin,target))return;
-            using var req=new HttpRequestMessage(HttpMethod.Post,target){
-                Content=new FormUrlEncodedContent(names)
-            };
-            using var result=await client.SendAsync(req,
+        var current=entry;
+        for(var pageIndex=0;pageIndex<2;pageIndex++){
+            using var initial=new HttpRequestMessage(HttpMethod.Get,current);
+            using var response=await client.SendAsync(initial,
                 HttpCompletionOption.ResponseHeadersRead,ct);
-            if(result.Headers.Location is { } next){
-                var redirect=new Uri(target,next);
-                if(!SameUpstream(origin,redirect))return;
-                using var follow=new HttpRequestMessage(HttpMethod.Get,redirect);
-                using var confirmed=await client.SendAsync(follow,
+            if(!response.IsSuccessStatusCode ||
+               response.Content.Headers.ContentLength>262144)return;
+            var bytes=await ReadLimitedAsync(response.Content,262144,ct);
+            var html=Encoding.UTF8.GetString(bytes);
+            if(!LooksLikeHtml(html))return;
+            using var request=BuildHtmlLoginRequest(html,current,origin,
+                username,password);
+            if(request is not null){
+                using var result=await client.SendAsync(request,
                     HttpCompletionOption.ResponseHeadersRead,ct);
+                if(result.Headers.Location is { } next){
+                    var redirect=new Uri(request.RequestUri!,next);
+                    if(!SameUpstream(origin,redirect))return;
+                    using var follow=new HttpRequestMessage(HttpMethod.Get,redirect);
+                    using var confirmed=await client.SendAsync(follow,
+                        HttpCompletionOption.ResponseHeadersRead,ct);
+                }
+                return;
             }
-            return;
+            if(pageIndex==0 && FindHtmlLoginLink(html,current,origin) is { } found)
+                current=found;
+            else return;
         }
     }
 
