@@ -575,6 +575,13 @@ public sealed partial class FavoriteProxy
             ".json"=>"application/json",
             ".webmanifest"=>"application/manifest+json",
             ".svg"=>"image/svg+xml",
+            ".png" or ".apng"=>"image/png",
+            ".jpg" or ".jpeg" or ".jpe"=>"image/jpeg",
+            ".webp"=>"image/webp",
+            ".gif"=>"image/gif",
+            ".avif"=>"image/avif",
+            ".ico"=>"image/x-icon",
+            ".bmp"=>"image/bmp",
             ".wasm"=>"application/wasm",
             _=>null
         };
@@ -648,6 +655,25 @@ public sealed partial class FavoriteProxy
              (pathPrefix.Length>0&&!value.AbsolutePath.StartsWith(
                 pathPrefix+"/",StringComparison.Ordinal))))return false;
         return true;
+    }
+
+    // Never derive an upstream Referer from another favorite, the shared
+    // browser root, or a path shorter than the current /site-<id>/ prefix.
+    // For GET resources those references are optional; for writes the
+    // AllowedMutation gate already requires the current favorite.
+    private static Uri? UpstreamReferer(Uri external,Uri upstream,
+        string pathPrefix,string? raw)
+    {
+        if(!Uri.TryCreate(raw,UriKind.Absolute,out var from)||
+           !SameUpstream(external,from))return null;
+        var path=from.AbsolutePath;
+        if(pathPrefix.Length>0){
+            if(path==pathPrefix)path="/";
+            else if(path.StartsWith(pathPrefix+"/",StringComparison.Ordinal))
+                path=path[pathPrefix.Length..];
+            else return null;
+        }
+        return new Uri(upstream,(path.Length==0?"/":path)+from.Query);
     }
 
     private static async Task<byte[]> ReadLimitedAsync(HttpContent content,
@@ -747,9 +773,13 @@ public sealed partial class FavoriteProxy
             if(ctx.Request.ContentLength is { } len)
                 req.Content.Headers.ContentLength=len;
         }
+        // Same-origin JavaScript login/API calls sometimes carry bearer or
+        // CSRF headers. The destination is already pinned to this favorite's
+        // exact HTTPS origin; never forward browser cookies or Host headers.
         foreach(var header in new[]{"Accept","Accept-Language","User-Agent",
             "X-Requested-With","X-Requested-By","If-None-Match","If-Modified-Since",
-            "Range"}){
+            "Range","Authorization","X-CSRF-Token","X-CSRFToken","X-XSRF-TOKEN",
+            "X-Atlassian-Token"}){
             if(ctx.Request.Headers.TryGetValue(header,out var values))
                 req.Headers.TryAddWithoutValidation(header,values.ToArray());
         }
@@ -759,14 +789,10 @@ public sealed partial class FavoriteProxy
                 StringComparison.OrdinalIgnoreCase))
             req.Headers.TryAddWithoutValidation("Origin",
                 session.Upstream.GetLeftPart(UriPartial.Authority));
-        if(ctx.Request.Headers.TryGetValue("Referer",out var refValue)&&
-           Uri.TryCreate(refValue.ToString(),UriKind.Absolute,out var from)&&
-           SameUpstream(external,from)){
-            var refPath=pathPrefix.Length>0
-                ? from.AbsolutePath[pathPrefix.Length..] : from.AbsolutePath;
-            req.Headers.Referrer=new Uri(session.Upstream,
-                (refPath.Length==0?"/":refPath)+from.Query);
-        }
+        if(ctx.Request.Headers.TryGetValue("Referer",out var refValue) &&
+           UpstreamReferer(external,session.Upstream,pathPrefix,
+               refValue.ToString()) is { } upstreamReferer)
+            req.Headers.Referrer=upstreamReferer;
         try{
             using var res=await session.Client.SendAsync(req,
                 HttpCompletionOption.ResponseHeadersRead,ct);
