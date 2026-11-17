@@ -149,13 +149,15 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
           checked={form.autoLogin} onChange={e=>
             setForm({...form,autoLogin:e.target.checked})}/>
           Automatische Anmeldung über ein übliches HTML-Loginformular versuchen</label>
-        <p className="um-hint">Plenaro versucht dabei, die Anmeldung auf dem Server
-          über HTTPS auszuführen. Das Passwort wird nicht in die eingebettete
-          Webseite oder in den Browser übertragen. Bei dynamischen JavaScript-
-          Loginfeldern (z. B. manchen ATOSS-Oberflächen), SSO und MFA kann
-          Plenaro die Felder deshalb nicht automatisch ausfüllen. In diesem Fall
-          bitte im Favoriten manuell anmelden. Manche Webseiten verbieten zudem
-          die Darstellung in eingebetteten Fenstern.</p>
+        <p className="um-hint">Mit einem eigenen HTTPS-Host für diesen Favoriten
+          erkennt Plenaro auch nachgeladene ATOSS-/JavaScript-Felder und füllt
+          die Anmeldedaten wie in der Desktop-Version ein. Auf dem gemeinsamen
+          Favoriten-Host versucht Plenaro weiterhin nur einen serverseitigen
+          klassischen HTML-Login; die Browser-Passwortübergabe ist dort
+          gesperrt. SSO, MFA und externe Login-Domains bleiben gesonderte Fälle.
+          Passwörter sind verschlüsselt gespeichert; im dedizierten Modus
+          werden sie ausschließlich der gewählten Webseite zur Anmeldung
+          bereitgestellt.</p>
         <ErrorMessage message={error}/>
         {info&&<p role="status" className="um-feedback success">{info}</p>}
         <div className="favorites-toolbar">
@@ -178,6 +180,7 @@ export function FavoritePage(){
   const {id}=useParams();
   const [favorite,setFavorite]=useState<Favorite|null>(null);
   const [url,setUrl]=useState('');
+  const [sharedAutoLogin,setSharedAutoLogin]=useState(false);
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(true);
   const [revision,setRevision]=useState(0);
@@ -186,11 +189,11 @@ export function FavoritePage(){
   // an already invalid single-use bootstrap token. Share ONE in-flight
   // request across both effect invocations for the same favorite/revision.
   const startup=useRef<{
-    key:string;promise:Promise<{item:Favorite;url:string}>
+    key:string;promise:Promise<{item:Favorite;url:string;shared:boolean}>
   }|null>(null);
   useEffect(()=>{
     let active=true;
-    setLoading(true);setError('');setUrl('');
+    setLoading(true);setError('');setUrl('');setSharedAutoLogin(false);
     const key=(id??'')+':'+revision;
     if(startup.current?.key!==key){
       const promise=(async()=>{
@@ -212,12 +215,15 @@ export function FavoritePage(){
           destination.username!==''||destination.password!==''||
           (!legacyBootstrap&&!sharedBootstrap))
           throw new Error('Ungültige Favoriten-Proxy-Adresse.');
-        return {item,url:destination.toString()};
+        return {item,url:destination.toString(),shared:sharedBootstrap};
       })();
       startup.current={key,promise};
     }
-    void startup.current.promise.then(({item,url})=>{
-      if(active){setFavorite(item);setUrl(url);}
+    void startup.current.promise.then(({item,url,shared})=>{
+      if(active){
+        setFavorite(item);setUrl(url);
+        setSharedAutoLogin(item.autoLogin&&item.hasPassword&&shared);
+      }
     }).catch(e=>{
       if(active){setError(e instanceof Error?e.message:'Webseite nicht erreichbar.');
         setLoading(false);}
@@ -243,6 +249,15 @@ export function FavoritePage(){
       <strong>Favorit konnte nicht geöffnet werden</strong><p>{error}</p></div>}
     {loading&&!error&&<div role="status" className="znuny-native-loading">
       Webseite wird geöffnet …</div>}
+    {sharedAutoLogin&&<div className="content-card" role="status">
+      <strong>Automatisches Ausfüllen noch nicht aktiv</strong>
+      <p>Diese Webseite läuft über den gemeinsamen Favoriten-Host.
+        Aus Sicherheitsgründen überträgt Plenaro gespeicherte Passwörter
+        nur an einen eigenen HTTPS-Host für genau diesen Favoriten.
+        Dafür benötigt der Betreiber Wildcard-DNS, ein passendes TLS-Zertifikat
+        und eine konfigurierte Favoriten-Hostvorlage. Bis dahin ist eine
+        manuelle Anmeldung möglich.</p>
+    </div>}
     {!error&&url&&<div className="znuny-portal-frame-wrap znuny-native-frame-wrap">
       <div className="znuny-portal-security-caption">
         <ShieldCheck size={14}/>Webseite über den Plenaro-Proxy. Manche
