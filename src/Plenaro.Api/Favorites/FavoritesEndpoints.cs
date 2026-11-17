@@ -221,9 +221,11 @@ public static class FavoritesEndpoints
             await using var db=await Open(config,ct);
             await using var cmd=new NpgsqlCommand("""
                 SELECT a.id,a.name,a.slug FROM favorite_apps a
-                WHERE a.enabled AND (a.available_to_all OR
-                  EXISTS (SELECT 1 FROM favorite_app_users access
-                    WHERE access.app_id=a.id AND access.user_id=@uid))
+                WHERE a.enabled AND a.slug<>'wiki' AND
+                    (a.owner_user_id=@uid OR
+                     (a.owner_user_id IS NULL AND (a.available_to_all OR
+                      EXISTS (SELECT 1 FROM favorite_app_users access
+                        WHERE access.app_id=a.id AND access.user_id=@uid))))
                 ORDER BY a.name
                 """,db);
             cmd.Parameters.AddWithValue("uid",user.Id);
@@ -365,7 +367,8 @@ public static class FavoritesEndpoints
                 SELECT a.id,a.name,a.slug,a.upstream_url,a.enabled,a.available_to_all,
                   ARRAY(SELECT user_id FROM favorite_app_users
                     WHERE app_id=a.id ORDER BY user_id)
-                FROM favorite_apps a ORDER BY a.name
+                FROM favorite_apps a WHERE a.owner_user_id IS NULL
+                    AND a.slug<>'wiki' ORDER BY a.name
                 """,db);
             var data=new List<AppInfo>();
             await using var reader=await cmd.ExecuteReaderAsync(ct);
@@ -468,9 +471,11 @@ public static class FavoritesEndpoints
         Guid appId,CancellationToken ct){
         await using var cmd=new NpgsqlCommand("""
             SELECT EXISTS(SELECT 1 FROM favorite_apps a WHERE a.id=@app
-              AND a.enabled AND (a.available_to_all OR
-              EXISTS(SELECT 1 FROM favorite_app_users access
-                WHERE access.app_id=a.id AND access.user_id=@uid)))
+              AND a.enabled AND a.slug<>'wiki' AND
+                (a.owner_user_id=@uid OR
+                 (a.owner_user_id IS NULL AND (a.available_to_all OR
+                  EXISTS(SELECT 1 FROM favorite_app_users access
+                    WHERE access.app_id=a.id AND access.user_id=@uid)))))
             """,db);
         cmd.Parameters.AddWithValue("app",appId);
         cmd.Parameters.AddWithValue("uid",user);
@@ -481,9 +486,11 @@ public static class FavoritesEndpoints
         Guid app,CancellationToken ct){
         await using var cmd=new NpgsqlCommand("""
             SELECT upstream_url FROM favorite_apps a WHERE a.id=@app
-              AND a.enabled AND (a.available_to_all OR
-              EXISTS(SELECT 1 FROM favorite_app_users access
-                  WHERE access.app_id=a.id AND access.user_id=@uid))
+              AND a.enabled AND a.slug<>'wiki' AND
+               (a.owner_user_id=@uid OR
+                (a.owner_user_id IS NULL AND (a.available_to_all OR
+                 EXISTS(SELECT 1 FROM favorite_app_users access
+                   WHERE access.app_id=a.id AND access.user_id=@uid))))
             """,db);
         cmd.Parameters.AddWithValue("app",app);
         cmd.Parameters.AddWithValue("uid",user);
@@ -494,12 +501,13 @@ public static class FavoritesEndpoints
         NpgsqlConnection db,Guid user,CancellationToken ct){
         await using var cmd=new NpgsqlCommand("""
             SELECT f.id,f.app_id,f.name,a.name,a.slug,f.path,f.username,
-                f.auto_login,f.enabled,f.sort_order
+                f.auto_login,f.enabled,f.sort_order,a.upstream_url
             FROM user_favorites f JOIN favorite_apps a ON a.id=f.app_id
-            WHERE f.user_id=@uid AND a.enabled AND
-              (a.available_to_all OR EXISTS(
-              SELECT 1 FROM favorite_app_users access
-              WHERE access.app_id=a.id AND access.user_id=@uid))
+            WHERE f.user_id=@uid AND a.enabled AND a.slug<>'wiki' AND
+                (a.owner_user_id=@uid OR
+                 (a.owner_user_id IS NULL AND (a.available_to_all OR EXISTS(
+                   SELECT 1 FROM favorite_app_users access
+                   WHERE access.app_id=a.id AND access.user_id=@uid))))
             ORDER BY f.sort_order,f.created_at,f.id
             """,db);
         cmd.Parameters.AddWithValue("uid",user);
@@ -509,7 +517,8 @@ public static class FavoritesEndpoints
             favorites.Add(new(reader.GetGuid(0),reader.GetGuid(1),
                 reader.GetString(2),reader.GetString(3),reader.GetString(4),
                 reader.GetString(5),reader.GetString(6),reader.GetBoolean(7),
-                reader.GetBoolean(8),reader.GetInt32(9),false));
+                reader.GetBoolean(8),reader.GetInt32(9),false,
+                new Uri(new Uri(reader.GetString(10)),reader.GetString(5)).AbsoluteUri));
         return favorites;
     }
 
