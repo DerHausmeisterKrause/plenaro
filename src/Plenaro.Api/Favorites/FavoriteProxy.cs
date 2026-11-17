@@ -163,7 +163,8 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         // centrally configured wiki retains its administrator-controlled
         // internal HTTPS connectivity.
         var handler=ZnunyConnectionTester.SecureHandler(
-            publicOnly:favorite.Slug.StartsWith("site-",StringComparison.Ordinal));
+            publicOnly:favorite.Slug.StartsWith("site-",StringComparison.Ordinal)
+                && !favorite.AllowPrivateUpstream);
         handler.UseCookies=true;
         handler.CookieContainer=new CookieContainer(256,64,8192);
         handler.AutomaticDecompression=DecompressionMethods.GZip|
