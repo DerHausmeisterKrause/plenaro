@@ -934,12 +934,13 @@ Diese Änderung **ersetzt** die in PR #41 dokumentierte Pflicht, einzelne Origin
 - [ ] [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40) dedizierte Browser-Origin pro freiem Favoriten; Sicherheit eigener und fremder Skripte noch nicht final gewährleistet.
 
 
-## 17.11.2026 – Phase 7: Erkennung klassischer Login-Felder (PR #44 – in Prüfung)
+## 17.11.2026 – Phase 7: Erkennung klassischer Login-Felder (PR #44 – gemergt)
 
 - [x] Ursachenvergleich WPF ↔ Web: WPF-WebView2 füllt echte DOM-Felder nach JS-Rendern; Web schickt bislang nur ein serverseitiges Standardformular ab.
 - [x] Serverseitige Erkennung für `autocomplete=username`, IDs, Platzhalter, `j_username`-/Enterprise-Namen und eindeutige Eingaben erweitert.
 - [x] Vorhandene CSRF-/Hidden-Felder und Login-Submit-Werte mitnehmen, Same-Origin-Anmeldeseiten anhand einer HTML-Verlinkung oder begrenzter GET-Redirects finden, maximal ein Passwort-POST; keine fremden SSO-Domains.
 - [x] Schutz vor GET-Passwortversand, Registrierung, Passwortänderung, Mehrfach-Passwortfeldern, fremden Action-URLs und JS-only-Formularen.
 - [x] Contract-Tests mit synthetischen Enterprise-Loginformularen und Redirect-/SSO-Blockade ergänzt; UI-Hinweis zu Sicherheits- und JavaScript-Grenzen präzisiert.
-- [ ] CI grün, PR gemergt, Live-Abnahme der realen ATOSS-Anmeldung.
+- [x] [PR #44](https://github.com/DerHausmeisterKrause/plenaro/pull/44) in `main` gemergt; [CI #44058573710](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44058573710) erfolgreich; Frontend-Dependency `csstype` wegen fehlerhafter npm-Auflösung auf veröffentlichte 3.2.3 fixiert.
+- [ ] Live-Abnahme der realen ATOSS-Anmeldung.
 - [ ] **Issue #40 zuerst schließen**, bevor WPF-artiges Browser-Autofill Klartextpasswörter in beliebige Drittseiten am geteilten Host schreiben dürfte.
