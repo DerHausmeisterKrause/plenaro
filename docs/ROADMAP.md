@@ -845,3 +845,14 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] [PR #35](https://github.com/DerHausmeisterKrause/plenaro/pull/35) nach main gemergt; [CI #43226009165](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43226009165) vollständig erfolgreich (Backend, Frontend, Vertrags- und Docker-Tests).
 - [ ] Znuny `TimeAccountingREST` + `timeaccounting_webservice` (rw) bei der konkreten Instanz einrichten; Live-Test mit direkten OTRS-Zeiten, Plenaro-Buchungen und verschiedenen Benutzern.
 - [ ] Noch offen: WPF-Monats-Nachbuchung als separater Web-Datensatz und optionale Übersicht lokaler, noch nicht nach OTRS übertragener Ticket-Timer.
+
+## 17.11.2026 – Phase 5: Zeit-Schnellkorrektur im Znuny-Ticket wiederhergestellt (PR folgt)
+
+- [x] WPF-Referenz geprüft: `Views/TaskDetailPanel.xaml` enthält zwei Reihen +15/+30/+1h sowie -15/-30/-1h, verbunden mit `TodayViewModel.AdjustBookedMinutes`; `TaskService.AddTicketMinutes` begrenzt negative Zeiten bei 0.
+- [x] Dieselben sechs Presets in `ZnunyTicketTimerPanel` direkt unter Start/Stop wiederhergestellt, positive Buttons grau, negative rot.
+- [x] Über `PUT /api/v1/znuny/tickets/{ticketId}/time` jeweils ausschließlich **ungebuchte Sekunden** korrigieren; bereits bestätigte Transfers nach Znuny bleiben unverändert. Keine unbeabsichtigte neue OTRS-Zeitbuchung.
+- [x] Vorhandene Sekunden beim Hinzufügen/Abziehen ganzer Minuten erhalten; Untergrenze 0, Obergrenze 240 Stunden.
+- [x] Während API-Änderungen, manueller HH:MM:SS-Eingabe, beim Laden und bei offenen ungeklärten OTRS-Zeitbuchungen Presets sperren.
+- [x] Frontendtests für alle sechs Schaltflächen, korrekte API-Nutzlast, laufendes Buchungsjournal, Grenzwerte und Pending-Sperre ergänzt.
+- [ ] CI-Lauf erfolgreich und PR nach `main` mergen.
+- [ ] Live-Test nach Docker-Deployment auf einem echten Znuny-Ticket; insbesondere laufender Timer und bestätigte Altbuchungen.

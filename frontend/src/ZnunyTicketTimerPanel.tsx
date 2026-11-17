@@ -17,6 +17,13 @@ export function parseTimerDuration(value:string):number|null {
 export function roundedBookingMinutes(seconds:number):number {
   return seconds>0?Math.ceil(seconds/900)*15:0;
 }
+/** Match WPF's six preset adjustments. Change only the unbooked
+ * HH:MM:SS value; never alter the already transferred Znuny booking journal.
+ * Keep any remaining seconds when applying minute-based adjustments. */
+export function quickAdjustUnbookedSeconds(currentSeconds:number,deltaMinutes:number):number {
+  return Math.max(0,Math.min(864000,
+    Math.floor(currentSeconds)+deltaMinutes*60));
+}
 function pickerOptions(options:ZnunyFieldOption[],current:string):ZnunyFieldOption[] {
   return current&&!options.some(x=>x.key===current)
     ?[{key:current,displayText:current+' (aktueller Wert)'},...options]:options;
@@ -80,6 +87,19 @@ export function ZnunyTicketTimerPanel({ticketId,defaultDescription='Zeitbuchung'
       setError(e instanceof Error?e.message:'Timer konnte nicht geändert werden.');
       return false;
     }finally{setBusy(false);}
+  }
+  async function quickAdjust(deltaMinutes:number){
+    if(!summary||!ticketId||busy||editing||
+       bookings.some(row=>row.status==='pending'))return;
+    const currentRunning=summary.runningSince?
+      Math.max(0,Math.floor((Date.now()-Date.parse(summary.runningSince))/1000)):0;
+    const currentUnbooked=Math.max(0,summary.bookedSeconds+
+      currentRunning-summary.transferredSeconds);
+    const updated=quickAdjustUnbookedSeconds(currentUnbooked,deltaMinutes);
+    if(updated===currentUnbooked)return;
+    const label=(deltaMinutes>0?'+':'')+deltaMinutes+' Minuten';
+    await update(()=>setTicketUnbookedSeconds(ticketId,updated),
+      'Ungebuchte Zeit um '+label+' angepasst.');
   }
   async function correct(e:FormEvent){
     e.preventDefault();
@@ -178,6 +198,22 @@ export function ZnunyTicketTimerPanel({ticketId,defaultDescription='Zeitbuchung'
           disabled={busy||editing||!summary?.runningSince}
           onClick={()=>void update(()=>stopTicketTime(ticketId),'Timer gestoppt.')}>
           <Square size={13}/>Stop</button>
+      </div>
+      <div className="classic-wpf-preset-grid"
+        role="group" aria-label="Ungebuchte Ticketzeit schnell anpassen">
+        {([15,30,60,-15,-30,-60] as const).map(minutes=>
+          <button key={minutes} type="button"
+            className={'znuny-time-quick-button '+(minutes<0?'is-negative':'is-positive')}
+            aria-label={(minutes<0?'Zeit verringern um ':'Zeit erhöhen um ')+
+              Math.abs(minutes)+(Math.abs(minutes)===60?' Minuten (1 Stunde)':' Minuten')}
+            title={(minutes<0?'Abziehen: ':'Hinzufügen: ')+Math.abs(minutes)+' Minuten'}
+            disabled={busy||editing||!summary||pending||
+              (minutes<0&&unbooked===0)||
+              (minutes>0&&unbooked>=864000)}
+            onClick={()=>void quickAdjust(minutes)}>
+            {minutes>0?'+':''}{Math.abs(minutes)===60?
+              (minutes<0?'-1h':'+1h'):minutes}
+          </button>)}
       </div>
       {error&&<p role="alert" className="um-feedback failure">{error}</p>}
       {notice&&<p role="status" className="um-feedback success">{notice}</p>}
