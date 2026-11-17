@@ -909,3 +909,15 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] [PR #41](https://github.com/DerHausmeisterKrause/plenaro/pull/41) nach `main` gemergt; [CI #44048722860](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44048722860) erfolgreich (Backend, Frontend, Proxy-Vertragstests, Docker-Smoke).
 - [ ] Auf Zielhost exakte interne HTTPS-Origins in `.env` eintragen, Web-Container neu erstellen, betroffenen Favoriten neu verbinden und `private-upstream-blocked`/TLS/DNS live abnehmen.
 - [ ] **Issue #40:** Eigene Browser-Origin pro benutzergesteuertem Favoriten statt gemeinsamer `/site-...`-Pfade; anschließend reelle Mehrbenutzer-/CSP-/JS-Sicherheitsabnahme.
+
+## 17.11.2026 – Phase 7: interne HTTPS-Favoriten ohne Betreiber-Variablen (PR in Bearbeitung)
+
+- [x] Erneuter WPF-Abgleich: favorisierte Intranet-Seiten werden vom Benutzer selbst konfiguriert.
+- [x] Zusätzliche Freigabeliste `PLENARO_FAVORITES_INTERNAL_ORIGINS` aus PR #41 wieder entfernt; interne HTTPS-Favoriten laufen standardmäßig über den bestehenden sicheren TCP-Connector.
+- [x] Selbstproxy-/Origin-/TLS-/Sitzungs-/Eigentümerschranken bleiben bestehen, ebenso Sperren für Loopback, Link-Local, bekannte Metadaten-Endpunkte, Multicast und nicht spezifizierte Adressen.
+- [x] Testabdeckung für private IPv4-/IPv6-Adressen und weiterhin gesperrte Ziele ergänzt; Betriebs- und Sicherheitsdokumentation angepasst.
+- [ ] CI grün und Änderung in `main` gemergt.
+- [ ] Deployment und Live-Abnahme: interne Favoriten, Wiki-Login, CSS/JS und zwei Benutzer; DNS-Auflösung und CA-Vertrauen des Containers prüfen.
+- [ ] **Sicherheitspriorität:** Jeder authentifizierte Nutzer kann durch den Server erreichbare private HTTPS-Netzwerkziele ansprechen. Firewall/Netzsegmentierung und Berechtigungsmodell absichern; [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40) (echte Browser-Origin-Isolation) offen.
+
+Diese Änderung **ersetzt** die in PR #41 dokumentierte Pflicht, einzelne Origins in der `.env` freizugeben.
