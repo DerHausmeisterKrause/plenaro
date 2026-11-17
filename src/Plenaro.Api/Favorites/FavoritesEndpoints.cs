@@ -22,7 +22,8 @@ public static class FavoritesEndpoints
         bool AvailableToAll,string? UpstreamUrl,Guid[]? AllowedUsers);
     public sealed record FavoriteInfo(Guid Id,Guid AppId,string Name,string AppName,
         string Slug,string Path,string Username,bool AutoLogin,bool Enabled,
-        int SortOrder,bool HasPassword,string? Url=null);
+        int SortOrder,bool HasPassword,string? Url=null,
+        bool AllowPrivateUpstream=false);
 
     public static void MapPlenaroFavorites(this WebApplication app)
     {
@@ -154,7 +155,10 @@ public static class FavoritesEndpoints
             if(!ValidPersonalSite(input,slug,config,out var origin,out var path,
                 out var error))return Results.BadRequest(new{error});
             await using(var appCmd=new NpgsqlCommand("""
-                UPDATE favorite_apps SET name=@name,upstream_url=@url
+                UPDATE favorite_apps SET name=@name,upstream_url=@url,
+                    allow_private_upstream=CASE
+                      WHEN upstream_url=@url THEN allow_private_upstream
+                      ELSE false END
                 WHERE id=@app AND owner_user_id=@user
                 """,db,tx)){
                 appCmd.Parameters.AddWithValue("app",appId);
@@ -501,7 +505,8 @@ public static class FavoritesEndpoints
         NpgsqlConnection db,Guid user,CancellationToken ct){
         await using var cmd=new NpgsqlCommand("""
             SELECT f.id,f.app_id,f.name,a.name,a.slug,f.path,f.username,
-                f.auto_login,f.enabled,f.sort_order,a.upstream_url
+                f.auto_login,f.enabled,f.sort_order,a.upstream_url,
+                a.allow_private_upstream
             FROM user_favorites f JOIN favorite_apps a ON a.id=f.app_id
             WHERE f.user_id=@uid AND a.enabled AND a.slug<>'wiki' AND
                 (a.owner_user_id=@uid OR
@@ -518,7 +523,8 @@ public static class FavoritesEndpoints
                 reader.GetString(2),reader.GetString(3),reader.GetString(4),
                 reader.GetString(5),reader.GetString(6),reader.GetBoolean(7),
                 reader.GetBoolean(8),reader.GetInt32(9),false,
-                new Uri(new Uri(reader.GetString(10)),reader.GetString(5)).AbsoluteUri));
+                new Uri(new Uri(reader.GetString(10)),reader.GetString(5)).AbsoluteUri,
+                reader.GetBoolean(11)));
         return favorites;
     }
 
