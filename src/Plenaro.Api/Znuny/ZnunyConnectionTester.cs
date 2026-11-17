@@ -83,7 +83,9 @@ public sealed class ZnunyConnectionTester(IHttpClientFactory clients)
         {
             var addresses = await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host,ct);
             // Restrict the actual TCP peer, not just the user-provided URL.
-            // RFC1918/private LAN hosts remain allowed for administrator-controlled installations.
+            // RFC1918/private LAN hosts are permitted for authenticated
+            // user favorites as well as administrator-controlled integrations.
+            // Keep rejecting loopback, link-local, and metadata endpoints.
             var allowed=addresses.FirstOrDefault(ip=>
                 Allowed(ip)&&(!publicOnly||PublicEndpointAllowed(ip)));
             if (allowed is null)
