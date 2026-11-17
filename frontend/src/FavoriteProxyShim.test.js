@@ -93,7 +93,7 @@ it('rewrites dynamic personal images and login URLs without touching external or
   form.action='/login/check';
   history.pushState({},'', '/dashboard');
   expect(fetches).toEqual([
-    origin+'/'+slug+'/api/login',origin+'/'+slug+'/api/account',
+    '/'+slug+'/api/login','/'+slug+'/api/account',
     'https://cdn.example.net/public.png'
   ]);
   expect(requests).toEqual([['POST','/'+slug+'/login']]);
