@@ -363,3 +363,20 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] UI-Integrationstests für Anpinnen/Abpinnen und Admin-Schalter ergänzt.
 - [x] [PR #37](https://github.com/DerHausmeisterKrause/plenaro/pull/37) nach `main` gemergt; [CI #44035220540](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44035220540) vollständig erfolgreich (Build, Frontend-Tests, Vertrags- und Docker-Smoke-Tests).
 - [ ] Live-Test: 2 Benutzer, Pin-Reihenfolge auch über Seiten hinweg; Report mit Schalter an/aus vergleichen und **Netzwerk-/Znuny-Logs** prüfen, dass bei Aus wirklich kein OTRS-Zeitabruf erfolgt.
+
+## 17.11.2026 – Persönliche Favoriten ohne Admin-Freigabe, Wiki unabhängig (PR folgt)
+
+- [x] WPF-Favoritenprinzip umgesetzt: jeder Benutzer kann eigenständig Webseite, vollständige HTTPS-URL, Name, optionalen Login, Aktivierung und individuelle Reihenfolge bestimmen.
+- [x] Favoriten-Editor von Admin-Anwendungskatalog auf `/api/v1/favorites/personal` umgestellt. Keine Webseite muss vorab durch einen Administrator angelegt oder benutzerbezogen freigegeben werden.
+- [x] Ein persönlicher Favorit besitzt seinen eigenen zufällig abgeleiteten Proxy-Slug (`site-<favorite UUID>`). Der HTTPS-Zielserver bleibt je Favorit getrennt und nachträglich bearbeitbar.
+- [x] Persistentes benutzereigenes Verschieben über `PUT /api/v1/favorites/personal/order`, serverseitige Eigentümerprüfung, Transaktion und CSRF.
+- [x] Sicherheit: nur HTTPS mit DNS-Host, keine URL-Credentials, Blockade von Selbst-Proxies, internen/privaten TCP-Zielen und DNS-Rebinding. Die benutzerdefinierte Webseite erhält keine Administrations- oder andere Plenaro-Rechte.
+- [x] Migration `0030_personal_favorites_independent_wiki.sql`: frühere freigegebene Benutzerfavoriten in persönliche Apps umhängen, bestehende Fav-IDs/Anmeldenamen/Sortierung/Vault-Secrets erhalten; alte Admin-ACLs werden für die eigenen Webseiten nicht mehr benötigt.
+- [x] **Wissensdatenbank wird niemals mehr als `user_favorites`-Eintrag angelegt.** Bestehende Wiki-Benutzer werden in `wiki_user_connections` übernommen, während Serveradresse weiter ausschließlich vom Wiki-Admin konfiguriert wird.
+- [x] Wiki-Login nutzt weiterhin die bestehende `FavoriteProxy.StartAsync(...,requireWikiAutoLogin:true)`-Verifikation mit eigenem CookieContainer und genau einer Benutzer-Sitzung. Die Wiki-Proxy-Autorisierung verwendet jetzt eigenständige Wiki-Verbindungen statt Favoritenfreigaben.
+- [x] Vorhandene AES-256-GCM-Wiki-Passwörter werden über ihren ursprünglichen Namen gelesen und bei neuer Benutzung unter `wiki.password` neu verschlüsselt; kein unsicheres Umbenennen des Ciphertexts.
+- [x] Favoriten und Wissensdatenbank in den Einstellungen getrennt, globale Freigabe-UI für Webseiten entfernt.
+- [x] Synthetische UI- und HTTP-Smoke-Tests für eigene Webseiten, URLs, Reihenfolge, CSRF und bestehendes Favoriten-Frame ergänzt.
+- [ ] GitHub-CI und Merge abschließen.
+- [ ] Live-Abnahme mit zwei Benutzern, bestehenden Favoriten/Passwörtern, Wiki-Bootstrap und URLs mit komplexen JS-/CSP-Pfaden durchführen.
+- [ ] Private Intranet-Webseiten benötigen weiterhin einen gesonderten, ausdrücklich freigeschalteten sicheren Netzwerkpfad; freie persönliche Proxy-Ziele erlauben aus SSRF-Schutzgründen nur öffentlich routbare HTTPS-IPs. Das zentral angebundene interne Wiki bleibt davon unberührt.
