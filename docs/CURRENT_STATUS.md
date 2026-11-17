@@ -398,7 +398,7 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] PR #41 mit exakter Betreiber-Freigabeliste wird funktional ersetzt: Im HTTPS-Favoriten-Proxy benötigen eigene `site-*`-Webseiten ab jetzt keine zusätzlichen `.env`-Origins mehr.
 - [x] Der bestehende sichere TCP-Handler akzeptiert RFC1918-LAN und IPv6-ULA, blockiert weiterhin Loopback, Link-Local, bekannte Metadaten-IPs, Multicast und nicht spezifizierte Ziele; HTTPS-Zertifikatsvalidierung und Eigentümer-/Sitzungsprüfungen bleiben aktiv.
 - [x] Überflüssige Allowlist-Datei, Compose-Variable und `.env`-Beispiele entfernt; Vertragsprüfungen für private und gesperrte Ziel-IPs ergänzt.
-- [ ] GitHub-CI abschließen und neue Version nach `main` übernehmen.
+- [x] [PR #42](https://github.com/DerHausmeisterKrause/plenaro/pull/42) nach `main` gemergt; [CI #44050034477](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44050034477) erfolgreich im zweiten Lauf; erster Lauf hatte einen flüchtigen Fehler in einem HO-Frontendtest.
 - [ ] Produktionsabnahme: Interne und öffentliche HTTPS-Favoriten, CSS/JS, Anmeldungen, Wiki und zwei getrennte Benutzer testen.
 - [ ] **Bewusstes Sicherheitsrisiko:** Jeder Plenaro-Nutzer kann serverseitig interne HTTPS-Dienste erreichen; Firewall/Segmentierung und vertrauenswürdige Benutzer sicherstellen. Dedizierte Browser-Origin je frei angelegtem Favoriten bleibt als [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40) offen.
 
