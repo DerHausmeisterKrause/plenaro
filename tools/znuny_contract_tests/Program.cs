@@ -43,39 +43,25 @@ try{
 }catch(InvalidOperationException){invalidFavoritesDomainRejected=true;}
 Assert(invalidFavoritesDomainRejected,"invalid base domains fail closed");
 
-// A free personal favorite may reach an intranet HTTPS service only if the
-// operator names that EXACT origin. Everything else stays public-only.
-const string approvedInternal=
-    "https://wiki.intern.example.org;https://cloud.intern.example.org:8443";
-Assert(FavoriteInternalOrigins.IsApproved(approvedInternal,
-    new Uri("https://wiki.intern.example.org/")) &&
-    FavoriteInternalOrigins.IsApproved(approvedInternal,
-    new Uri("https://CLOUD.intern.example.org:8443/page")) &&
-    !FavoriteInternalOrigins.IsApproved(approvedInternal,
-        new Uri("https://cloud.intern.example.org/")) &&
-    !FavoriteInternalOrigins.IsApproved(approvedInternal,
-        new Uri("https://evil-wiki.intern.example.org/")) &&
-    !FavoriteInternalOrigins.IsApproved(approvedInternal,
-        new Uri("https://wiki.intern.example.org.evil.test/")) &&
-    !FavoriteInternalOrigins.IsApproved(null,
-        new Uri("https://wiki.intern.example.org/")),
-    "internal HTTPS allowlist uses exact hosts and ports; absent config denies");
-var invalidInternalOriginRejected=false;
-try{
-    FavoriteInternalOrigins.IsApproved(
-        "https://wiki.intern.example.org;http://wrong.example.org",
-        new Uri("https://wiki.intern.example.org/"));
-}catch(InvalidOperationException){invalidInternalOriginRejected=true;}
-Assert(invalidInternalOriginRejected,
-    "malformed internal exception cannot be bypassed by earlier matching host");
-invalidInternalOriginRejected=false;
-try{
-    FavoriteInternalOrigins.IsApproved(
-        "https://wiki.intern.example.org/settings",
-        new Uri("https://wiki.intern.example.org/"));
-}catch(InvalidOperationException){invalidInternalOriginRejected=true;}
-Assert(invalidInternalOriginRejected,
-    "internal exceptions accept origins only, never paths or credentials");
+// The secure proxy must accept private LAN peers (including IPv6 ULA),
+// but never loopback, link-local, any/unspecified, multicast or metadata
+// addresses. This is checked again when the actual TCP connection opens.
+var safePeer=typeof(ZnunyConnectionTester).GetMethod(
+    "Allowed",BindingFlags.NonPublic|BindingFlags.Static)!;
+bool AllowedPeer(string address)=>(bool)safePeer.Invoke(null,
+    new object[]{IPAddress.Parse(address)})!;
+Assert(AllowedPeer("10.10.10.10") &&
+    AllowedPeer("172.16.0.14") &&
+    AllowedPeer("192.168.178.20") &&
+    AllowedPeer("fd00::10"),
+    "private LAN IPv4 and IPv6 destinations remain usable without env exceptions");
+Assert(!AllowedPeer("127.0.0.1") &&
+    !AllowedPeer("::1") &&
+    !AllowedPeer("169.254.169.254") &&
+    !AllowedPeer("100.100.100.200") &&
+    !AllowedPeer("fe80::1") &&
+    !AllowedPeer("0.0.0.0"),
+    "loopback, link-local, cloud metadata and unspecified destinations stay blocked");
 
 
 // The new wildcard app router is opt-in and never relaxes the
