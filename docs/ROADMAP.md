@@ -857,7 +857,7 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] [PR #36](https://github.com/DerHausmeisterKrause/plenaro/pull/36) erfolgreich gemergt; [CI #44032906303](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44032906303) vollständig grün.
 - [ ] Live-Test nach Docker-Deployment auf einem echten Znuny-Ticket; insbesondere laufender Timer und bestätigte Altbuchungen.
 
-## 17.11.2026 – Phase 5/7: Angepinnte Tickets und globaler OTRS-Report-Schalter (PR folgt)
+## 17.11.2026 – Phase 5/7: Angepinnte Tickets und globaler OTRS-Report-Schalter (PR #37 – gemergt)
 
 - [x] WPF-Referenz `TodayViewModel.TogglePinTaskCommand` + `TaskService.SetPinned` abgeglichen: Pin-Status persistent, angepinnte Tickets kommen zuerst.
 - [x] Neue PostgreSQL-Migration `0029_znuny_ticket_pins.sql`: Pins pro Benutzer und Ticket getrennt, bei Ticket-/Benutzerlöschung automatisch bereinigt.
@@ -869,5 +869,5 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] Aktiviert: Vorhandene Live-Abfrage `TimeAccountingGet` und das deduplizierte Zusammenführen mit Plenaro-Buchungen unverändert.
 - [x] JSON- und CSV-Monatsreport verwenden dieselbe serverseitige Einstellung und denselben Auswertungspfad; Browser meldet einen administrativ deaktivierten OTRS-Abgleich als normalen Betriebszustand, nicht als Verbindungsfehler.
 - [x] UI-Integrationstests für Anpinnen/Abpinnen und Admin-Schalter ergänzt.
-- [ ] PR CI inkl. Browser-, Backend-, Sicherheits- und Docker-Tests vollständig erfolgreich, danach Merge.
+- [x] [PR #37](https://github.com/DerHausmeisterKrause/plenaro/pull/37) nach `main` gemergt; [CI #44035220540](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44035220540) vollständig erfolgreich (Build, Frontend-Tests, Vertrags- und Docker-Smoke-Tests).
 - [ ] Live-Test: 2 Benutzer, Pin-Reihenfolge auch über Seiten hinweg; Report mit Schalter an/aus vergleichen und **Netzwerk-/Znuny-Logs** prüfen, dass bei Aus wirklich kein OTRS-Zeitabruf erfolgt.
