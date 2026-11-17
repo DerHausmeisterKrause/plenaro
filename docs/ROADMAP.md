@@ -899,3 +899,13 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] [PR #39](https://github.com/DerHausmeisterKrause/plenaro/pull/39) nach `main` gemergt; [CI #44044531957](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44044531957) nach einem erneuten Lauf vollständig erfolgreich (Build, Frontendtests, Znuny-/Proxy-Vertragstests, NGINX und Docker-Smoke).
 - [ ] Live-Test mit echter interner/public HTTPS-Seite, unterschiedlichen SPAs, CSP/X-Frame-Options des äußeren NGINX und 2 Benutzerkonten. Manche fremden Websites können selbst mit Korrekturen keine eingebettete Ansicht unterstützen (SSO, CSP, CDN, JavaScript, Anti-Bot).
 - [ ] **Sicherheitspriorität [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40):** Benutzergesteuerte Favoriten auf dedizierte Browser-Origins migrieren. Der Shared-Path-Host trennt Browser-Cookies nach Pfad, aber keine Same-Origin-JavaScript-Zugriffe zwischen verschiedenen Pfaden. Bis zur vollständigen Origin-Isolation keine beliebigen fremden Skript-Webseiten als vertrauenswürdig einstufen.
+
+## 17.11.2026 – Phase 7: persönliche Intranet-Favoriten gezielt wieder zulassen (PR in Prüfung)
+
+- [x] Regression nach PR #38 eingegrenzt: frei angelegte `site-*`-Favoriten aktivieren stets den öffentlichen IP-Filter; frühere Admin-Freigaben gelten nur noch für ihre ursprüngliche Origin.
+- [x] Neue Betreiber-Einstellung `PLENARO_FAVORITES_INTERNAL_ORIGINS` für **exakte** HTTPS-Hosts und Ports (keine Wildcards, kein URL-Pfad) ergänzt, ohne Benutzerrechte zur Freigabe beliebiger privater IPs.
+- [x] In den bestehenden `SecureHandler` integriert: Ausnahmen nur für vom Betreiber explizit genehmigte Origins oder migrierte Bestandsfreigaben; sonst bleibt `publicOnly` unverändert; Wiki-Verhalten bleibt unverändert.
+- [x] Compose, .env-Beispiel und Sicherheits-/Deployment-Dokumentation erweitert; Regressionstests für exakte Origin-Übereinstimmung, Porttrennung, nicht passende Domains und fehlerhafte Konfiguration ergänzt.
+- [ ] CI für den PR und anschließende Übernahme in `main` bestätigen.
+- [ ] Auf Zielhost exakte interne HTTPS-Origins in `.env` eintragen, Web-Container neu erstellen, betroffenen Favoriten neu verbinden und `private-upstream-blocked`/TLS/DNS live abnehmen.
+- [ ] **Issue #40:** Eigene Browser-Origin pro benutzergesteuertem Favoriten statt gemeinsamer `/site-...`-Pfade; anschließend reelle Mehrbenutzer-/CSP-/JS-Sicherheitsabnahme.
