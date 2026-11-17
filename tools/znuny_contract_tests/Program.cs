@@ -7,6 +7,39 @@ using Plenaro.Api.Znuny;
 using Plenaro.Api.Favorites;
 using static Plenaro.Api.Znuny.ZnunyEndpoints;
 
+// Regression: RateLimiter used to run BEFORE UseAuthentication and therefore
+// saw every user behind NGINX as the same reverse-proxy IP. A Znuny read
+// limiter of 40/5 minutes was exhausted across different Plenaro users.
+Microsoft.AspNetCore.Http.DefaultHttpContext MakeRateContext(string? userId,
+    string address="172.29.213.10"){
+    var ctx=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+    ctx.Connection.RemoteIpAddress=IPAddress.Parse(address);
+    if(userId is not null)
+        ctx.User=new System.Security.Claims.ClaimsPrincipal(
+            new System.Security.Claims.ClaimsIdentity(new[]{
+                new System.Security.Claims.Claim(
+                    System.Security.Claims.ClaimTypes.NameIdentifier,userId)
+            },"plenaro-cookie"));
+    return ctx;
+}
+var rateUserA=MakeRateContext("00000000-0000-4000-8000-000000000001");
+var rateUserB=MakeRateContext("00000000-0000-4000-8000-000000000002");
+var rateSameUserOtherIp=MakeRateContext(
+    "00000000-0000-4000-8000-000000000001","10.0.0.15");
+var rateAnonymous=MakeRateContext(null);
+var rateAnonymousElsewhere=MakeRateContext(null,"10.0.0.15");
+Assert(Plenaro.Api.Identity.AuthenticatedRateLimitKey.For(rateUserA)!=
+       Plenaro.Api.Identity.AuthenticatedRateLimitKey.For(rateUserB) &&
+    Plenaro.Api.Identity.AuthenticatedRateLimitKey.For(rateUserA)==
+       Plenaro.Api.Identity.AuthenticatedRateLimitKey.For(rateSameUserOtherIp) &&
+    Plenaro.Api.Identity.AuthenticatedRateLimitKey.For(rateUserA).StartsWith(
+        "user:",StringComparison.Ordinal) &&
+    Plenaro.Api.Identity.AuthenticatedRateLimitKey.For(rateAnonymous)==
+        "ip:172.29.213.10" &&
+    Plenaro.Api.Identity.AuthenticatedRateLimitKey.For(rateAnonymousElsewhere)==
+        "ip:10.0.0.15",
+    "authenticated users behind one proxy get independent Znuny quotas; unauthenticated get IP keys");
+
 // Favoriten-Wildcard ist zunächst nur eine reservierte, niemals
 // als Plenaro-Login-Host verwendbare Origin.
 Assert(!FavoriteHostGuard.IsUnassignedAlias(
