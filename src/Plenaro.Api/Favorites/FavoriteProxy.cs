@@ -159,7 +159,11 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                 _pending.TryRemove(pair.Key,out _);
         if(_sessions.Count>=200)throw new InvalidOperationException("Session limit reached.");
         var root=new Uri(upstream.GetLeftPart(UriPartial.Authority));
-        var handler=ZnunyConnectionTester.SecureHandler();
+        // User-defined sites accept only public TCP destinations. The
+        // centrally configured wiki retains its administrator-controlled
+        // internal HTTPS connectivity.
+        var handler=ZnunyConnectionTester.SecureHandler(
+            publicOnly:favorite.Slug.StartsWith("site-",StringComparison.Ordinal));
         handler.UseCookies=true;
         handler.CookieContainer=new CookieContainer(256,64,8192);
         handler.AutomaticDecompression=DecompressionMethods.GZip|
@@ -342,14 +346,25 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             configuration.GetConnectionString("Plenaro"));
         await db.OpenAsync(ct);
         await using var cmd=new NpgsqlCommand("""
-            SELECT EXISTS(SELECT 1 FROM user_favorites f
-                JOIN favorite_apps a ON a.id=f.app_id
-                WHERE f.id=@favorite AND f.user_id=@user AND
-                  f.app_id=@app AND f.enabled AND a.enabled AND
-                  a.slug=@slug AND a.upstream_url=@upstream AND
-                  (a.available_to_all OR EXISTS(
-                    SELECT 1 FROM favorite_app_users access
-                    WHERE access.app_id=a.id AND access.user_id=@user)))
+            SELECT
+                EXISTS(SELECT 1 FROM user_favorites f
+                    JOIN favorite_apps a ON a.id=f.app_id
+                    WHERE f.id=@favorite AND f.user_id=@user AND
+                      f.app_id=@app AND f.enabled AND a.enabled AND
+                      a.slug=@slug AND a.upstream_url=@upstream AND
+                      a.slug<>'wiki' AND
+                      (a.owner_user_id=@user OR
+                       (a.owner_user_id IS NULL AND
+                        (a.available_to_all OR EXISTS(
+                          SELECT 1 FROM favorite_app_users access
+                          WHERE access.app_id=a.id AND access.user_id=@user)))))
+                OR
+                EXISTS(SELECT 1 FROM wiki_user_connections w
+                    JOIN favorite_apps a ON a.slug='wiki'
+                    WHERE w.id=@favorite AND w.user_id=@user AND
+                      length(trim(w.username))>0 AND a.id=@app AND
+                      a.slug=@slug AND a.upstream_url=@upstream AND
+                      a.enabled AND a.available_to_all)
             """,db);
         cmd.Parameters.AddWithValue("favorite",session.Favorite);
         cmd.Parameters.AddWithValue("user",session.User);
