@@ -391,3 +391,11 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] [PR #39](https://github.com/DerHausmeisterKrause/plenaro/pull/39) nach `main` gemergt; [CI #44044531957](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44044531957) nach einem erneuten Lauf vollständig erfolgreich (Build, Frontendtests, Znuny-/Proxy-Vertragstests, NGINX und Docker-Smoke).
 - [ ] Live-Test mit echter interner/public HTTPS-Seite, unterschiedlichen SPAs, CSP/X-Frame-Options des äußeren NGINX und 2 Benutzerkonten. Manche fremden Websites können selbst mit Korrekturen keine eingebettete Ansicht unterstützen (SSO, CSP, CDN, JavaScript, Anti-Bot).
 - [ ] **Sicherheitspriorität [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40):** Benutzergesteuerte Favoriten auf dedizierte Browser-Origins migrieren. Der Shared-Path-Host trennt Browser-Cookies nach Pfad, aber keine Same-Origin-JavaScript-Zugriffe zwischen verschiedenen Pfaden. Bis zur vollständigen Origin-Isolation keine beliebigen fremden Skript-Webseiten als vertrauenswürdig einstufen.
+
+## 17.11.2026 – Fix für interne persönliche Favoriten (Phase 7; PR in Prüfung)
+
+- [x] Ursache von `private-upstream-blocked` bestätigt: neue `site-*`-Favoriten erreichen ohne gezielte Betreiber-Ausnahme nur öffentliche HTTPS-IP-Ziele; migrierte Alt-Freigaben funktionieren nur für ihre bestehende Origin.
+- [x] Konfiguration `PLENARO_FAVORITES_INTERNAL_ORIGINS`: ausschließlich exakte, durch Betreiber genehmigte HTTPS-Origins (Hostname und Port), keine pauschale Intranet-/Subnetzfreigabe; Wiki und vorhandene Logins bleiben unverändert.
+- [x] Bestehenden TCP-/DNS-Filter weiterbenutzt, Tests für exakte Domains, Port und ungültige Einträge ergänzt; Docker-Compose, .env und Proxy-Dokumentation aktualisiert.
+- [ ] CI/PR-Merge und tatsächlichen Zielserver-Browser-Test durchführen: echte Hosts eintragen, Container aktualisieren, Favorit neu verbinden.
+- [ ] Getrennte Browser-Origins für selbst angelegte Favoriten (Issue #40) weiterhin priorisieren, bevor fremde JS-Webseiten als sicher gelten.
