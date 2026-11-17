@@ -130,6 +130,7 @@ public sealed partial class FavoriteProxy
             var result=new List<KeyValuePair<string,string>>();
             string? passwordName=null;
             var passwordCount=0;
+            var newPasswordPresent=false;
             foreach(Match input in InputRegex.Matches(form.Groups["body"].Value)){
                 var attrs=input.Groups["attrs"].Value;
                 if(Attribute(attrs,"disabled") is not null)continue;
@@ -137,9 +138,9 @@ public sealed partial class FavoriteProxy
                 if(string.IsNullOrWhiteSpace(name))continue;
                 var type=(Attribute(attrs,"type")??"text").Trim().ToLowerInvariant();
                 if(type=="password"){
-                    if(!PasswordHint(attrs))continue;
                     passwordCount++;
-                    passwordName=name;
+                    if(!PasswordHint(attrs))newPasswordPresent=true;
+                    else passwordName=name;
                 }else if(type is "text" or "email" or "tel"){
                     if((Attribute(attrs,"autocomplete")??"")
                         .Contains("one-time-code",StringComparison.OrdinalIgnoreCase))
@@ -151,7 +152,7 @@ public sealed partial class FavoriteProxy
                     result.Add(new(name,Attribute(attrs,"value")??""));
                 }
             }
-            if(passwordCount!=1||passwordName is null)continue;
+            if(newPasswordPresent||passwordCount!=1||passwordName is null)continue;
             var hinted=candidates.Where(x=>x.Hinted).ToArray();
             // Prefer one clearly identified username field; if none is
             // identified, only one plain text/email input is unambiguous.
