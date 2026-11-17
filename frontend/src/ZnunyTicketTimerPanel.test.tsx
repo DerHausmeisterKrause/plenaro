@@ -71,7 +71,7 @@ it('restores six WPF preset buttons and edits only unbooked time via PUT',async(
   expect(targets).toEqual([2700,4500,3600,1800,0,3600]);
   expect(time.transferredSeconds).toBe(5400);
   expect(time.bookedSeconds).toBe(9000);
-  expect(screen.getByRole('button',{name:'-1h'})).toBeTruthy();
+  expect(screen.getByRole('button',{name:names[5]}).textContent).toBe('-1h');
   expect(await screen.findByText(/Noch nicht in Znuny gebucht: 60 Min/)).toBeTruthy();
 });
 
