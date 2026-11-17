@@ -2,6 +2,10 @@
 -- approval request. Preserve existing bookmark IDs and encrypted secrets.
 ALTER TABLE favorite_apps
   ADD COLUMN owner_user_id uuid REFERENCES "AspNetUsers"("Id") ON DELETE CASCADE;
+-- Preserve already admin-approved intranet origins during migration, without
+-- allowing users to retarget that trust to a new internal server.
+ALTER TABLE favorite_apps
+  ADD COLUMN allow_private_upstream boolean NOT NULL DEFAULT false;
 CREATE INDEX ix_favorite_apps_personal_owner
   ON favorite_apps(owner_user_id) WHERE owner_user_id IS NOT NULL;
 
@@ -37,9 +41,10 @@ BEGIN
   LOOP
     new_app_id=gen_random_uuid();
     INSERT INTO favorite_apps
-      (id,slug,name,upstream_url,enabled,available_to_all,owner_user_id)
+      (id,slug,name,upstream_url,enabled,available_to_all,
+       owner_user_id,allow_private_upstream)
     VALUES(new_app_id,'site-'||replace(entry.id::text,'-',''),
-      entry.name,entry.upstream_url,true,false,entry.user_id);
+      entry.name,entry.upstream_url,true,false,entry.user_id,true);
     UPDATE user_favorites SET app_id=new_app_id WHERE id=entry.id;
   END LOOP;
 END $$;
