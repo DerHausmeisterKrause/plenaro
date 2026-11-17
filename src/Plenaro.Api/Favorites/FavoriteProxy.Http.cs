@@ -220,10 +220,25 @@ public sealed partial class FavoriteProxy
         string username,string password,CancellationToken ct)
     {
         var current=entry;
-        for(var pageIndex=0;pageIndex<2;pageIndex++){
+        var followedLoginLink=false;
+        var visited=new HashSet<string>(StringComparer.Ordinal);
+        // At most four safe GETs: sites often redirect "/" to "/login"
+        // before serving the form. Do not follow a cross-host SSO redirect.
+        for(var pageIndex=0;pageIndex<4;pageIndex++){
+            if(!SameUpstream(origin,current)||
+               !visited.Add(current.AbsoluteUri))return;
             using var initial=new HttpRequestMessage(HttpMethod.Get,current);
             using var response=await client.SendAsync(initial,
                 HttpCompletionOption.ResponseHeadersRead,ct);
+            if(response.StatusCode is HttpStatusCode.MovedPermanently or
+                HttpStatusCode.Redirect or HttpStatusCode.SeeOther or
+                HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect){
+                if(response.Headers.Location is not { } next)return;
+                var redirect=new Uri(current,next);
+                if(!SameUpstream(origin,redirect))return;
+                current=redirect;
+                continue;
+            }
             if(!response.IsSuccessStatusCode ||
                response.Content.Headers.ContentLength>262144)return;
             var bytes=await ReadLimitedAsync(response.Content,262144,ct);
@@ -243,9 +258,11 @@ public sealed partial class FavoriteProxy
                 }
                 return;
             }
-            if(pageIndex==0 && FindHtmlLoginLink(html,current,origin) is { } found)
+            if(!followedLoginLink &&
+               FindHtmlLoginLink(html,current,origin) is { } found){
+                followedLoginLink=true;
                 current=found;
-            else return;
+            }else return;
         }
     }
 
