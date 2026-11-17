@@ -123,6 +123,8 @@ Assert(BuildLogin(
     BuildLogin(
     """<form method='post' action='/login'><input name='user'><input name='pw' type='password' autocomplete='new-password'></form>""") is null &&
     BuildLogin(
+    """<form method='post' action='/account'><input name='user'><input name='current' type='password' autocomplete='current-password'><input name='newpw' type='password' autocomplete='new-password'></form>""") is null &&
+    BuildLogin(
     """<div id='client-rendered-login'></div>""") is null,
     "never submit GET, cross-origin, password-reset, multiple-password, registration or JS-only forms");
 var loginLinkFinder=typeof(FavoriteProxy).GetMethod(
