@@ -375,10 +375,20 @@ builder.Services.AddRateLimiter(options =>
             PermitLimit=10,Window=TimeSpan.FromMinutes(5),QueueLimit=0,
             AutoReplenishment=true
         }));
+    // Ticket conversation reads can occur from several open task tabs.
+    // Keep a bounded per-user limit, but no longer count inline images and
+    // ticket attachments against that same quota.
     options.AddPolicy("znuny-ticket-read", context => RateLimitPartition.GetFixedWindowLimiter(
         AuthenticatedRateLimitKey.For(context),
         _ => new FixedWindowRateLimiterOptions {
-            PermitLimit=40, Window=TimeSpan.FromMinutes(5), QueueLimit=0,
+            PermitLimit=80, Window=TimeSpan.FromMinutes(5), QueueLimit=0,
+            AutoReplenishment=true
+        }));
+    options.AddPolicy("znuny-ticket-attachment-read",
+        context => RateLimitPartition.GetFixedWindowLimiter(
+        AuthenticatedRateLimitKey.For(context),
+        _ => new FixedWindowRateLimiterOptions {
+            PermitLimit=120, Window=TimeSpan.FromMinutes(5), QueueLimit=0,
             AutoReplenishment=true
         }));
     options.AddPolicy("znuny-ticket-write", context => RateLimitPartition.GetFixedWindowLimiter(
