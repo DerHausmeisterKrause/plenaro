@@ -91,7 +91,7 @@ using(var login=BuildLogin(atossStyleForm)){
         login.Headers.Referrer?.AbsoluteUri=="https://atoss.example.org/" &&
         login.Headers.GetValues("Origin").Single()=="https://atoss.example.org",
         "unusual enterprise form names use human-readable username label and same-host post");
-    var payload=await login.Content!.ReadAsStringAsync();
+    var payload=await login!.Content!.ReadAsStringAsync();
     Assert(payload.Contains("z_id=test.user") &&
         payload.Contains("j_password=demo-pass") &&
         payload.Contains("csrf_token=csrf123") &&
