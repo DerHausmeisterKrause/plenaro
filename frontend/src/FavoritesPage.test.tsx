@@ -25,6 +25,7 @@ const favorite={
   appId:'00000000-0000-4000-8000-000000000020',
   name:'Wiki',appName:'Wiki',slug:'wiki',path:'/',
   username:'',autoLogin:false,enabled:true,sortOrder:0,hasPassword:false,
+  url:'https://example.org/docs',
 };
 
 function renderStrictFavorite(){
@@ -52,6 +53,10 @@ describe('Favorite iframe bootstrap',()=>{
       '/_plenaro/favorite-bootstrap?token=example-test');
     await waitFor(()=>expect(mocks.startFavorite).toHaveBeenCalledTimes(1));
     expect(mocks.loadFavorites).toHaveBeenCalledTimes(1);
+    const original=screen.getByRole('link',{name:'Originalseite öffnen'});
+    expect(original.getAttribute('href')).toBe('https://example.org/docs');
+    expect(original.getAttribute('target')).toBe('_blank');
+    expect(original.getAttribute('rel')).toContain('noopener');
   });
 
   it('accepts the shared path-host bootstrap for the selected favorite',async()=>{

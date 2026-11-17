@@ -1,3 +1,29 @@
+## Favoriten nach PR #38: weiße eingebettete Webseiten
+
+Persönliche Webseiten (`site-<UUID>`) haben einen eigenen serverseitigen CookieJar, werden in der derzeitigen Umgebung aber über den Shared-Host `/<slug>/` ausgeliefert. Viele Webapps erstellen dynamische API-/CSS-/JS-Aufrufe direkt gegen `/api` oder `/assets`. Ohne browserseitige Präfixkorrektur gehen sie an den gemeinsamen Hostroot (404). Der Proxy ergänzt jetzt bei **persönlichen** Seiten die allgemeine Root-Pfadkorrektur, während der Wiki-Shim bewusst nur seine bisherigen Endpunkte `/rest` und `/s` verändert.
+
+Ein HTTP-502/504/403/401 als Hauptnavigation wird künftig als lesbares Diagnose-HTML angezeigt. Der Header `X-Plenaro-Favorite-Error` benennt den Fehler ohne Benutzer-/URL-Daten:
+
+- `private-upstream-blocked`: neue persönliche Seite zeigt auf privaten/localhost/Metadaten-IP-Bereich; serverseitiger Proxy lehnt dies absichtlich ab.
+- `upstream-redirect`: Zielseite leitet auf anderen Host (z. B. WWW-Canonical-Host) um; korrekte finale HTTPS-Adresse als persönlichen Favoriten speichern.
+- `upstream-unavailable`/`upstream-timeout`: Proxy-Netzwerkverbindung nicht möglich.
+- `proxy-session-expired`/`proxy-session-revoked`: Sitzungs-Cookie und Appberechtigung nicht mehr gültig, per „Neu verbinden“ neue Sitzung starten.
+- `upstream-resource-limit`: HTML/Assets außerhalb der Größenbeschränkung.
+
+Zusätzlich gibt es in jedem Favoriten den Link **„Originalseite öffnen“**. Wenn eine externe Webseite ihre Einbettung durch Browser-/JavaScript-/CSP-Verhalten verhindert, ist die Originalseite direkt im neuen Browser-Tab erreichbar, sofern der Benutzer selbst Zugang hat.
+
+### Live-Test ohne Tokens teilen
+
+1. Ein persönliches Favoritenfenster öffnen. Erwartet: Inhalt oder **sichtbarer** Diagnosehinweis.
+2. Im Browser-Entwicklerwerkzeug Network den **Dokument-Aufruf** unter `/site-...` ansehen. HTTP-Status und ggf. `X-Plenaro-Favorite-Error` notieren. **Keine Cookies, CSRF-Token, Einmal-Bootstrap-URLs oder vollständige HAR mit Zugangsdaten weitergeben.**
+3. Bei vollkommen weißer Seite prüfen, ob ein äußerer NGINX weiterhin `X-Frame-Options: SAMEORIGIN` hinzufügt oder CSP `frame-ancestors` blockiert. Die normale Plenaro- und die Favoriten-Origin sind verschieden.
+4. Im Network/Console defekte Ressourcen prüfen. Zielserver können fremde Skripte, CDN-Abhängigkeiten und Cross-Origin-Authentifizierung nutzen, die mit Proxy-Pfaden nicht garantiert funktionieren.
+5. Die Wiki-Seite und persönliche Auto-Logins separat gegen echte Systeme prüfen; CI verwendet nur simulierte Domains.
+
+**Sicherheitsgrenze:** Auch mit individueller Pfad-Cookie bleiben auf einem Shared-Browser-Host mehrere persönliche Webseiten dieselbe Origin. Eine langfristige Isolation mit dedizierter Browser-Origin pro frei angelegter Website ist erforderlich, bevor dieser Modus für beliebige fremde JS-Anwendungen als generell sicher gelten kann.
+
+---
+
 # Stand 17.11.2026 – Self-Service-Favoriten und eigenständige Wissensdatenbank
 
 **Aktueller Stand:** Webseiten werden unter `Einstellungen → Webseiten / Favoriten` direkt mit Namen und vollständiger HTTPS-Adresse pro Benutzer angelegt und sortiert. Eine Einzel-Freigabe durch die Administration ist nicht mehr erforderlich. Für persönliche Proxys gelten strengere Netzwerkgrenzen: keine lokalen/privaten IP-Ziele, nur öffentlich routbare HTTPS-Endpunkte. Das verhindert eine SSRF-Verbindung aus Plenaro in das interne Netzwerk.

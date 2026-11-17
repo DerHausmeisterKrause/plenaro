@@ -229,6 +229,9 @@ export function FavoritePage(){
         <button type="button" className="button button-secondary"
           onClick={()=>setRevision(n=>n+1)} disabled={loading}>
           <RefreshCw size={15}/>Neu verbinden</button>
+        {favorite?.url&&<a className="button button-secondary"
+          href={favorite.url} target="_blank" rel="noopener noreferrer">
+          <ExternalLink size={15}/>Originalseite öffnen</a>}
         <Link className="button button-secondary" to="/settings?section=favorites">Favoriten verwalten</Link>
       </div>
     </div>
@@ -238,7 +241,10 @@ export function FavoritePage(){
       Webseite wird geöffnet …</div>}
     {!error&&url&&<div className="znuny-portal-frame-wrap znuny-native-frame-wrap">
       <div className="znuny-portal-security-caption">
-        <ShieldCheck size={14}/>Browser-Origin getrennt, Verbindung über Plenaro.</div>
+        <ShieldCheck size={14}/>Webseite über den Plenaro-Proxy. Manche
+        Webseiten benötigen externe Skripte, verbieten Einbettungen oder
+        sind aus dem Servernetz nicht erreichbar. Falls die Ansicht leer
+        bleibt, die Originalseite über den oberen Link öffnen.</div>
       <iframe key={url} title={favorite?.name??'Webfavorit'}
         src={url} className="znuny-native-frame"
         sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"
