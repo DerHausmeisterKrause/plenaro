@@ -1,4 +1,4 @@
-## 17.11.2026 – Phase 6: Znuny-Dashboard 429 beheben (PR #46)
+## 17.11.2026 – Phase 6: Znuny-Dashboard 429 beheben (PR #46 – gemergt)
 
 - [x] Fehlermeldung im Frontend zugeordnet: `znunySyncApi.ts`
   verwendet die HTTP-Antwort des Plenaro-/Gateway-Endpunkts;
@@ -15,7 +15,8 @@
   429-Meldung im Frontend ergänzt.
 - [x] C#-Contract-Test zu separaten User-Limits trotz gleicher
   Reverse-Proxy-IP und Frontend-Tests zu HTTP-429-Ursachen ergänzt.
-- [ ] CI grün / PR gemergt und echter Zwei-User-Dashboard-Test.
+- [x] [PR #46](https://github.com/DerHausmeisterKrause/plenaro/pull/46) in `main` gemergt; [CI #44075326407](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44075326407) erfolgreich inkl. Backend, Frontend, Rate-Limit-Regression, NGINX und Docker-Smoke.
+- [ ] Echter Zwei-User-Dashboard-Test am Zielhost.
 - [ ] Falls weiterhin 429 ohne Plenaro-Kennung auftreten,
   NGINX-Limits und Upstream-Gateway getrennt diagnostizieren.
 
