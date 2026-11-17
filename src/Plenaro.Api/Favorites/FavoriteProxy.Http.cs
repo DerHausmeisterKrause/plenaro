@@ -248,6 +248,7 @@ public sealed partial class FavoriteProxy
           "use strict";
           const base = "__PREFIX__";
           const routes = ["/rest/", "/s/"];
+          const allRootPaths = __ALL_ROOT_PATHS__;
           function rewrite(value) {
             if (typeof value !== "string" &&
                 !(typeof URL !== "undefined" && value instanceof URL))
@@ -261,7 +262,10 @@ public sealed partial class FavoriteProxy
             try { url = new URL(raw, window.location.href); }
             catch (_) { return value; }
             if (url.origin !== window.location.origin ||
-                !routes.some(route => url.pathname.startsWith(route)))
+                url.pathname === base || url.pathname.startsWith(base + "/") ||
+                url.pathname.startsWith("/_plenaro/") ||
+                (!allRootPaths &&
+                  !routes.some(route => url.pathname.startsWith(route))))
               return value;
             return base + url.pathname + url.search + url.hash;
           }
@@ -360,18 +364,24 @@ public sealed partial class FavoriteProxy
         </script>
         """;
 
-    private static string InjectBrowserPathShim(string html,string pathPrefix)
+    private static string InjectBrowserPathShim(string html,string pathPrefix)=>
+        InjectPathShim(html,pathPrefix,false);
+
+    private static string InjectPersonalSitePathShim(string html,string pathPrefix)=>
+        InjectPathShim(html,pathPrefix,true);
+
+    private static string InjectPathShim(string html,string pathPrefix,bool allRootPaths)
     {
         if(pathPrefix.Length==0 ||
            html.Contains("data-plenaro-browser-shim",StringComparison.Ordinal))
             return html;
-        // ValidSlug limits the prefix to safe ASCII, so it is safe to use as
-        // a literal JS string. No browser-supplied value enters this script.
+        // Slug is server-created and verified before inclusion in JS.
         var slug=pathPrefix.TrimStart('/');
         if(pathPrefix!="/"+slug || !FavoriteHostNames.ValidSlug(slug))
             throw new InvalidOperationException("Invalid shim path.");
         var script=BrowserPathShim.Replace("__PREFIX__",pathPrefix,
-            StringComparison.Ordinal);
+            StringComparison.Ordinal).Replace("__ALL_ROOT_PATHS__",
+                allRootPaths?"true":"false",StringComparison.Ordinal);
         return Regex.Replace(html,@"<head\b[^>]*>",
             match=>match.Value+script,RegexOptions.IgnoreCase|
             RegexOptions.CultureInvariant,TimeSpan.FromSeconds(1));
@@ -591,6 +601,33 @@ public sealed partial class FavoriteProxy
         return buffer.ToArray();
     }
 
+    // A failed iframe navigation used to produce an empty 502/403 page.
+    // Return a small, actionable, self-contained document instead; never
+    // include the upstream URL, credentials or internal network addresses.
+    private static async Task ProxyNavigationErrorAsync(
+        HttpContext ctx,int status,string code,string message,CancellationToken ct)
+    {
+        if(ctx.Response.HasStarted)return;
+        ctx.Response.StatusCode=status;
+        ctx.Response.Headers["X-Plenaro-Favorite-Error"]=code;
+        ctx.Response.Headers.CacheControl="no-store";
+        if(!Navigation(ctx.Request))return;
+        ctx.Response.ContentType="text/html; charset=utf-8";
+        // Only fixed, server-authored text is passed into this template.
+        var html="<html lang=\"de\"><head><meta charset=\"utf-8\">"+
+            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"+
+            "<title>Favorit nicht erreichbar</title></head>"+
+            "<body style=\"font:16px system-ui;background:#111827;color:#e5e7eb;"+
+            "padding:38px;max-width:680px;margin:0 auto;line-height:1.6\">"+
+            "<h2>Diese Webseite konnte nicht angezeigt werden</h2><p>"+
+            System.Net.WebUtility.HtmlEncode(message)+"</p>"+
+            "<p>Prüfe die gespeicherte HTTPS-Adresse oder öffne die "+
+            "Originalseite über den Link oberhalb des Fensters.</p>"+
+            "<small>Fehlercode: "+System.Net.WebUtility.HtmlEncode(code)+"</small>"+
+            "</body></html>";
+        await ctx.Response.WriteAsync(html,ct);
+    }
+
     private async Task ForwardAsync(HttpContext ctx,ProxySession session,
         Uri external,string appPath,string pathPrefix,CancellationToken ct)
     {
@@ -640,7 +677,10 @@ public sealed partial class FavoriteProxy
             if(res.Headers.Location is { } location){
                 var redirect=new Uri(target,location);
                 if(!SameUpstream(session.Upstream,redirect)){
-                    ctx.Response.StatusCode=502;return;
+                    await ProxyNavigationErrorAsync(ctx,502,"upstream-redirect",
+                        "Die Webseite leitet auf einen anderen Server weiter. "+
+                        "Hinterlege die endgültige HTTPS-Adresse als Favorit.",ct);
+                    return;
                 }
                 ctx.Response.Headers.Location=external.GetLeftPart(
                     UriPartial.Authority)+pathPrefix+redirect.PathAndQuery;
@@ -707,21 +747,35 @@ public sealed partial class FavoriteProxy
                 var transformed=isHtml
                     ? RewriteHtmlPreservingScripts(html,session.Upstream,external,pathPrefix)
                     : Rewrite(html,session.Upstream,external,pathPrefix);
-                if(isHtml&&pathPrefix.Length>0&&
-                   FavoritePathRouting.BrowserShimEnabled(
-                       configuration["PLENARO_FAVORITES_BROWSER_SHIM_SLUGS"],
-                       session.Slug))
-                    transformed=InjectBrowserPathShim(transformed,pathPrefix);
+                if(isHtml&&pathPrefix.Length>0){
+                    if(session.Slug.StartsWith("site-",StringComparison.Ordinal))
+                        transformed=InjectPersonalSitePathShim(transformed,pathPrefix);
+                    else if(FavoritePathRouting.BrowserShimEnabled(
+                        configuration["PLENARO_FAVORITES_BROWSER_SHIM_SLUGS"],
+                        session.Slug))
+                        transformed=InjectBrowserPathShim(transformed,pathPrefix);
+                }
                 await ctx.Response.Body.WriteAsync(encoding.GetBytes(transformed),ct);
             }else{
                 await res.Content.CopyToAsync(ctx.Response.Body,ct);
             }
-        }catch(HttpRequestException){
-            if(!ctx.Response.HasStarted)ctx.Response.StatusCode=502;
+        }catch(HttpRequestException error) when(!ct.IsCancellationRequested){
+            var blocked=error.Message.Contains("Host address is blocked",
+                StringComparison.Ordinal);
+            await ProxyNavigationErrorAsync(ctx,502,
+                blocked?"private-upstream-blocked":"upstream-unavailable",
+                blocked
+                    ?"Für frei angelegte Favoriten ist der Zugriff auf "+
+                      "interne oder lokale Netzwerkadressen gesperrt. "+
+                      "Öffne eine Intranet-Webseite direkt im neuen Tab."
+                    :"Der Zielserver ist über den Plenaro-Proxy nicht erreichbar.",
+                ct);
         }catch(OperationCanceledException) when(!ct.IsCancellationRequested){
-            if(!ctx.Response.HasStarted)ctx.Response.StatusCode=504;
+            await ProxyNavigationErrorAsync(ctx,504,"upstream-timeout",
+                "Der Zielserver hat nicht rechtzeitig geantwortet.",ct);
         }catch(InvalidOperationException){
-            if(!ctx.Response.HasStarted)ctx.Response.StatusCode=413;
+            await ProxyNavigationErrorAsync(ctx,413,"upstream-resource-limit",
+                "Die Antwort des Zielservers ist für den Proxy zu groß.",ct);
         }
     }
 }
