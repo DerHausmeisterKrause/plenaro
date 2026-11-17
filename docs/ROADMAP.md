@@ -872,7 +872,7 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] [PR #37](https://github.com/DerHausmeisterKrause/plenaro/pull/37) nach `main` gemergt; [CI #44035220540](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44035220540) vollständig erfolgreich (Build, Frontend-Tests, Vertrags- und Docker-Smoke-Tests).
 - [ ] Live-Test: 2 Benutzer, Pin-Reihenfolge auch über Seiten hinweg; Report mit Schalter an/aus vergleichen und **Netzwerk-/Znuny-Logs** prüfen, dass bei Aus wirklich kein OTRS-Zeitabruf erfolgt.
 
-## 17.11.2026 – Persönliche Favoriten ohne Admin-Freigabe, Wiki unabhängig (PR folgt)
+## 17.11.2026 – Persönliche Favoriten ohne Admin-Freigabe, Wiki unabhängig (PR #38 – gemergt)
 
 - [x] WPF-Favoritenprinzip umgesetzt: jeder Benutzer kann eigenständig Webseite, vollständige HTTPS-URL, Name, optionalen Login, Aktivierung und individuelle Reihenfolge bestimmen.
 - [x] Favoriten-Editor von Admin-Anwendungskatalog auf `/api/v1/favorites/personal` umgestellt. Keine Webseite muss vorab durch einen Administrator angelegt oder benutzerbezogen freigegeben werden.
@@ -885,6 +885,6 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] Vorhandene AES-256-GCM-Wiki-Passwörter werden über ihren ursprünglichen Namen gelesen und bei neuer Benutzung unter `wiki.password` neu verschlüsselt; kein unsicheres Umbenennen des Ciphertexts.
 - [x] Favoriten und Wissensdatenbank in den Einstellungen getrennt, globale Freigabe-UI für Webseiten entfernt.
 - [x] Synthetische UI- und HTTP-Smoke-Tests für eigene Webseiten, URLs, Reihenfolge, CSRF und bestehendes Favoriten-Frame ergänzt.
-- [ ] GitHub-CI und Merge abschließen.
+- [x] [PR #38](https://github.com/DerHausmeisterKrause/plenaro/pull/38) nach `main` gemergt; [CI #44040160724](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44040160724) vollständig erfolgreich inklusive Frontend/Backend, Znuny- und Proxy-Vertragstests, Datenbankmigration und Docker-Smoke-Tests.
 - [ ] Live-Abnahme mit zwei Benutzern, bestehenden Favoriten/Passwörtern, Wiki-Bootstrap und URLs mit komplexen JS-/CSP-Pfaden durchführen.
 - [ ] Private Intranet-Webseiten benötigen weiterhin einen gesonderten, ausdrücklich freigeschalteten sicheren Netzwerkpfad; freie persönliche Proxy-Ziele erlauben aus SSRF-Schutzgründen nur öffentlich routbare HTTPS-IPs. Das zentral angebundene interne Wiki bleibt davon unberührt.
