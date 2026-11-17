@@ -1,3 +1,61 @@
+## Betreiberfreigabe für persönliche Intranet-Webseiten (November 2026)
+
+Der Fehlercode `private-upstream-blocked` bedeutet bei persönlichen
+`site-*`-Favoriten eine **bewusste** Sperre des TCP-Ziels durch den
+SSRF-Schutz. Die funktionierende zentrale Wiki-Verbindung ist davon
+unabhängig. Bei bereits vor der Trennung freigegebenen Favoriten wird
+`favorite_apps.allow_private_upstream` für die **unveränderte** Origin
+weiterhin berücksichtigt; selbst angelegte/neue oder umadressierte Favoriten
+erhalten diesen Bestandschutz nicht.
+
+**Lösung ohne pauschale Öffnung des lokalen Netzes:**
+Der Betreiber darf unter `/opt/plenaro/.env` die **exakten**
+vertrauenswürdigen HTTPS-Ziel-Origins eintragen:
+
+```dotenv
+PLENARO_FAVORITES_INTERNAL_ORIGINS=https://wiki.intern.example.org;https://cloud.intern.example.org:8443
+```
+
+Die Beispielnamen ersetzen! Nur `https://host` oder
+`https://host:port`, getrennt mit Semikolon, **keine Pfade,
+Subdomains als Wildcard, Credentials oder Subnetze**. Benutzer können
+weiterhin ihre Favoriten selbst anlegen; die Berechtigung für den
+serverseitigen Zugriff auf **private IPs** ist jedoch auf diese
+Administratoren-Liste begrenzt. Die Prüfung ist auf Hostname und Port
+exakt, nicht auf Namenspräfix/Suffix. Ein fehlerhafter Eintrag wird
+abgelehnt. Bei allen anderen persönlichen Upstreams bleiben nur
+öffentlich routbare Ziele erlaubt. Auch bei freigegebenen internen
+Origins blockiert der bestehende `SecureHandler` weiterhin Loopback,
+Link-Local und Metadaten-Adressen. DNS wird bei jedem TCP-Connect neu
+geprüft, HTTPS-Zertifikate und Hostnamen werden weiter validiert.
+
+Nach der Änderung:
+
+```sh
+cd /opt/plenaro
+git switch main && git pull --ff-only
+docker compose up -d --build --no-deps --force-recreate web
+docker compose up -d --no-deps --force-recreate nginx
+```
+
+Neu verbinden und im Browser neu laden. Bei internen Zertifikaten
+gegebenenfalls `PLENARO_TRUSTED_CA_FILE` auf die vertrauenswürdige
+**CA** setzen (niemals Zertifikatsprüfung ausschalten).
+Zur Diagnose in F12 → Netzwerk den ersten `/site-.../`-
+Dokumentrequest prüfen: der Code `private-upstream-blocked`
+sollte für explizit freigegebene, vom Container tatsächlich erreichbare
+Origins verschwinden. Darauf folgende 502 können DNS/TLS/Firewall-
+Ursachen haben; Login- oder JS-Fehler sind gesondert zu prüfen.
+
+**Sicherheitsvorbehalt:** Ein Shared-Path-Host `apps-plenaro.../site-...`
+ist keine Browser-Origin-Isolation. Nur bewusst vertrauenswürdige
+Webseiten darin einbetten; für beliebige fremde Skript-Webseiten
+bleibt die Umstellung auf dedizierte Browser-Origins (Issue #40) offen.
+Dieses Update ändert weder Wiki-Zugriff noch andere Anmeldungen,
+Cookies, gespeicherte Passwörter oder Datenbanktabellen.
+
+---
+
 ## Favoriten nach PR #38: weiße eingebettete Webseiten
 
 Persönliche Webseiten (`site-<UUID>`) haben einen eigenen serverseitigen CookieJar, werden in der derzeitigen Umgebung aber über den Shared-Host `/<slug>/` ausgeliefert. Viele Webapps erstellen dynamische API-/CSS-/JS-Aufrufe direkt gegen `/api` oder `/assets`. Ohne browserseitige Präfixkorrektur gehen sie an den gemeinsamen Hostroot (404). Der Proxy ergänzt jetzt bei **persönlichen** Seiten die allgemeine Root-Pfadkorrektur, während der Wiki-Shim bewusst nur seine bisherigen Endpunkte `/rest` und `/s` verändert.
