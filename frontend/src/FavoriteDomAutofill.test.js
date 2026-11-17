@@ -90,6 +90,28 @@ describe('Dedicated personal favorite DOM autofill (WPF parity)',()=>{
     p.window.close();
   });
 
+  it('also fills login fields in an accessible nested about:blank frame',()=>{
+    const p=page('<iframe id="embedded"></iframe>');
+    const iframe=p.window.document.querySelector('iframe');
+    const inner=iframe.contentDocument;
+    expect(inner).not.toBeNull();
+    inner.body.innerHTML=
+      '<form><input type="text" name="user" placeholder="Benutzername">'+
+      '<input type="password" name="pw" placeholder="Kennwort">'+
+      '<button type="submit">Anmelden</button></form>';
+    iframe.contentWindow.HTMLElement.prototype.getClientRects=function(){
+      return [Object.freeze({width:100,height:20})];
+    };
+    const form=inner.querySelector('form');
+    form.requestSubmit=vi.fn();
+    p.run();
+    p.scheduled[0]();
+    expect(inner.querySelector('[name="user"]').value).toBe('test.user');
+    expect(inner.querySelector('[name="pw"]').value).toBe('test-password');
+    expect(form.requestSubmit).toHaveBeenCalledTimes(1);
+    p.window.close();
+  });
+
   it('never fills or submits on another origin',()=>{
     const p=page('<form><input name="user"><input type="password"></form>',
       'apps-plenaro.example.org');
