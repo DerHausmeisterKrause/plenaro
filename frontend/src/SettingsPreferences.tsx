@@ -70,6 +70,7 @@ export function WorkspacePreferencesPanel({ admin, onSaved }: {
 }) {
   const [form, setForm] = useState<WorkspacePreferences>({
     instanceName: 'Plenaro', supportEmail: '', defaultWeekStart: 'monday',
+    fetchOtrsAccounting: true,
   });
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -114,12 +115,24 @@ export function WorkspacePreferencesPanel({ admin, onSaved }: {
         <select id="workspace-week" value={form.defaultWeekStart} onChange={e => setForm({ ...form, defaultWeekStart: e.target.value as WorkspacePreferences['defaultWeekStart'] })}>
           <option value="monday">Montag</option><option value="sunday">Sonntag</option>
         </select>
+        <label className="um-check" htmlFor="workspace-otrs-accounting">
+          <input id="workspace-otrs-accounting" type="checkbox"
+            checked={form.fetchOtrsAccounting!==false}
+            onChange={e=>setForm({...form,fetchOtrsAccounting:e.target.checked})}/>
+          OTRS-Zeiten im Zeitreport abrufen und berücksichtigen
+        </label>
+        <p className="um-hint">Aktiv: persönliche OTRS-Zeitbuchungen abrufen,
+          mit lokal bestätigten Plenaro-Buchungen abgleichen und fehlende Zeiten
+          ergänzen (ohne Doppelzählung). Deaktiviert: der Zeitreport fragt OTRS
+          überhaupt nicht ab und verwendet nur lokale Daten. Das betrifft
+          ausschließlich den Report, nicht den Ticket-Sync oder normale Buchungen.</p>
         <p className="um-hint">Diese Werte enthalten keine Passwörter oder API-Schlüssel. Integrations-Zugangsdaten bekommen später einen eigenen sicheren Speicher.</p>
         <button type="submit" className="button button-primary" disabled={busy}><Save size={16}/>{busy ? 'Speichere …' : 'Instanzeinstellungen speichern'}</button>
       </form> : <div className="um-readonly">
         <div className="um-account-data"><span>Instanz</span><strong>{form.instanceName}</strong></div>
         <div className="um-account-data"><span>Support</span><strong>{form.supportEmail || 'Nicht hinterlegt'}</strong></div>
         <div className="um-account-data"><span>Standard-Wochenbeginn</span><strong>{form.defaultWeekStart === 'monday' ? 'Montag' : 'Sonntag'}</strong></div>
+        <div className="um-account-data"><span>OTRS-Zeitabruf im Report</span><strong>{form.fetchOtrsAccounting!==false ? 'Aktiv' : 'Deaktiviert – nur lokale Zeiten'}</strong></div>
       </div>}
     <Notice message={message} error={error}/>
     {admin && <p className="um-hint" style={{ marginTop: 16 }}><ShieldCheck size={14} aria-hidden="true" style={{ verticalAlign: 'middle' }}/> Änderungen werden serverseitig mit Adminrolle und CSRF-Schutz geprüft.</p>}

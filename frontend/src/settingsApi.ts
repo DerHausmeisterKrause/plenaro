@@ -7,6 +7,7 @@ export type WorkspacePreferences = {
   instanceName: string;
   supportEmail: string;
   defaultWeekStart: 'monday' | 'sunday';
+  fetchOtrsAccounting: boolean;
 };
 
 export async function readPersonalPreferences(): Promise<PersonalPreferences> {

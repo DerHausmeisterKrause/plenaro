@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays, Clock3, ExternalLink, MapPin, RefreshCw, Search, SlidersHorizontal, Ticket } from 'lucide-react';
+import { CalendarDays, Clock3, ExternalLink, MapPin, Pin, RefreshCw, Search, SlidersHorizontal, Ticket } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { ClassicTasksPage } from './ClassicTasksPage';
 import { localDate } from './tasksApi';
@@ -8,6 +8,7 @@ import { graphStatus, readOutlookWeek, type OutlookEvent } from './graphApi';
 import { ClassicTicketDetailPanel } from './ClassicTicketDetailPanel';
 import {
   getCachedTickets, getTicketAccess, getTicketAgenda, setShowAllCandidates,
+  setZnunyTicketPinned,
   type CachedTicket, type TicketAccess, type TicketAgendaSegment, type TicketListFilters,
 } from './znunySyncApi';
 import { agendaTimeLabel, buildTodayAgenda, localDayBounds } from './todayAgenda';
@@ -40,6 +41,7 @@ export function ClassicTodayPage() {
   });
   const [filtersOpen,setFiltersOpen]=useState(false);
   const [toggleBusy,setToggleBusy]=useState(false);
+  const [pinBusy,setPinBusy]=useState<string|null>(null);
   const [loading,setLoading]=useState(true);
   const [listLoading,setListLoading]=useState(false);
   const [busy,setBusy]=useState(false);
@@ -133,6 +135,18 @@ export function ClassicTodayPage() {
     setTab(next);setPage(0);setSelectedTicketId(null);setSelectedAgendaKey(null);
     setTicketSearch('');setSearchDebounced('');
   }
+  async function togglePin(ticket:CachedTicket){
+    if(pinBusy)return;
+    setPinBusy(ticket.ticketId);setError('');
+    try{
+      await setZnunyTicketPinned(ticket.ticketId,!ticket.isPinned);
+      // Server handles pinned-first sort before pagination. Reload instead of
+      // locally reordering this page and possibly hiding pins on other pages.
+      setPage(0);setRefresh(v=>v+1);
+    }catch(e){setError(e instanceof Error?e.message:'Ticket konnte nicht angepinnt werden.');}
+    finally{setPinBusy(null);}
+  }
+
   function updateFilter<K extends keyof TicketListFilters>(
     key:K,value:TicketListFilters[K]){
     setPage(0);setFilters(old=>({...old,[key]:value}));
@@ -291,14 +305,25 @@ export function ClassicTodayPage() {
             <p>{tab==='new'?'Keine Tickets passend zum Pool- und Suchfilter gefunden.':
               'In dieser Ansicht sind keine Tickets vorhanden.'}</p>
           </div>:
-          <div className="plenaro-rows">{tickets.map(ticket=><button
-            key={ticket.ticketId} type="button"
-            className={`plenaro-task-row${selectedTicketId===ticket.ticketId?' selected':''}`}
-            onClick={()=>setSelectedTicketId(ticket.ticketId)}>
-            <span><strong>{ticket.title}</strong>
-              <small>#{ticket.ticketNumber||ticket.ticketId} · {ticket.queue}</small></span>
-            <span className="tasks-state">{ticket.state}</span>
-          </button>)}</div>}
+          <div className="plenaro-rows">{tickets.map(ticket=>
+            <div key={ticket.ticketId} className={`ticket-pin-row${ticket.isPinned&&tab==='active'?' is-pinned':''}`}>
+              <button type="button"
+                className={`plenaro-task-row${selectedTicketId===ticket.ticketId?' selected':''}`}
+                onClick={()=>setSelectedTicketId(ticket.ticketId)}>
+                <span><strong>{ticket.title}</strong>
+                  <small>#{ticket.ticketNumber||ticket.ticketId} · {ticket.queue}</small></span>
+                <span className="tasks-state">{ticket.state}</span>
+              </button>
+              {tab==='active'&&<button type="button"
+                className={`ticket-pin-toggle${ticket.isPinned?' is-pinned':''}`}
+                aria-label={`Ticket #${ticket.ticketNumber||ticket.ticketId} ${ticket.isPinned?'Pin lösen':'anpinnen'}`}
+                title={ticket.isPinned?'Von oben lösen':'Oben anpinnen'}
+                aria-pressed={!!ticket.isPinned} disabled={!!pinBusy}
+                onClick={()=>void togglePin(ticket)}>
+                <Pin size={16} fill={ticket.isPinned?'currentColor':'none'}/>
+              </button>}
+            </div>
+          )}</div>}
           {tab!=='today'&&!listLoading&&(page>0||tickets.length===100)&&
             <div className="znuny-ticket-pagination">
               <button type="button" className="button button-secondary" disabled={page===0}

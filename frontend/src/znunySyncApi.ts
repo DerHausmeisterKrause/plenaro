@@ -17,7 +17,7 @@ export type SyncRunResult = {
 export type CachedTicket = {
   ticketId: string; ticketNumber: string; title: string; queue: string;
   state: string; stateType: string; ownerId: number|null; responsibleId: number|null;
-  createdAt: string|null; changedAt: string|null;
+  createdAt: string|null; changedAt: string|null; isPinned?:boolean;
 };
 export type TicketAccess = {
   approved:boolean;agentId:number|null;candidateUserId:number|null;syncEnabled:boolean;
@@ -72,6 +72,10 @@ async function mutate(url:string,method:'PUT'|'DELETE'|'POST',body?:unknown):Pro
   }
   return response;
 }
+/** Pins belong to the currently signed-in Plenaro user, not to OTRS. */
+export const setZnunyTicketPinned=async(ticketId:string,pinned:boolean):Promise<void>=>{
+  await mutate('/api/v1/znuny/tickets/pins','PUT',{ticketId,pinned});
+};
 export const getSyncStatus=()=>request<SyncStatus>('/api/v1/admin/znuny/sync');
 export const saveSyncConfig=async(settings:SyncConfig)=>{
   await mutate('/api/v1/admin/znuny/sync','PUT',settings);

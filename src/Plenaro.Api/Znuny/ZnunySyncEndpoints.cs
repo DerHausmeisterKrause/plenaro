@@ -10,6 +10,7 @@ namespace Plenaro.Api.Znuny;
 public static class ZnunySyncEndpoints
 {
     public sealed record ShowAllInput(bool ShowAll);
+    public sealed record PinTicketInput(string TicketId,bool Pinned);
     public sealed record SyncConfiguration(bool Enabled,string ServiceUsername,
         int InitialLookbackDays=365,int DeltaIntervalMinutes=15,
         int OpenIntervalMinutes=360,int MaxRequestsPerCycle=200,
@@ -229,10 +230,13 @@ public static class ZnunySyncEndpoints
             await using var cmd=new NpgsqlCommand($"""
                 SELECT t.ticket_id,t.ticket_number,t.title,t.queue,t.state,
                     t.state_type,t.owner_agent_id,t.responsible_agent_id,
-                    t.created_at,t.changed_at
+                    t.created_at,t.changed_at,
+                    (pin.ticket_id IS NOT NULL) AS is_pinned
                 FROM znuny_cached_tickets t
                 INNER JOIN znuny_approved_agent_bindings b ON b.user_id=@user
                 LEFT JOIN znuny_user_settings p ON p.user_id=b.user_id
+                LEFT JOIN znuny_ticket_pins pin
+                    ON pin.ticket_id=t.ticket_id AND pin.user_id=@user
                 LEFT JOIN znuny_ticket_search_documents d ON d.ticket_id=t.ticket_id
                 LEFT JOIN znuny_ticket_workspaces w ON w.ticket_id=t.ticket_id
                     AND w.user_id=@user
@@ -276,7 +280,10 @@ public static class ZnunySyncEndpoints
                       COALESCE(d.content,''),COALESCE(w.description,''),COALESCE(w.ticket_url,''))),
                     lower(term))=0
                 ))
-                ORDER BY {sortColumn} {sortDirection} NULLS LAST,t.ticket_id DESC
+                ORDER BY CASE WHEN @view='mine' AND pin.ticket_id IS NOT NULL
+                                  THEN 0 ELSE 1 END,
+                         CASE WHEN @view='mine' THEN pin.pinned_at END DESC NULLS LAST,
+                         {sortColumn} {sortDirection} NULLS LAST,t.ticket_id DESC
                 LIMIT @max OFFSET @skip
                 """,db);
             cmd.Parameters.AddWithValue("user",account.Id);
@@ -303,10 +310,60 @@ public static class ZnunySyncEndpoints
                     state=r.GetString(4),stateType=r.GetString(5),
                     ownerId=r.IsDBNull(6)?(int?)null:r.GetInt32(6),
                     responsibleId=r.IsDBNull(7)?(int?)null:r.GetInt32(7),
-                    createdAt=Date(8),changedAt=Date(9)
+                    createdAt=Date(8),changedAt=Date(9),
+                    isPinned=r.GetBoolean(10)
                 });
             }
             return Results.Ok(tickets);
+        });
+
+        // Per-user pinning affects only the current ticket list, never OTRS.
+        // Active tickets must belong to the bound agent; any old personal pin
+        // can always be removed even after the ticket changes owner.
+        reader.MapPut("/tickets/pins",async(PinTicketInput input,
+            HttpContext http,IAntiforgery anti,UserManager<ApplicationUser> users,
+            ZnunyTicketVisibility visibility,IConfiguration config,CancellationToken ct)=>{
+            if(!await Csrf(http,anti))return BadCsrf();
+            var user=await users.GetUserAsync(http.User);
+            if(user is null||user.IsDisabled)return Results.Unauthorized();
+            if(input.TicketId is null||input.TicketId.Length is <1 or >80||
+               input.TicketId.Any(char.IsControl))
+                return Results.BadRequest(new{error="Ungültige Ticket-ID."});
+            await using var db=await Open(config,ct);
+            if(!input.Pinned){
+                await using var remove=new NpgsqlCommand("""
+                    DELETE FROM znuny_ticket_pins
+                    WHERE user_id=@user AND ticket_id=@ticket
+                    """,db);
+                remove.Parameters.AddWithValue("user",user.Id);
+                remove.Parameters.AddWithValue("ticket",input.TicketId);
+                await remove.ExecuteNonQueryAsync(ct);
+                return Results.NoContent();
+            }
+            var personal=await visibility.PersonalTicketsAsync(user.Id,ct);
+            if(!personal.Contains(input.TicketId,StringComparer.Ordinal))
+                return Results.NotFound();
+            await using var pin=new NpgsqlCommand("""
+                INSERT INTO znuny_ticket_pins(user_id,ticket_id,pinned_at)
+                SELECT @user,t.ticket_id,now()
+                FROM znuny_cached_tickets t
+                WHERE t.ticket_id=@ticket AND lower(t.state_type)<>'closed'
+                ON CONFLICT(user_id,ticket_id) DO NOTHING
+                RETURNING ticket_id
+                """,db);
+            pin.Parameters.AddWithValue("user",user.Id);
+            pin.Parameters.AddWithValue("ticket",input.TicketId);
+            if(await pin.ExecuteScalarAsync(ct) is null){
+                await using var exists=new NpgsqlCommand("""
+                    SELECT EXISTS(SELECT 1 FROM znuny_ticket_pins
+                        WHERE user_id=@user AND ticket_id=@ticket)
+                    """,db);
+                exists.Parameters.AddWithValue("user",user.Id);
+                exists.Parameters.AddWithValue("ticket",input.TicketId);
+                if(await exists.ExecuteScalarAsync(ct) is not true)
+                    return Results.Conflict(new{error="Nur aktuelle Tickets können angepinnt werden."});
+            }
+            return Results.NoContent();
         });
 
         reader.MapPut("/tickets/candidates/show-all",async(ShowAllInput input,

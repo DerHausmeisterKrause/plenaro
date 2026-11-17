@@ -1143,3 +1143,19 @@ h1,h2,h3,p { margin-top: 0; }
   .homeoffice-dialog-actions{justify-content:stretch}
   .homeoffice-dialog-actions>.button{flex:1;justify-content:center}
 }
+
+
+/* Personal WPF-style pinned current-ticket rows: distinct pin control and
+   ticket-opening control to preserve keyboard and screen-reader behavior. */
+.ticket-pin-row{display:flex;align-items:stretch;gap:5px;min-width:0}
+.ticket-pin-row>.plenaro-task-row,
+.ticket-pin-row>.classic-list-item{flex:1;min-width:0;width:auto}
+.ticket-pin-row.is-pinned>.plenaro-task-row,
+.ticket-pin-row.is-pinned>.classic-list-item{border-left:3px solid var(--blue)}
+.ticket-pin-toggle{flex:0 0 34px;align-self:stretch;display:grid;place-items:center;
+  background:var(--surface-soft);border:1px solid var(--border);border-radius:8px;
+  color:var(--muted-strong);cursor:pointer;padding:4px}
+.ticket-pin-toggle.is-pinned{background:var(--blue-pale);border-color:var(--blue);color:var(--blue)}
+.ticket-pin-toggle:hover:not(:disabled){color:var(--blue)}
+.ticket-pin-toggle:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.ticket-pin-toggle:disabled{opacity:.5;cursor:not-allowed}
