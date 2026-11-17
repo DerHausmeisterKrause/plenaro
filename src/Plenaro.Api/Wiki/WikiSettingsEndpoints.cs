@@ -14,12 +14,13 @@ namespace Plenaro.Api.Wiki;
 /// <summary>
 /// One admin-controlled Wiki server for everybody. The only personal settings
 /// are each user's username and AES-GCM encrypted password. The existing
-/// per-user FavoriteProxy handles all sessions; users cannot alter the server.
+/// FavoriteProxy handles all browser sessions without ever creating bookmarks.
 /// </summary>
 public static class WikiSettingsEndpoints
 {
     private const string Slug="wiki";
     private const string ConfigKey="wiki.browser";
+    private const string PasswordKey="wiki.password";
     public sealed record WikiAdminInput(string Name,string BaseUrl,string HomePath);
     public sealed record WikiAdminInfo(bool Configured,string Name,string BaseUrl,string HomePath);
     public sealed record WikiUserInfo(bool Configured,string Name,string HomePath,
@@ -43,10 +44,12 @@ public static class WikiSettingsEndpoints
             if(wiki is null||!wiki.Enabled||!wiki.All)
                 return Results.Ok(new WikiUserInfo(false,"","/","",false,false,null));
             var home=await Home(db,ct);
-            var personal=await Personal(db,user.Id,wiki.Id,ct);
+            var personal=await Personal(db,user.Id,ct);
             var hasPassword=personal is not null&&vault.IsConfigured&&
                 (await vault.ListNamesAsync("user",user.Id,ct))
-                    .Contains(FavoritesEndpoints.PasswordName(personal.Value.Id));
+                    .Contains(PasswordKey);
+            if(!hasPassword&&personal is {LegacySecretName: {Length:>0} legacy}&&vault.IsConfigured)
+                hasPassword=(await vault.ListNamesAsync("user",user.Id,ct)).Contains(legacy);
             var ready=personal is not null&&personal.Value.AutoLogin&&
                 !string.IsNullOrWhiteSpace(personal.Value.Username)&&hasPassword;
             return Results.Ok(new WikiUserInfo(true,wiki.Name,home,
@@ -72,37 +75,41 @@ public static class WikiSettingsEndpoints
             var wiki=await Wiki(db,ct);
             if(wiki is null||!wiki.Enabled||!wiki.All)
                 return Results.Conflict(new{error="Der Administrator hat noch keinen Wiki-Server für alle freigegeben."});
-            var previous=await Personal(db,user.Id,wiki.Id,ct);
-            var secretName=previous is null?"":
-                FavoritesEndpoints.PasswordName(previous.Value.Id);
-            var existingSecret=previous is not null &&
-                (await vault.ListNamesAsync("user",user.Id,ct)).Contains(secretName);
+            var previous=await Personal(db,user.Id,ct);
+            var names=(await vault.ListNamesAsync("user",user.Id,ct)).ToHashSet();
+            var existingSecret=names.Contains(PasswordKey)||
+                (previous is {LegacySecretName: {Length:>0} legacy}&&names.Contains(legacy));
             if(string.IsNullOrEmpty(input.Password)&&!existingSecret)
                 return Results.BadRequest(new{error="Ein Wiki-Passwort ist erforderlich."});
-            var home=await Home(db,ct);
-            var favoriteId=Guid.NewGuid();
+            var connectionId=previous?.Id??Guid.NewGuid();
             await using(var cmd=new NpgsqlCommand("""
-                INSERT INTO user_favorites(
-                    id,user_id,app_id,name,path,username,auto_login,enabled,sort_order)
-                VALUES(@id,@user,@app,@name,@path,@username,true,true,0)
-                ON CONFLICT(user_id,app_id) DO UPDATE SET
-                    name=EXCLUDED.name,path=EXCLUDED.path,
-                    username=EXCLUDED.username,auto_login=true,enabled=true
+                INSERT INTO wiki_user_connections(id,user_id,username,legacy_secret_name)
+                VALUES(@id,@user,@username,@legacy)
+                ON CONFLICT(user_id) DO UPDATE SET username=EXCLUDED.username
                 RETURNING id
                 """,db)){
-                cmd.Parameters.AddWithValue("id",favoriteId);
+                cmd.Parameters.AddWithValue("id",connectionId);
                 cmd.Parameters.AddWithValue("user",user.Id);
-                cmd.Parameters.AddWithValue("app",wiki.Id);
-                cmd.Parameters.AddWithValue("name",wiki.Name);
-                cmd.Parameters.AddWithValue("path",home);
                 cmd.Parameters.AddWithValue("username",input.Username.Trim());
-                favoriteId=(Guid)(await cmd.ExecuteScalarAsync(ct)
-                    ?? throw new InvalidOperationException("Wiki-Favorit konnte nicht gespeichert werden."));
+                cmd.Parameters.AddWithValue("legacy",NpgsqlDbType.Varchar).Value=
+                    (object?)previous?.LegacySecretName??DBNull.Value;
+                connectionId=(Guid)(await cmd.ExecuteScalarAsync(ct)
+                    ?? throw new InvalidOperationException("Wiki-Anmeldung konnte nicht gespeichert werden."));
             }
-            if(!string.IsNullOrEmpty(input.Password))
-                await vault.SetAsync("user",user.Id,
-                    FavoritesEndpoints.PasswordName(favoriteId),input.Password,ct);
-            proxy.RevokeFavorite(user.Id,favoriteId);
+            if(!string.IsNullOrEmpty(input.Password)){
+                await vault.SetAsync("user",user.Id,PasswordKey,input.Password,ct);
+                if(previous?.LegacySecretName is {Length:>0} legacySecret)
+                    await vault.DeleteAsync("user",user.Id,legacySecret,ct);
+            }else if(!names.Contains(PasswordKey)&&previous is {LegacySecretName:{Length:>0} legacyName}){
+                // Move existing encrypted favorite password by decrypting and
+                // re-encrypting with the correct new AAD, never copying raw
+                // ciphertext to a different secret name.
+                var prior=await vault.GetForIntegrationAsync("user",user.Id,
+                    legacyName,ct);
+                if(!string.IsNullOrEmpty(prior))
+                    await vault.SetAsync("user",user.Id,PasswordKey,prior,ct);
+            }
+            proxy.RevokeFavorite(user.Id,connectionId);
             return Results.NoContent();
         });
 
@@ -122,11 +129,22 @@ public static class WikiSettingsEndpoints
             var wiki=await Wiki(db,ct);
             if(wiki is null||!wiki.Enabled||!wiki.All)
                 return Results.Conflict(new{error="Der Wiki-Server ist nicht für alle freigegeben."});
-            var personal=await Personal(db,user.Id,wiki.Id,ct);
-            if(personal is null||!personal.Value.AutoLogin||
-               string.IsNullOrWhiteSpace(personal.Value.Username)||!vault.IsConfigured||
-               !(await vault.ListNamesAsync("user",user.Id,ct))
-                   .Contains(FavoritesEndpoints.PasswordName(personal.Value.Id)))
+            var personal=await Personal(db,user.Id,ct);
+            if(personal is null||
+               string.IsNullOrWhiteSpace(personal.Value.Username)||!vault.IsConfigured)
+                return Results.Conflict(new{
+                    error="Bitte deinen Wiki-Benutzernamen und dein Passwort unter Einstellungen → Wiki hinterlegen."});
+            var secretNames=(await vault.ListNamesAsync("user",user.Id,ct)).ToHashSet();
+            var hasPassword=secretNames.Contains(PasswordKey);
+            if(!hasPassword&&personal.Value.LegacySecretName is {Length:>0} legacy &&
+               secretNames.Contains(legacy)){
+                var oldPassword=await vault.GetForIntegrationAsync("user",user.Id,legacy,ct);
+                if(!string.IsNullOrEmpty(oldPassword)){
+                    await vault.SetAsync("user",user.Id,PasswordKey,oldPassword,ct);
+                    hasPassword=true;
+                }
+            }
+            if(!hasPassword)
                 return Results.Conflict(new{
                     error="Bitte deinen Wiki-Benutzernamen und dein Passwort unter Einstellungen → Wiki hinterlegen."});
             var favorite=new FavoritesEndpoints.FavoriteInfo(
@@ -157,19 +175,19 @@ public static class WikiSettingsEndpoints
             await using var db=await Open(config,ct);
             var wiki=await Wiki(db,ct);
             if(wiki is null)return Results.NoContent();
-            var personal=await Personal(db,user.Id,wiki.Id,ct);
+            var personal=await Personal(db,user.Id,ct);
             if(personal is null)return Results.NoContent();
             proxy.RevokeFavorite(user.Id,personal.Value.Id);
-            if(vault.IsConfigured)
-                await vault.DeleteAsync("user",user.Id,
-                    FavoritesEndpoints.PasswordName(personal.Value.Id),ct);
+            if(vault.IsConfigured){
+                await vault.DeleteAsync("user",user.Id,PasswordKey,ct);
+                if(personal.Value.LegacySecretName is {Length:>0} old)
+                    await vault.DeleteAsync("user",user.Id,old,ct);
+            }
             await using var cmd=new NpgsqlCommand("""
-                DELETE FROM user_favorites
-                WHERE id=@favorite AND user_id=@user AND app_id=@app
+                DELETE FROM wiki_user_connections WHERE id=@id AND user_id=@user
                 """,db);
-            cmd.Parameters.AddWithValue("favorite",personal.Value.Id);
+            cmd.Parameters.AddWithValue("id",personal.Value.Id);
             cmd.Parameters.AddWithValue("user",user.Id);
-            cmd.Parameters.AddWithValue("app",wiki.Id);
             await cmd.ExecuteNonQueryAsync(ct);
             return Results.NoContent();
         });
@@ -217,17 +235,8 @@ public static class WikiSettingsEndpoints
                     JsonSerializer.Serialize(new {homePath=normalized.HomePath}));
                 await cmd.ExecuteNonQueryAsync(ct);
             }
-            // Existing personal credentials remain bound to this app ID.
-            // Existing per-user favorites get the globally chosen home path.
-            await using(var cmd=new NpgsqlCommand("""
-                UPDATE user_favorites SET path=@path,name=@name
-                WHERE app_id=@app
-                """,db,tx)){
-                cmd.Parameters.AddWithValue("path",normalized.HomePath);
-                cmd.Parameters.AddWithValue("name",normalized.Name);
-                cmd.Parameters.AddWithValue("app",appId);
-                await cmd.ExecuteNonQueryAsync(ct);
-            }
+            // Wiki credentials are stored independently of personal
+            // favorites; changing the server does not touch user bookmarks.
             await tx.CommitAsync(ct);
             proxy.RevokeApp(appId);
             return Results.NoContent();
@@ -280,18 +289,19 @@ public static class WikiSettingsEndpoints
         return (await cmd.ExecuteScalarAsync(ct) as string) is {Length:>0} p?p:"/";
     }
 
-    private static async Task<(Guid Id,string Username,bool AutoLogin)?> Personal(
-        NpgsqlConnection db,Guid user,Guid app,CancellationToken ct)
+    private static async Task<(Guid Id,string Username,bool AutoLogin,
+        string? LegacySecretName)?> Personal(
+        NpgsqlConnection db,Guid user,CancellationToken ct)
     {
         await using var cmd=new NpgsqlCommand("""
-            SELECT id,username,auto_login FROM user_favorites
-            WHERE user_id=@user AND app_id=@app
+            SELECT id,username,legacy_secret_name FROM wiki_user_connections
+            WHERE user_id=@user
             """,db);
         cmd.Parameters.AddWithValue("user",user);
-        cmd.Parameters.AddWithValue("app",app);
         await using var reader=await cmd.ExecuteReaderAsync(ct);
         return await reader.ReadAsync(ct)?
-            (reader.GetGuid(0),reader.GetString(1),reader.GetBoolean(2)):null;
+            (reader.GetGuid(0),reader.GetString(1),true,
+             reader.IsDBNull(2)?null:reader.GetString(2)):null;
     }
 
     private static async Task<NpgsqlConnection> Open(IConfiguration config,

@@ -8,7 +8,7 @@ import { DayMarkerBudgetSettings } from './DayMarkersPanel';
 import { BrRecipientsSettingsPanel } from './BrRecipientsSettingsPanel';
 import { ReminderSettingsPanel } from './ReminderSettingsPanel';
 import { ZnunySettingsPanel } from './ZnunySettingsPanel';
-import {FavoriteSettingsPanel,FavoriteAppsAdminPanel} from './FavoritesPage';
+import {FavoriteSettingsPanel} from './FavoritesPage';
 import {WikiSettingsPanel} from './WikiSettingsPanel';
 import {useSearchParams} from 'react-router-dom';
 import { ZnunyCentralAdminPanel } from './ZnunyCentralAdminPanel';
@@ -319,8 +319,8 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved, onFavori
     { key: 'import', label: 'Datenimport' },
     { key: 'microsoft', label: 'Microsoft 365' },
     { key: 'ticket', label: 'Ticketsystem' },
-    { key: 'favorites', label: 'Favoriten' },
-    { key: 'wiki', label: 'Wiki' },
+    { key: 'favorites', label: 'Webseiten / Favoriten' },
+    { key: 'wiki', label: 'Wissensdatenbank' },
     { key: 'security', label: 'Konto & Sicherheit' },
     ...(admin ? [{ key: 'admin' as const, label: 'Administration' }] : []),
   ];
@@ -358,10 +358,10 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved, onFavori
       </section>
     </>}
     {section === 'ticket' && <><ZnunySettingsPanel admin={admin}/>{admin && <ZnunyCentralAdminPanel/>}</>}
-    {section === 'favorites' && <><FavoriteSettingsPanel key={appsRevision} onChanged={onFavoritesChanged}/>
-      {admin&&<FavoriteAppsAdminPanel onChanged={()=>{
+    {section === 'favorites'&&<FavoriteSettingsPanel
+      key={appsRevision} onChanged={()=>{
         setAppsRevision(v=>v+1);onFavoritesChanged();
-      }}/>}</>}
+      }}/>}
     {section === 'wiki' && <WikiSettingsPanel admin={admin}/>}
     {section === 'security' && <>
       <section className="content-card um-account">

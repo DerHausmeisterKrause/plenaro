@@ -12,19 +12,211 @@ public static class FavoritesEndpoints
 {
     public sealed record AppInput(string Name,string Slug,string UpstreamUrl,
         bool Enabled,bool AvailableToAll,Guid[]? AllowedUsers);
+    public sealed record PersonalSiteInput(string Name,string Url,string Username,
+        bool AutoLogin,bool Enabled,int SortOrder,string? Password,
+        bool ClearPassword=false);
+    public sealed record FavoriteOrderInput(Guid[] Ids);
     public sealed record FavoriteInput(Guid AppId,string Name,string Path,
         string Username,bool AutoLogin,bool Enabled,int SortOrder,string? Password,bool ClearPassword=false);
     public sealed record AppInfo(Guid Id,string Name,string Slug,bool Enabled,
         bool AvailableToAll,string? UpstreamUrl,Guid[]? AllowedUsers);
     public sealed record FavoriteInfo(Guid Id,Guid AppId,string Name,string AppName,
         string Slug,string Path,string Username,bool AutoLogin,bool Enabled,
-        int SortOrder,bool HasPassword);
+        int SortOrder,bool HasPassword,string? Url=null,
+        bool AllowPrivateUpstream=false);
 
     public static void MapPlenaroFavorites(this WebApplication app)
     {
         var group=app.MapGroup("/api/v1/favorites").RequireAuthorization();
         var admin=app.MapGroup("/api/v1/admin/favorite-apps")
             .RequireAuthorization("AdminOnly");
+
+        // Personal website favorites are first-class and do NOT require a
+        // pre-approved admin application. Each site gets its own isolated
+        // random proxy slug; its origin is immutable to other users.
+        group.MapPost("/personal",async(PersonalSiteInput input,HttpContext ctx,
+            IAntiforgery anti,UserManager<ApplicationUser> users,
+            IConfiguration config,SecretVault vault,CancellationToken ct)=>{
+            if(!await ValidCsrf(ctx,anti))return CsrfError();
+            var user=await CurrentUser(ctx,users);
+            if(user is null)return Results.Unauthorized();
+            var id=Guid.NewGuid();
+            var appId=Guid.NewGuid();
+            var slug="site-"+id.ToString("N");
+            if(!ValidPersonalSite(input,slug,config,out var origin,out var path,
+                out var error))return Results.BadRequest(new{error});
+            if(input.Password is {Length:>0}&&!vault.IsConfigured)
+                return Results.Problem("Verschlüsselter Speicher ist nicht eingerichtet.",statusCode:503);
+            await using var db=await Open(config,ct);
+            await using var tx=await db.BeginTransactionAsync(ct);
+            await using(var count=new NpgsqlCommand("""
+                SELECT COUNT(*) FROM user_favorites
+                WHERE user_id=@uid
+                """,db,tx)){
+                count.Parameters.AddWithValue("uid",user.Id);
+                if(Convert.ToInt32(await count.ExecuteScalarAsync(ct))>=40)
+                    return Results.Conflict(new{error="Maximal 40 persönliche Webseiten pro Benutzer."});
+            }
+            await using(var appCmd=new NpgsqlCommand("""
+                INSERT INTO favorite_apps(id,name,slug,upstream_url,
+                    enabled,available_to_all,owner_user_id)
+                VALUES(@app,@name,@slug,@origin,true,false,@user)
+                """,db,tx)){
+                appCmd.Parameters.AddWithValue("app",appId);
+                appCmd.Parameters.AddWithValue("name",input.Name.Trim());
+                appCmd.Parameters.AddWithValue("slug",slug);
+                appCmd.Parameters.AddWithValue("origin",origin);
+                appCmd.Parameters.AddWithValue("user",user.Id);
+                await appCmd.ExecuteNonQueryAsync(ct);
+            }
+            await using(var favCmd=new NpgsqlCommand("""
+                INSERT INTO user_favorites(id,user_id,app_id,name,path,
+                    username,auto_login,enabled,sort_order)
+                VALUES(@id,@user,@app,@name,@path,@username,@auto,@enabled,@ord)
+                """,db,tx)){
+                favCmd.Parameters.AddWithValue("id",id);
+                favCmd.Parameters.AddWithValue("user",user.Id);
+                favCmd.Parameters.AddWithValue("app",appId);
+                favCmd.Parameters.AddWithValue("name",input.Name.Trim());
+                favCmd.Parameters.AddWithValue("path",path);
+                favCmd.Parameters.AddWithValue("username",input.Username.Trim());
+                favCmd.Parameters.AddWithValue("auto",input.AutoLogin);
+                favCmd.Parameters.AddWithValue("enabled",input.Enabled);
+                favCmd.Parameters.AddWithValue("ord",input.SortOrder);
+                await favCmd.ExecuteNonQueryAsync(ct);
+            }
+            await tx.CommitAsync(ct);
+            if(!string.IsNullOrEmpty(input.Password))
+                await vault.SetAsync("user",user.Id,PasswordName(id),input.Password,ct);
+            return Results.Ok(new{id});
+        });
+
+        group.MapPut("/personal/order",async(FavoriteOrderInput input,
+            HttpContext ctx,IAntiforgery anti,UserManager<ApplicationUser> users,
+            IConfiguration config,CancellationToken ct)=>{
+            if(!await ValidCsrf(ctx,anti))return CsrfError();
+            var user=await CurrentUser(ctx,users);
+            if(user is null)return Results.Unauthorized();
+            if(input.Ids is null||input.Ids.Length>40||
+               input.Ids.Distinct().Count()!=input.Ids.Length)
+                return Results.BadRequest(new{error="Ungültige Sortierreihenfolge."});
+            await using var db=await Open(config,ct);
+            await using var tx=await db.BeginTransactionAsync(ct);
+            await using var check=new NpgsqlCommand("""
+                SELECT id FROM user_favorites WHERE user_id=@user
+                ORDER BY id FOR UPDATE
+                """,db,tx);
+            check.Parameters.AddWithValue("user",user.Id);
+            var owned=new HashSet<Guid>();
+            await using(var cursor=await check.ExecuteReaderAsync(ct)){
+                while(await cursor.ReadAsync(ct))owned.Add(cursor.GetGuid(0));
+            }
+            if(owned.Count!=input.Ids.Length||!input.Ids.All(owned.Contains))
+                return Results.BadRequest(new{error="Sortierung enthält fremde oder fehlende Favoriten."});
+            for(var i=0;i<input.Ids.Length;i++){
+                await using var update=new NpgsqlCommand("""
+                    UPDATE user_favorites SET sort_order=@order
+                    WHERE id=@id AND user_id=@user
+                    """,db,tx);
+                update.Parameters.AddWithValue("order",i);
+                update.Parameters.AddWithValue("id",input.Ids[i]);
+                update.Parameters.AddWithValue("user",user.Id);
+                await update.ExecuteNonQueryAsync(ct);
+            }
+            await tx.CommitAsync(ct);
+            return Results.NoContent();
+        });
+
+        group.MapPut("/personal/{id:guid}",async(Guid id,PersonalSiteInput input,
+            HttpContext ctx,IAntiforgery anti,UserManager<ApplicationUser> users,
+            IConfiguration config,SecretVault vault,FavoriteProxy proxy,
+            CancellationToken ct)=>{
+            if(!await ValidCsrf(ctx,anti))return CsrfError();
+            var user=await CurrentUser(ctx,users);
+            if(user is null)return Results.Unauthorized();
+            if(input.Password is {Length:>0}&&!vault.IsConfigured)
+                return Results.Problem("Verschlüsselter Speicher ist nicht eingerichtet.",statusCode:503);
+            await using var db=await Open(config,ct);
+            await using var tx=await db.BeginTransactionAsync(ct);
+            Guid appId;
+            string slug;
+            await using(var lookup=new NpgsqlCommand("""
+                SELECT a.id,a.slug FROM user_favorites f
+                JOIN favorite_apps a ON a.id=f.app_id
+                WHERE f.id=@id AND f.user_id=@user AND a.owner_user_id=@user
+                FOR UPDATE OF f,a
+                """,db,tx)){
+                lookup.Parameters.AddWithValue("id",id);
+                lookup.Parameters.AddWithValue("user",user.Id);
+                await using var cursor=await lookup.ExecuteReaderAsync(ct);
+                if(!await cursor.ReadAsync(ct))return Results.NotFound();
+                appId=cursor.GetGuid(0);slug=cursor.GetString(1);
+            }
+            if(!ValidPersonalSite(input,slug,config,out var origin,out var path,
+                out var error))return Results.BadRequest(new{error});
+            await using(var appCmd=new NpgsqlCommand("""
+                UPDATE favorite_apps SET name=@name,upstream_url=@url,
+                    allow_private_upstream=CASE
+                      WHEN upstream_url=@url THEN allow_private_upstream
+                      ELSE false END
+                WHERE id=@app AND owner_user_id=@user
+                """,db,tx)){
+                appCmd.Parameters.AddWithValue("app",appId);
+                appCmd.Parameters.AddWithValue("user",user.Id);
+                appCmd.Parameters.AddWithValue("name",input.Name.Trim());
+                appCmd.Parameters.AddWithValue("url",origin);
+                await appCmd.ExecuteNonQueryAsync(ct);
+            }
+            await using(var cmd=new NpgsqlCommand("""
+                UPDATE user_favorites SET name=@name,path=@path,username=@username,
+                    auto_login=@auto,enabled=@enabled,sort_order=@sort
+                WHERE id=@id AND user_id=@user AND app_id=@app
+                """,db,tx)){
+                cmd.Parameters.AddWithValue("id",id);
+                cmd.Parameters.AddWithValue("user",user.Id);
+                cmd.Parameters.AddWithValue("app",appId);
+                cmd.Parameters.AddWithValue("name",input.Name.Trim());
+                cmd.Parameters.AddWithValue("path",path);
+                cmd.Parameters.AddWithValue("username",input.Username.Trim());
+                cmd.Parameters.AddWithValue("auto",input.AutoLogin);
+                cmd.Parameters.AddWithValue("enabled",input.Enabled);
+                cmd.Parameters.AddWithValue("sort",input.SortOrder);
+                await cmd.ExecuteNonQueryAsync(ct);
+            }
+            await tx.CommitAsync(ct);
+            if(input.ClearPassword&&vault.IsConfigured)
+                await vault.DeleteAsync("user",user.Id,PasswordName(id),ct);
+            else if(input.Password is {Length:>0})
+                await vault.SetAsync("user",user.Id,PasswordName(id),input.Password,ct);
+            proxy.RevokeFavorite(user.Id,id);
+            return Results.NoContent();
+        });
+
+        group.MapDelete("/personal/{id:guid}",async(Guid id,
+            HttpContext ctx,IAntiforgery anti,UserManager<ApplicationUser> users,
+            IConfiguration config,SecretVault vault,FavoriteProxy proxy,
+            CancellationToken ct)=>{
+            if(!await ValidCsrf(ctx,anti))return CsrfError();
+            var user=await CurrentUser(ctx,users);
+            if(user is null)return Results.Unauthorized();
+            await using var db=await Open(config,ct);
+            await using var cmd=new NpgsqlCommand("""
+                DELETE FROM favorite_apps a
+                USING user_favorites f
+                WHERE f.id=@id AND f.user_id=@user AND f.app_id=a.id
+                    AND a.owner_user_id=@user
+                RETURNING a.id
+                """,db);
+            cmd.Parameters.AddWithValue("id",id);
+            cmd.Parameters.AddWithValue("user",user.Id);
+            var deleted=await cmd.ExecuteScalarAsync(ct);
+            if(deleted is not Guid appId)return Results.NotFound();
+            proxy.RevokeApp(appId);
+            proxy.RevokeFavorite(user.Id,id);
+            if(vault.IsConfigured)
+                await vault.DeleteAsync("user",user.Id,PasswordName(id),ct);
+            return Results.NoContent();
+        });
 
         group.MapGet("/apps",async(HttpContext ctx,UserManager<ApplicationUser> users,
             IConfiguration config,CancellationToken ct)=>{
@@ -33,9 +225,11 @@ public static class FavoritesEndpoints
             await using var db=await Open(config,ct);
             await using var cmd=new NpgsqlCommand("""
                 SELECT a.id,a.name,a.slug FROM favorite_apps a
-                WHERE a.enabled AND (a.available_to_all OR
-                  EXISTS (SELECT 1 FROM favorite_app_users access
-                    WHERE access.app_id=a.id AND access.user_id=@uid))
+                WHERE a.enabled AND a.slug<>'wiki' AND
+                    (a.owner_user_id=@uid OR
+                     (a.owner_user_id IS NULL AND (a.available_to_all OR
+                      EXISTS (SELECT 1 FROM favorite_app_users access
+                        WHERE access.app_id=a.id AND access.user_id=@uid))))
                 ORDER BY a.name
                 """,db);
             cmd.Parameters.AddWithValue("uid",user.Id);
@@ -177,7 +371,8 @@ public static class FavoritesEndpoints
                 SELECT a.id,a.name,a.slug,a.upstream_url,a.enabled,a.available_to_all,
                   ARRAY(SELECT user_id FROM favorite_app_users
                     WHERE app_id=a.id ORDER BY user_id)
-                FROM favorite_apps a ORDER BY a.name
+                FROM favorite_apps a WHERE a.owner_user_id IS NULL
+                    AND a.slug<>'wiki' ORDER BY a.name
                 """,db);
             var data=new List<AppInfo>();
             await using var reader=await cmd.ExecuteReaderAsync(ct);
@@ -280,9 +475,11 @@ public static class FavoritesEndpoints
         Guid appId,CancellationToken ct){
         await using var cmd=new NpgsqlCommand("""
             SELECT EXISTS(SELECT 1 FROM favorite_apps a WHERE a.id=@app
-              AND a.enabled AND (a.available_to_all OR
-              EXISTS(SELECT 1 FROM favorite_app_users access
-                WHERE access.app_id=a.id AND access.user_id=@uid)))
+              AND a.enabled AND a.slug<>'wiki' AND
+                (a.owner_user_id=@uid OR
+                 (a.owner_user_id IS NULL AND (a.available_to_all OR
+                  EXISTS(SELECT 1 FROM favorite_app_users access
+                    WHERE access.app_id=a.id AND access.user_id=@uid)))))
             """,db);
         cmd.Parameters.AddWithValue("app",appId);
         cmd.Parameters.AddWithValue("uid",user);
@@ -293,9 +490,11 @@ public static class FavoritesEndpoints
         Guid app,CancellationToken ct){
         await using var cmd=new NpgsqlCommand("""
             SELECT upstream_url FROM favorite_apps a WHERE a.id=@app
-              AND a.enabled AND (a.available_to_all OR
-              EXISTS(SELECT 1 FROM favorite_app_users access
-                  WHERE access.app_id=a.id AND access.user_id=@uid))
+              AND a.enabled AND a.slug<>'wiki' AND
+               (a.owner_user_id=@uid OR
+                (a.owner_user_id IS NULL AND (a.available_to_all OR
+                 EXISTS(SELECT 1 FROM favorite_app_users access
+                   WHERE access.app_id=a.id AND access.user_id=@uid))))
             """,db);
         cmd.Parameters.AddWithValue("app",app);
         cmd.Parameters.AddWithValue("uid",user);
@@ -306,12 +505,14 @@ public static class FavoritesEndpoints
         NpgsqlConnection db,Guid user,CancellationToken ct){
         await using var cmd=new NpgsqlCommand("""
             SELECT f.id,f.app_id,f.name,a.name,a.slug,f.path,f.username,
-                f.auto_login,f.enabled,f.sort_order
+                f.auto_login,f.enabled,f.sort_order,a.upstream_url,
+                a.allow_private_upstream
             FROM user_favorites f JOIN favorite_apps a ON a.id=f.app_id
-            WHERE f.user_id=@uid AND a.enabled AND
-              (a.available_to_all OR EXISTS(
-              SELECT 1 FROM favorite_app_users access
-              WHERE access.app_id=a.id AND access.user_id=@uid))
+            WHERE f.user_id=@uid AND a.enabled AND a.slug<>'wiki' AND
+                (a.owner_user_id=@uid OR
+                 (a.owner_user_id IS NULL AND (a.available_to_all OR EXISTS(
+                   SELECT 1 FROM favorite_app_users access
+                   WHERE access.app_id=a.id AND access.user_id=@uid))))
             ORDER BY f.sort_order,f.created_at,f.id
             """,db);
         cmd.Parameters.AddWithValue("uid",user);
@@ -321,8 +522,38 @@ public static class FavoritesEndpoints
             favorites.Add(new(reader.GetGuid(0),reader.GetGuid(1),
                 reader.GetString(2),reader.GetString(3),reader.GetString(4),
                 reader.GetString(5),reader.GetString(6),reader.GetBoolean(7),
-                reader.GetBoolean(8),reader.GetInt32(9),false));
+                reader.GetBoolean(8),reader.GetInt32(9),false,
+                new Uri(new Uri(reader.GetString(10)),reader.GetString(5)).AbsoluteUri,
+                reader.GetBoolean(11)));
         return favorites;
+    }
+
+    private static bool ValidPersonalSite(PersonalSiteInput input,string slug,
+        IConfiguration config,out string origin,out string path,out string error)
+    {
+        origin="";path="";
+        error="Bitte eine gültige HTTPS-Webadresse mit DNS-Host eingeben.";
+        if(input.Name is null||input.Name.Trim().Length is <2 or >120||
+           input.Url is null||input.Url.Length is < 9 or >2048||
+           input.Username is null||input.Username.Length>180||
+           input.Username.Any(char.IsControl)||input.SortOrder is <0 or >10000||
+           input.Password is {Length:>4096}||
+           (input.ClearPassword&&!string.IsNullOrEmpty(input.Password))||
+           (input.AutoLogin&&string.IsNullOrWhiteSpace(input.Username)))
+            return false;
+        if(!Uri.TryCreate(input.Url.Trim(),UriKind.Absolute,out var url)||
+           url.Scheme!=Uri.UriSchemeHttps||url.HostNameType!=UriHostNameType.Dns||
+           !string.IsNullOrEmpty(url.UserInfo)||url.Fragment.Length>0)
+            return false;
+        origin=url.GetLeftPart(UriPartial.Authority)+"/";
+        path=url.PathAndQuery;
+        if(path.Length is <1 or >2048||path.StartsWith("//")||
+           path.Contains('\\')||path.Contains("://")||
+           path.Any(char.IsControl))return false;
+        // Preserve the existing self-proxy, DNS and reserved-host checks.
+        // User-provided DNS still gets checked again at TCP connect time.
+        return ValidApp(new AppInput(input.Name,slug,origin,true,false,null),
+            config,out error);
     }
 
     private static bool ValidFavorite(FavoriteInput value,out string error){
