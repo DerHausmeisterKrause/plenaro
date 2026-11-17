@@ -380,3 +380,14 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [x] [PR #38](https://github.com/DerHausmeisterKrause/plenaro/pull/38) nach `main` gemergt; [CI #44040160724](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44040160724) vollständig erfolgreich inklusive Frontend/Backend, Znuny- und Proxy-Vertragstests, Datenbankmigration und Docker-Smoke-Tests.
 - [ ] Live-Abnahme mit zwei Benutzern, bestehenden Favoriten/Passwörtern, Wiki-Bootstrap und URLs mit komplexen JS-/CSP-Pfaden durchführen.
 - [ ] Private Intranet-Webseiten benötigen weiterhin einen gesonderten, ausdrücklich freigeschalteten sicheren Netzwerkpfad; freie persönliche Proxy-Ziele erlauben aus SSRF-Schutzgründen nur öffentlich routbare HTTPS-IPs. Das zentral angebundene interne Wiki bleibt davon unberührt.
+
+## 17.11.2026 – Fix: weiße persönliche Favoriten-Seiten (PR folgt)
+
+- [x] Ursache im Proxy nach PR #38 geprüft: Wiki besitzt eigene Pfadkompatibilität; persönliche `site-*`-Favoriten bekamen keine Shim-Injektion für origin-root `fetch/XHR`, `Request`, `script.src` oder dynamische Styles/Images. Viele moderne Single-Page-Apps laden deshalb unter dem Shared-Pfad keine Ressourcen.
+- [x] Dynamische root-relative Browser-URLs werden für persönliche Seiten auf den aktuellen `/site-<id>/`-Pfad abgebildet. Bereits korrekt präfixierte URLs, externe Origins und die internen `/_plenaro/`-Bootstrap-Endpunkte werden nicht umgeschrieben; separate Wiki-Shim-Regeln bleiben erhalten.
+- [x] Statt leerem Frame bei 401/403 (abgelaufene/entzogene Sitzung) und Proxy-502/504/413 (gesperrte private Netzwerkadresse, Timeout, externer Redirect, zu große Antwort) ein lesbares, begrenztes Fehlerdokument ausgeben; für CSS/JS bleibt der Fehler leer und mit korrektem Status.
+- [x] Im Favoriten-Tab die Funktion **Originalseite öffnen** in einem neuen Tab ergänzen, wenn eine fremde Seite im iframe nicht eingebettet werden kann. `noopener noreferrer` schützt den Plenaro-Tab.
+- [x] Contract-Tests für dynamische Pfade, unverändertes Wiki, HTML-Fehlerstatus und korrekte nicht-HTML-Ausgaben ergänzt. Frontendtest für Original-Link.
+- [ ] CI und Merge abschließen.
+- [ ] Live-Test mit echter interner/public HTTPS-Seite, unterschiedlichen SPAs, CSP/X-Frame-Options des äußeren NGINX und 2 Benutzerkonten. Manche fremden Websites können selbst mit Korrekturen keine eingebettete Ansicht unterstützen (SSO, CSP, CDN, JavaScript, Anti-Bot).
+- [ ] Sicherheitsfolgephase: Benutzergesteuerte Favoriten auf eigene Browser-Origins migrieren. Der Shared-Path-Host trennt Browser-Cookies nach Pfad, aber keine Same-Origin-JavaScript-Zugriffe zwischen verschiedenen Pfaden; deshalb keine zusätzlichen privilegierten API-Öffnungen für frei eingebettete Seiten zulassen.
