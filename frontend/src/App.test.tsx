@@ -19,6 +19,10 @@ let managedUsersFixture: ManagedUser[] = [];
 let ticketFixture: Record<'mine'|'new'|'completed',CachedTicket[]> = {
   mine:[],new:[],completed:[],
 };
+let workspacePrefsFixture={
+  instanceName:'Plenaro',supportEmail:'',defaultWeekStart:'monday',
+  fetchOtrsAccounting:true
+};
 let ticketAgendaFixture: TicketAgendaSegment[] = [];
 let candidateAccess={approved:false,agentId:null as number|null,
   candidateUserId:null as number|null,syncEnabled:false,
@@ -43,6 +47,10 @@ beforeEach(() => {
   outlookEnabled = false;
   managedUsersFixture = [];
   ticketFixture = {mine:[],new:[],completed:[]};
+  workspacePrefsFixture={
+    instanceName:'Plenaro',supportEmail:'',defaultWeekStart:'monday',
+    fetchOtrsAccounting:true
+  };
   ticketAgendaFixture = [];
   candidateAccess={approved:false,agentId:null,candidateUserId:null,
     syncEnabled:false,showAllCandidatePoolTickets:false,hasCandidateKeywords:false};
@@ -138,6 +146,13 @@ beforeEach(() => {
         (JSON.parse(String(options.body)) as {showAll:boolean}).showAll;
       return {ok:true,status:204};
     }
+    if (path === '/api/v1/znuny/tickets/pins'&&options?.method==='PUT'){
+      const {ticketId,pinned}=JSON.parse(String(options.body)) as {ticketId:string;pinned:boolean};
+      ticketFixture.mine=ticketFixture.mine.map(t=>t.ticketId===ticketId?
+        {...t,isPinned:pinned}:t);
+      ticketFixture.mine.sort((a,b)=>Number(!!b.isPinned)-Number(!!a.isPinned));
+      return {ok:true,status:204};
+    }
     if (path === '/api/v1/znuny/tickets/status') return {
       ok:true,status:200,json:async()=>({...candidateAccess}),
     };
@@ -207,8 +222,12 @@ beforeEach(() => {
     if (path === '/api/v1/settings/me') return {
       ok: true, status: 200, json: async () => ({ theme: 'light', weekStart: 'inherit' }),
     };
+    if(path==='/api/v1/settings/global'&&options?.method==='PUT'){
+      workspacePrefsFixture=JSON.parse(String(options.body)) as typeof workspacePrefsFixture;
+      return {ok:true,status:204};
+    }
     if (path === '/api/v1/settings/global') return {
-      ok: true, status: 200, json: async () => ({ instanceName: 'Plenaro', supportEmail: '', defaultWeekStart: 'monday' }),
+      ok:true,status:200,json:async()=>({...workspacePrefsFixture}),
     };
     if (path === '/api/v1/admin/entra/') return {
       ok: true, status: 200, json: async () => ({
@@ -924,6 +943,56 @@ describe('Plenaro web shell', () => {
     fireEvent.click(screen.getByRole('tab',{name:'Erledigte Aufgaben'}));
     expect(await screen.findByText('Geschlossenes Znuny-Ticket')).toBeTruthy();
     expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('view=completed'))).toBe(true);
+  });
+
+  it('pinnt und löst Tickets pro Benutzer in Aktuelle Aufgaben ohne OTRS-Schreibaufruf',async()=>{
+    candidateAccess={approved:true,agentId:77,candidateUserId:1,
+      syncEnabled:true,showAllCandidatePoolTickets:false,hasCandidateKeywords:false};
+    ticketFixture.mine=[
+      {ticketId:'77',ticketNumber:'2026#77',title:'Erster Eintrag',
+       queue:'IT',state:'open',stateType:'open',ownerId:77,responsibleId:null,
+       createdAt:null,changedAt:null,isPinned:false},
+      {ticketId:'88',ticketNumber:'2026#88',title:'Zweiter Eintrag',
+       queue:'IT',state:'open',stateType:'open',ownerId:77,responsibleId:null,
+       createdAt:null,changedAt:null,isPinned:false}
+    ];
+    renderAt('/workspace');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    const pin=await screen.findByRole('button',{name:'Ticket #2026#88 anpinnen'});
+    fireEvent.click(pin);
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
+      String(url)==='/api/v1/znuny/tickets/pins'&&
+      (opts as RequestInit)?.method==='PUT'&&
+      JSON.parse(String((opts as RequestInit).body)).ticketId==='88'&&
+      JSON.parse(String((opts as RequestInit).body)).pinned===true
+    )).toBe(true));
+    const remove=await screen.findByRole('button',{name:'Ticket #2026#88 Pin lösen'});
+    expect(remove.getAttribute('aria-pressed')).toBe('true');
+    const list=screen.getByText('Zweiter Eintrag').closest('.ticket-pin-row');
+    expect(list?.classList.contains('is-pinned')).toBe(true);
+    fireEvent.click(remove);
+    await waitFor(()=>expect(screen.getByRole('button',{
+      name:'Ticket #2026#88 anpinnen'
+    }).getAttribute('aria-pressed')).toBe('false'));
+    // This is a private Plenaro metadata endpoint, not a Znuny write route.
+    expect(vi.mocked(fetch).mock.calls.filter(([url])=>String(url)
+      .includes('/api/v1/znuny/tickets/88/')).length).toBe(0);
+  });
+
+  it('zeigt den globalen OTRS-Report-Schalter nur Administratoren als editierbar',async()=>{
+    renderAt('/settings');
+    const toggle=await screen.findByLabelText(
+      'OTRS-Zeiten im Zeitreport abrufen und berücksichtigen') as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+    fireEvent.click(toggle);
+    expect(toggle.checked).toBe(false);
+    fireEvent.click(screen.getByRole('button',{name:'Instanzeinstellungen speichern'}));
+    await waitFor(()=>expect(workspacePrefsFixture.fetchOtrsAccounting).toBe(false));
+    expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
+      String(url)==='/api/v1/settings/global'&&
+      (opts as RequestInit)?.method==='PUT'&&
+      JSON.parse(String((opts as RequestInit).body)).fetchOtrsAccounting===false
+    )).toBe(true));
   });
 
   it('zeigt Normal, UL, AM, HO und BR als Tagesmarker ohne Microsoft', async () => {
