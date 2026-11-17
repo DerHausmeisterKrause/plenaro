@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text;
 using System.Text.RegularExpressions;
+using Plenaro.Api.Secrets;
 
 namespace Plenaro.Api.Favorites;
 
@@ -1009,6 +1010,39 @@ public sealed partial class FavoriteProxy
                         configuration["PLENARO_FAVORITES_BROWSER_SHIM_SLUGS"],
                         session.Slug))
                         transformed=InjectBrowserPathShim(transformed,pathPrefix);
+                }
+                // The WPF desktop client fills *rendered* DOM fields, not
+                // server-side HTML forms. Transmit this browser helper ONLY
+                // inside a per-favorite dedicated HTTPS origin. On the
+                // shared path host, other favorite JS would have same-origin
+                // access to the injected credentials: intentionally skip.
+                if(isHtml && res.IsSuccessStatusCode &&
+                   disposition is null && HttpMethods.IsGet(method) &&
+                   Navigation(ctx.Request) && session.AutoLogin &&
+                   session.Slug.StartsWith("site-",StringComparison.Ordinal)){
+                    var dedicated=FavoriteHostNames.PreferredOrigin(session.Slug,
+                        configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
+                        configuration["PLENARO_FAVORITES_HOST_TEMPLATE"]);
+                    if(!FavoriteDomAutoLogin.Eligible(
+                        session.Slug,session.AutoLogin,pathPrefix.Length>0,
+                        session.Username,external.Host,dedicated?.Host)){
+                        ctx.Response.Headers["X-Plenaro-Autofill"]="isolated-origin-required";
+                    }else{
+                        var vault=ctx.RequestServices.GetService<SecretVault>();
+                        if(vault?.IsConfigured==true){
+                            var secret=await vault.GetForIntegrationAsync(
+                                "user",session.User,
+                                FavoritesEndpoints.PasswordName(session.Favorite),ct);
+                            if(!string.IsNullOrEmpty(secret)){
+                                transformed=FavoriteDomAutoLogin.Inject(
+                                    transformed,session.Username,secret,
+                                    external.Host,session.AutoFillNonce);
+                                ctx.Response.Headers["X-Plenaro-Autofill"]="dedicated-dom";
+                            }else
+                                ctx.Response.Headers["X-Plenaro-Autofill"]="missing-password";
+                        }else
+                            ctx.Response.Headers["X-Plenaro-Autofill"]="vault-unconfigured";
+                    }
                 }
                 await ctx.Response.Body.WriteAsync(encoding.GetBytes(transformed),ct);
             }else{

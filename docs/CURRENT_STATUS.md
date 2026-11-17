@@ -424,3 +424,15 @@ Historie: Die Origin-Allowlist aus [PR #41](https://github.com/DerHausmeisterKra
 - [x] [PR #44](https://github.com/DerHausmeisterKrause/plenaro/pull/44) nach `main` gemergt; [CI #44058573710](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44058573710) vollständig erfolgreich (Frontend-/Backend-Build, Login-Vertragstests, NGINX und Docker-Smoke). npm `csstype` auf veröffentlichte Version 3.2.3 fixiert.
 - [ ] Reale ATOSS-Abnahme; Login-Varianten außerhalb klassischen HTML bleiben offen.
 - [ ] **Issue #40**: echte Browser-Origin-Isolation vor einer browserseitigen Passwort-Autofill-Funktion.
+
+
+## 17.11.2026 – ATOSS-DOM-Autofill aus dem WPF-Vorgänger (Phase 7; PR #45)
+
+- [x] Ursache der fehlenden Eingabefüllung konkret belegt: bisheriger HTML-Proxy hat keinerlei WPF-äquivalentes Browser-DOM-Autofill, nur serverseitigen Formular-POST.
+- [x] `z-focustextbox-real`, `Benutzername`/`Kennwort`, native Input-Setter, Events, Browser-Nachladen, sichere Submit-Auswahl und One-Shot-Reconnect in dedizierten persönlichen Hosts übernommen.
+- [x] Bestehende Wildcard-Aliasse für neue persönliche Favoritensitzungen bevorzugt; ohne Alias kein Credential-DOM-Injection und erklärender Hinweis; zentraler Wiki-Host bleibt erhalten.
+- [x] Verschlüsselten Vault-Secret nur nach aktiver Benutzer-/Favoritenprüfung auf dedizierten HTTPS-Host injizieren, niemals auf Shared-Origin. Host-only Proxy-Cookies und `Origin-Agent-Cluster` bleiben erhalten.
+- [x] C#- und Browser-Laufzeitkontrakte sowie Dokumentation ergänzt.
+- [ ] GitHub-CI und PR-Merge abschließen.
+- [ ] Realer ATOSS-Test im Zielnetz: HTTPS-Wildcard, DNS, eigener Origin, Login-Felder und anschließende Authentifizierung; bei externem SSO/MFA bleibt der passende Adapter offen.
+- [ ] Issue #40: ältere/nicht isolierte Shared-Path-Favoriten bleiben ein gesondertes Sicherheitsproblem.

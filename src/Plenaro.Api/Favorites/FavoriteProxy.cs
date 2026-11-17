@@ -36,7 +36,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
 
     private sealed class ProxySession(
         Guid user,Guid favorite,Guid app,string slug,Uri upstream,
-        Uri parent,HttpClient client)
+        Uri parent,HttpClient client,bool autoLogin,string username)
     {
         public Guid User {get;}=user;
         public Guid Favorite {get;}=favorite;
@@ -45,6 +45,11 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         public Uri Upstream {get;}=upstream;
         public Uri Parent {get;}=parent;
         public HttpClient Client {get;}=client;
+        public bool AutoLogin {get;}=autoLogin;
+        public string Username {get;}=username;
+        // A harmless, random per-bootstrap attempt ID. Never the auth cookie.
+        public string AutoFillNonce {get;}=
+            Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
         public DateTimeOffset Created {get;}=DateTimeOffset.UtcNow;
         private long _lastUsed=DateTimeOffset.UtcNow.Ticks;
         public bool Expired=>DateTimeOffset.UtcNow-Created>MaxAge ||
@@ -118,13 +123,20 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             configuration["PLENARO_FAVORITES_PATH_ORIGIN"],
             configuration["PLENARO_PUBLIC_ORIGIN"],
             configuration["PLENARO_ZNUNY_PROXY_ORIGIN"]);
-        var dedicated=FavoriteHostNames.PreferDedicated(
-            configuration["PLENARO_FAVORITES_DEDICATED_SLUGS"],slug);
-        if(shared is not null&&!dedicated)
-            return FavoritePathRouting.AppOrigin(shared,slug);
         var alias=FavoriteHostNames.PreferredOrigin(slug,
             configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
             configuration["PLENARO_FAVORITES_HOST_TEMPLATE"]);
+        // A wildcard/hostname template already in place gives each user
+        // favorite its own browser origin, without an individual allowlist.
+        // Never mix self-service JS apps on the shared /site-... origin
+        // when a dedicated hostname is available.
+        var personal=slug.StartsWith("site-",StringComparison.Ordinal) &&
+            Guid.TryParseExact(slug.AsSpan(5),"N",out _);
+        var dedicated=FavoriteHostNames.PreferDedicated(
+            configuration["PLENARO_FAVORITES_DEDICATED_SLUGS"],slug) ||
+            (personal && alias is not null);
+        if(shared is not null&&!dedicated)
+            return FavoritePathRouting.AppOrigin(shared,slug);
         // A selected dedicated app must not silently fall back to /<slug>/.
         // That would reintroduce invalid root REST/Webpack URLs at login.
         if(alias is null)return null;
@@ -159,6 +171,15 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                 _pending.TryRemove(pair.Key,out _);
         if(_sessions.Count>=200)throw new InvalidOperationException("Session limit reached.");
         var root=new Uri(upstream.GetLeftPart(UriPartial.Authority));
+        // When a private wildcard alias is configured, the browser runs the
+        // WPF-compatible DOM login once. Do NOT perform a second speculative
+        // server-side HTML login attempt in the same personal session.
+        var preferred=FavoriteHostNames.PreferredOrigin(favorite.Slug,
+            configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
+            configuration["PLENARO_FAVORITES_HOST_TEMPLATE"]);
+        var domAutoLogin=FavoriteDomAutoLogin.Eligible(
+            favorite.Slug,favorite.AutoLogin,IsPathHost(external.Host),
+            favorite.Username,external.Host,preferred?.Host);
         // Personal favorites also support internal HTTPS services without
         // an operator-managed origin list, as in the Desktop application.
         // The shared secure connector still blocks loopback, link-local,
@@ -185,7 +206,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                    !await TryConfluenceWikiLoginAsync(client,root,
                        favorite.Username,secret,ct))
                     throw new InvalidOperationException("Wiki-Autologin wurde nicht bestätigt.");
-            }else if(favorite.AutoLogin && vault.IsConfigured){
+            }else if(favorite.AutoLogin && vault.IsConfigured && !domAutoLogin){
                 var password=await vault.GetForIntegrationAsync("user",user,
                     FavoritesEndpoints.PasswordName(favorite.Id),ct);
                 if(!string.IsNullOrEmpty(password) &&
@@ -202,7 +223,8 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         }
         var key=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var session=new ProxySession(user,favorite.Id,favorite.AppId,
-            favorite.Slug,root,new Uri(configuration["PLENARO_PUBLIC_ORIGIN"]!),client);
+            favorite.Slug,root,new Uri(configuration["PLENARO_PUBLIC_ORIGIN"]!),
+            client,favorite.AutoLogin,favorite.Username);
         if(_users.TryGetValue((user,favorite.Id),out var previous) &&
             _sessions.TryGetValue(previous,out var old))
             Remove(previous,old);
@@ -282,6 +304,9 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         if(ProxyOrigin(slug) is null){ctx.Response.StatusCode=404;return;}
         ctx.Response.Headers["X-Content-Type-Options"]="nosniff";
         ctx.Response.Headers["Referrer-Policy"]="no-referrer";
+        // Prevent legacy document.domain from collapsing dedicated hosts
+        // into one browser security boundary.
+        ctx.Response.Headers["Origin-Agent-Cluster"]="?1";
         ctx.Response.Headers["Content-Security-Policy"]=
             "default-src 'self' data: blob:; "+
             "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "+
@@ -370,7 +395,8 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                     WHERE f.id=@favorite AND f.user_id=@user AND
                       f.app_id=@app AND f.enabled AND a.enabled AND
                       a.slug=@slug AND a.upstream_url=@upstream AND
-                      a.slug<>'wiki' AND
+                      a.slug<>'wiki' AND f.auto_login=@auto AND
+                      f.username=@username AND
                       (a.owner_user_id=@user OR
                        (a.owner_user_id IS NULL AND
                         (a.available_to_all OR EXISTS(
@@ -389,6 +415,8 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         cmd.Parameters.AddWithValue("app",session.App);
         cmd.Parameters.AddWithValue("slug",session.Slug);
         cmd.Parameters.AddWithValue("upstream",session.Upstream.AbsoluteUri);
+        cmd.Parameters.AddWithValue("auto",session.AutoLogin);
+        cmd.Parameters.AddWithValue("username",session.Username);
         return await cmd.ExecuteScalarAsync(ct) is true;
     }
 
