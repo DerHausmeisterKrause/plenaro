@@ -33,7 +33,7 @@ export type MonthReport = {
   localFallbackSeconds: number;
   remoteEntries: number;
   localFallbackEntries: number;
-  accountingStatus: 'ok' | 'not-connected' | 'not-configured' | 'unavailable';
+  accountingStatus: 'ok' | 'not-connected' | 'not-configured' | 'unavailable' | 'disabled';
   accountingMessage: string;
   accountedTickets: AccountedTicketRow[];
 };
