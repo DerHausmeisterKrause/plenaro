@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Inbox, RefreshCw, Search, Ticket, SlidersHorizontal } from 'lucide-react';
+import { Inbox, RefreshCw, Search, Ticket, Pin, SlidersHorizontal } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ClassicTicketDetailPanel } from './ClassicTicketDetailPanel';
 import {
-  getCachedTickets,getTicketAccess,setShowAllCandidates,type CachedTicket,type TicketAccess,
+  getCachedTickets,getTicketAccess,setShowAllCandidates,setZnunyTicketPinned,
+  type CachedTicket,type TicketAccess,
   type TicketListFilters,
 } from './znunySyncApi';
 
@@ -22,6 +23,7 @@ export function TicketsWorkspacePage() {
   });
   const [filterOpen,setFilterOpen]=useState(false);
   const [toggleBusy,setToggleBusy]=useState(false);
+  const [pinBusy,setPinBusy]=useState<string|null>(null);
   const [page,setPage]=useState(0);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState('');
@@ -56,6 +58,15 @@ export function TicketsWorkspacePage() {
       await refresh();
     }catch(e){setError(e instanceof Error?e.message:'Kandidatenfilter konnte nicht geändert werden.');}
     finally{setToggleBusy(false);}
+  }
+  async function togglePin(ticket:CachedTicket){
+    if(pinBusy)return;
+    setPinBusy(ticket.ticketId);setError('');
+    try{
+      await setZnunyTicketPinned(ticket.ticketId,!ticket.isPinned);
+      setPage(0);await refresh();
+    }catch(e){setError(e instanceof Error?e.message:'Ticket-Pin konnte nicht geändert werden.');}
+    finally{setPinBusy(null);}
   }
   const editFilter=<K extends keyof TicketListFilters>(key:K,value:TicketListFilters[K])=>{
     setPage(0);setFilters(old=>({...old,[key]:value}));
@@ -145,14 +156,24 @@ export function TicketsWorkspacePage() {
               : 'Noch keine passenden Tickets im zentralen Cache.'}</p>
           </div>}
           {!loading&&tickets.map(ticket=>
-            <button key={ticket.ticketId} type="button"
-              className={`classic-list-item${selectedId===ticket.ticketId?' active':''}`}
-              aria-current={selectedId===ticket.ticketId?'true':undefined}
-              onClick={()=>setSelectedId(ticket.ticketId)}>
-              <strong>{ticket.title||'Ticket '+ticket.ticketNumber}</strong>
-              <small>#{ticket.ticketNumber||ticket.ticketId} · {ticket.queue}</small>
-              <span className="tasks-state">{ticket.state}</span>
-            </button>)}
+            <div key={ticket.ticketId} className={`ticket-pin-row${ticket.isPinned&&view==='mine'?' is-pinned':''}`}>
+              <button type="button"
+                className={`classic-list-item${selectedId===ticket.ticketId?' active':''}`}
+                aria-current={selectedId===ticket.ticketId?'true':undefined}
+                onClick={()=>setSelectedId(ticket.ticketId)}>
+                <strong>{ticket.title||'Ticket '+ticket.ticketNumber}</strong>
+                <small>#{ticket.ticketNumber||ticket.ticketId} · {ticket.queue}</small>
+                <span className="tasks-state">{ticket.state}</span>
+              </button>
+              {view==='mine'&&<button type="button"
+                className={`ticket-pin-toggle${ticket.isPinned?' is-pinned':''}`}
+                aria-label={`Ticket #${ticket.ticketNumber||ticket.ticketId} ${ticket.isPinned?'Pin lösen':'anpinnen'}`}
+                title={ticket.isPinned?'Von oben lösen':'Oben anpinnen'}
+                aria-pressed={!!ticket.isPinned} disabled={!!pinBusy}
+                onClick={()=>void togglePin(ticket)}>
+                <Pin size={16} fill={ticket.isPinned?'currentColor':'none'}/>
+              </button>}
+            </div>)}
           {!loading&&(page>0||tickets.length===100)&&<nav className="znuny-ticket-pagination" aria-label="Ticketseiten">
             <button type="button" className="button button-secondary" disabled={page===0}
               onClick={()=>setPage(p=>Math.max(0,p-1))}>Vorherige Seite</button>
