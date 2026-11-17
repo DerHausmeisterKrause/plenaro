@@ -1,6 +1,7 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
-import {ZnunyTicketTimerPanel,parseTimerDuration,roundedBookingMinutes}
+import {ZnunyTicketTimerPanel,parseTimerDuration,roundedBookingMinutes,
+  quickAdjustUnbookedSeconds}
   from './ZnunyTicketTimerPanel';
 
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();});
@@ -13,6 +14,90 @@ it('rounds only at booking: 1s->15m, 900s->15m, 901s->30m, 4200s->75m',()=>{
   expect(parseTimerDuration('01:23:45')).toBe(5025);
   expect(parseTimerDuration('01:75:00')).toBeNull();
   expect(parseTimerDuration('nonsense')).toBeNull();
+});
+
+it('preserves seconds, clamps at zero/240 hours, and never adjusts transferred bookings',()=>{
+  expect(quickAdjustUnbookedSeconds(901,15)).toBe(1801);
+  expect(quickAdjustUnbookedSeconds(901,-15)).toBe(1);
+  expect(quickAdjustUnbookedSeconds(600,-30)).toBe(0);
+  expect(quickAdjustUnbookedSeconds(863900,60)).toBe(864000);
+});
+
+it('restores six WPF preset buttons and edits only unbooked time via PUT',async()=>{
+  const targets:number[]=[];
+  const time={
+    bookedSeconds:7200,runningSeconds:0,runningSince:null,
+    adjustedMinutes:0,sessionCount:1,
+    transferredSeconds:5400,unbookedSeconds:1800
+  };
+  vi.stubGlobal('fetch',vi.fn(async (input:string,init?:RequestInit)=>{
+    const url=String(input),method=init?.method??'GET';
+    if(url==='/api/v1/auth/csrf')
+      return {ok:true,status:200,json:async()=>({token:'csrf'})};
+    if(url==='/api/v1/znuny/tickets/77/time' && method==='PUT'){
+      const payload=JSON.parse(String(init?.body)) as {targetSeconds:number};
+      targets.push(payload.targetSeconds);
+      // Match the backend: the transferred baseline remains untouched.
+      time.bookedSeconds=time.transferredSeconds+payload.targetSeconds;
+      time.unbookedSeconds=payload.targetSeconds;
+      return {ok:true,status:200,json:async()=>({...time})};
+    }
+    if(url==='/api/v1/znuny/tickets/77/time')
+      return {ok:true,status:200,json:async()=>({...time})};
+    if(url.endsWith('/time/bookings'))
+      return {ok:true,status:200,json:async()=>([])};
+    if(url.endsWith('/booking-fields'))
+      return {ok:true,status:200,json:async()=>({
+        costCenter:'100',order:'200',costCenterOptions:[],orderOptions:[]
+      })};
+    throw Error('Unexpected '+method+' '+url);
+  }));
+  render(<ZnunyTicketTimerPanel ticketId="77"/>);
+  const names=[
+    'Zeit erhöhen um 15 Minuten','Zeit erhöhen um 30 Minuten',
+    'Zeit erhöhen um 60 Minuten (1 Stunde)',
+    'Zeit verringern um 15 Minuten','Zeit verringern um 30 Minuten',
+    'Zeit verringern um 60 Minuten (1 Stunde)'
+  ];
+  for(const name of names)expect(await screen.findByRole('button',{name})).toBeTruthy();
+  for(const [i,name] of [
+    names[0],names[1],names[3],names[4],names[5],names[2]
+  ].entries()){
+    const button=screen.getByRole('button',{name});
+    await waitFor(()=>expect((button as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(button);
+    await waitFor(()=>expect(targets.length).toBe(i+1));
+  }
+  expect(targets).toEqual([2700,4500,3600,1800,0,3600]);
+  expect(time.transferredSeconds).toBe(5400);
+  expect(time.bookedSeconds).toBe(9000);
+  expect(screen.getByRole('button',{name:'-1h'})).toBeTruthy();
+  expect(await screen.findByText(/Noch nicht in Znuny gebucht: 60 Min/)).toBeTruthy();
+});
+
+it('disables corrections when a remote booking is unresolved',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async (input:string)=>{
+    const url=String(input);
+    if(url.endsWith('/time'))return {ok:true,status:200,json:async()=>({
+      bookedSeconds:900,runningSeconds:0,runningSince:null,
+      adjustedMinutes:0,sessionCount:0,transferredSeconds:0,unbookedSeconds:900
+    })};
+    if(url.endsWith('/time/bookings'))return {ok:true,status:200,json:async()=>[{
+      id:'unresolved',status:'pending',sourceSeconds:900,bookedMinutes:15,
+      costCenter:'',order:'',shortDescription:'',note:'',
+      createdAt:'2026-11-17T06:00:00Z'
+    }]};
+    if(url.endsWith('/booking-fields'))return {ok:true,status:200,json:async()=>({
+      costCenter:'',order:'',costCenterOptions:[],orderOptions:[]
+    })};
+    throw Error('Unexpected '+url);
+  }));
+  render(<ZnunyTicketTimerPanel ticketId="77"/>);
+  await screen.findByText(/Vorherige Buchung noch nicht bestätigt/);
+  for(const button of screen.getAllByRole('button')
+    .filter(b=>/^(?:Zeit erhöhen|Zeit verringern) um /.test(b.getAttribute('aria-label')??''))){
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+  }
 });
 
 it('clicks the unbooked clock to edit seconds without the old correction form',async()=>{
