@@ -413,3 +413,13 @@ Historie: Die Origin-Allowlist aus [PR #41](https://github.com/DerHausmeisterKra
 - [x] [PR #43](https://github.com/DerHausmeisterKrause/plenaro/pull/43) gemergt; [CI #44053732245](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44053732245) vollständig grün.
 - [ ] Betroffene Webseiten wie ATOSS live mit Bildern und Anmeldung abnehmen; externe SSO-/MFA-Systeme sind nicht automatisch kompatibel.
 - [ ] Sicherheitspriorität [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40) bleibt offen.
+
+
+## 17.11.2026 – Klassische Loginfelder / ATOSS-Kompatibilität (Phase 7; PR #44)
+
+- [x] WPF-Referenz WebView2-Laufzeitautofill mit DOM-/Frame-Erkennung gegen aktuelle Web-Implementierung verglichen: die Web-Variante füllt im Browser derzeit keine Felder aus.
+- [x] Sicheres serverseitiges HTML-Login unterstützt jetzt weitere Username-Merkmale, Hidden-CSRF- und Submit-Felder, Same-Origin-Loginlinks und bounded GET-Weiterleitungen.
+- [x] Ausschluss von fremden URLs, JS-only, SSO, Passwortänderungs-/Registrierungsformularen; gespeicherte Klartextpasswörter bleiben vom HTML-Proxy fern.
+- [x] Synthetic Contract-Tests und verständliche Einschränkungen in den Einstellungen und der Betriebsdokumentation ergänzt.
+- [ ] CI, PR-Merge und reale ATOSS-Abnahme; Login-Varianten außerhalb klassischen HTML bleiben offen.
+- [ ] **Issue #40**: echte Browser-Origin-Isolation vor einer browserseitigen Passwort-Autofill-Funktion.

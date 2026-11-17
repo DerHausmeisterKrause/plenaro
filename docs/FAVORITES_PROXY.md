@@ -1,3 +1,44 @@
+## 17.11.2026 – Verbesserte klassische Auto-Anmeldung, klare Grenze bei JavaScript-Loginfeldern
+
+Ursache: Die Desktop-Vorlage `Services/WebShortcutBrowserSessionManager.cs`
+verwendet WebView2, sucht mehrfach **im tatsächlichen DOM** nach
+Benutzer-/Passwortfeldern (einschließlich Frames) und setzt Eingabewerte
+mithilfe nativer DOM-Setter samt Input-/Change-Events. Die Web-Version
+sendet dagegen **nur serverseitige klassische Formular-POSTs** und
+hatte bislang einen eingeschränkten Namensvergleich (`user`,
+`username`, `email`) – sie füllt keine sichtbaren Browser-Felder.
+
+Die sichere Verbesserung unterstützt nun bei klassischen HTML-Formularen
+auch benannte Felder mit `autocomplete=username`, ID,
+`placeholder=Benutzername`, andere Namensvarianten und ein einzelnes
+eindeutiges Textfeld neben einem Passwortfeld. Vorhandene
+CSRF-/Anti-Forgery-Hidden-Felder und der übliche Submit-Button-Wert
+werden unverändert mitgesendet. Eine fehlende Loginseite kann über
+eine begrenzte, tatsächlich in der HTML-Seite vorhandene Login-Verlinkung
+gefunden werden. Reine **same-origin** GET-Redirects vor dem Formular
+werden bis zu vier Seiten lang verfolgt; es erfolgt höchstens
+**ein** Passwort-POST, mit HTTPS-Origin-/Referer-Prüfung.
+Registrierung, Kennwortänderung, mehrere Passwörter, GET-Formulare,
+fremde SSO-Domains und rein JS-gerenderte Felder werden nicht
+automatisch beschickt.
+
+**Wichtige verbleibende Einschränkung:** Eine zuverlässige visuelle
+Autofill-Funktion im Browser wie bei WPF ist damit noch **nicht**
+implementiert. Dafür müssten Klartextzugangsdaten in das von der
+fremden Webseite kontrollierte DOM gelangen. Bei aktuellem
+**Shared-Origin-Host** für mehrere persönliche Favoriten wäre das
+ein erhebliches zusätzliches Diebstahlrisiko: andere dort
+ausgeführte Skripte könnten auf diese Daten zugreifen.
+Voraussetzung für den sicheren Ausbau ist
+[Issue #40 – dedizierte Browser-Origin pro Favorit](https://github.com/DerHausmeisterKrause/plenaro/issues/40).
+ATOSS-Ausprägungen mit JavaScript-only, iFrames, MFA und externem
+SSO benötigen daher bis dahin eine interaktive Anmeldung oder
+eine app-spezifische, vom Betreiber vertrauenswürdig integrierte
+serverseitige Authentifizierung. Keine Anmeldedaten für Diagnosezwecke
+weitergeben.
+
+---
+
 ## 17.11.2026 – Bilder, dynamische Assets und Login-Navigation bei eigenen Favoriten
 
 **Beobachtung:** Manche selbst eingetragene Firmenwebseiten (beispielsweise

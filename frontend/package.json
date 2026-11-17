@@ -26,6 +26,7 @@
     "vitest": "4.1.11"
   },
   "overrides": {
-    "vitest": "4.1.11"
+    "vitest": "4.1.11",
+    "csstype": "3.2.3"
   }
 }

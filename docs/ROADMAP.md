@@ -932,3 +932,14 @@ Diese Änderung **ersetzt** die in PR #41 dokumentierte Pflicht, einzelne Origin
 - [x] [PR #43](https://github.com/DerHausmeisterKrause/plenaro/pull/43) nach `main` gemergt; [CI #44053732245](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44053732245) vollständig erfolgreich (Backend, Frontend, Proxy-Vertragstests, JS-Runtime-Test und Docker-Smoke).
 - [ ] Live-Abnahme gegen ATOSS und weitere betroffene Apps: Bilder, interaktiver Login, Session/Cookie, 2 Benutzer, Konsole/Netzwerkanfragen, externe SSO-Grenzen; keine produktiven Anmeldedaten in GitHub.
 - [ ] [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40) dedizierte Browser-Origin pro freiem Favoriten; Sicherheit eigener und fremder Skripte noch nicht final gewährleistet.
+
+
+## 17.11.2026 – Phase 7: Erkennung klassischer Login-Felder (PR #44 – in Prüfung)
+
+- [x] Ursachenvergleich WPF ↔ Web: WPF-WebView2 füllt echte DOM-Felder nach JS-Rendern; Web schickt bislang nur ein serverseitiges Standardformular ab.
+- [x] Serverseitige Erkennung für `autocomplete=username`, IDs, Platzhalter, `j_username`-/Enterprise-Namen und eindeutige Eingaben erweitert.
+- [x] Vorhandene CSRF-/Hidden-Felder und Login-Submit-Werte mitnehmen, Same-Origin-Anmeldeseiten anhand einer HTML-Verlinkung oder begrenzter GET-Redirects finden, maximal ein Passwort-POST; keine fremden SSO-Domains.
+- [x] Schutz vor GET-Passwortversand, Registrierung, Passwortänderung, Mehrfach-Passwortfeldern, fremden Action-URLs und JS-only-Formularen.
+- [x] Contract-Tests mit synthetischen Enterprise-Loginformularen und Redirect-/SSO-Blockade ergänzt; UI-Hinweis zu Sicherheits- und JavaScript-Grenzen präzisiert.
+- [ ] CI grün, PR gemergt, Live-Abnahme der realen ATOSS-Anmeldung.
+- [ ] **Issue #40 zuerst schließen**, bevor WPF-artiges Browser-Autofill Klartextpasswörter in beliebige Drittseiten am geteilten Host schreiben dürfte.
