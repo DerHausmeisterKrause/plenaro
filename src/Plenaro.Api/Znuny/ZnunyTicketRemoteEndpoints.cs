@@ -56,7 +56,7 @@ public static class ZnunyTicketRemoteEndpoints
                 SecretVault vault,ZnunyReader reader,CancellationToken ct)=>
                 await AttachmentResult(ticketId,articleId,fileId,false,http,
                     users,config,vault,reader,ct))
-            .RequireRateLimiting("znuny-ticket-read");
+            .RequireRateLimiting("znuny-ticket-attachment-read");
 
         group.MapGet("/tickets/{ticketId}/articles/{articleId}/attachments/{fileId}/inline",
             async(string ticketId,string articleId,string fileId,HttpContext http,
@@ -64,7 +64,7 @@ public static class ZnunyTicketRemoteEndpoints
                 SecretVault vault,ZnunyReader reader,CancellationToken ct)=>
                 await AttachmentResult(ticketId,articleId,fileId,true,http,
                     users,config,vault,reader,ct))
-            .RequireRateLimiting("znuny-ticket-read");
+            .RequireRateLimiting("znuny-ticket-attachment-read");
 
         group.MapGet("/tickets/{ticketId}/booking-fields",async(string ticketId,
             HttpContext http,UserManager<ApplicationUser> users,

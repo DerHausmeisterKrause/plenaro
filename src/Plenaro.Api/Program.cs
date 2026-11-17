@@ -327,9 +327,28 @@ builder.Services.AddAntiforgery(options =>
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected=async (rejected,ct) => {
+        // Distinguish Plenaro's own quota from an upstream error or an outer
+        // NGINX 429. Never include secrets, user IDs or remote IP addresses.
+        var response=rejected.HttpContext.Response;
+        response.StatusCode=StatusCodes.Status429TooManyRequests;
+        response.Headers.CacheControl="no-store";
+        response.Headers["X-Plenaro-RateLimit"]="application";
+        if(rejected.Lease.TryGetMetadata(MetadataName.RetryAfter,out var wait) &&
+           wait>TimeSpan.Zero){
+            var seconds=Math.Max(1,(int)Math.Ceiling(wait.TotalSeconds));
+            response.Headers.RetryAfter=seconds.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+        }
+        if(rejected.HttpContext.Request.Path.StartsWithSegments("/api"))
+            await response.WriteAsJsonAsync(new{
+                code="plenaro-rate-limited",
+                error="Zu viele Plenaro-Anfragen für dieses Konto. "+
+                    "Bitte kurz abwarten und anschließend erneut versuchen."
+            },ct);
+    };
     options.AddPolicy("znuny-test", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ??
-            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        AuthenticatedRateLimitKey.For(context),
         _ => new FixedWindowRateLimiterOptions {
             PermitLimit=5, Window=TimeSpan.FromMinutes(5), QueueLimit=0, AutoReplenishment=true
         }));
@@ -338,14 +357,12 @@ builder.Services.AddRateLimiter(options =>
     // Separate rare administrative operation from normal connection tests and
     // manual sync runs, which share the general Znuny test limiter.
     options.AddPolicy("znuny-bootstrap-restart", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ??
-            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        AuthenticatedRateLimitKey.For(context),
         _ => new FixedWindowRateLimiterOptions {
             PermitLimit=5, Window=TimeSpan.FromMinutes(5), QueueLimit=0, AutoReplenishment=true
         }));
     options.AddPolicy("znuny-web", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ??
-            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        AuthenticatedRateLimitKey.For(context),
         _ => new FixedWindowRateLimiterOptions {
             PermitLimit=240,Window=TimeSpan.FromMinutes(5),QueueLimit=0,
             AutoReplenishment=true
@@ -353,22 +370,29 @@ builder.Services.AddRateLimiter(options =>
     // A new upstream login may be expensive. Limit session/bootstrap creation,
     // not normal HTML/CSS/API requests of the authenticated native view.
     options.AddPolicy("znuny-native-start", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ??
-            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        AuthenticatedRateLimitKey.For(context),
         _=>new FixedWindowRateLimiterOptions{
             PermitLimit=10,Window=TimeSpan.FromMinutes(5),QueueLimit=0,
             AutoReplenishment=true
         }));
+    // Ticket conversation reads can occur from several open task tabs.
+    // Keep a bounded per-user limit, but no longer count inline images and
+    // ticket attachments against that same quota.
     options.AddPolicy("znuny-ticket-read", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ??
-            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        AuthenticatedRateLimitKey.For(context),
         _ => new FixedWindowRateLimiterOptions {
-            PermitLimit=40, Window=TimeSpan.FromMinutes(5), QueueLimit=0,
+            PermitLimit=80, Window=TimeSpan.FromMinutes(5), QueueLimit=0,
+            AutoReplenishment=true
+        }));
+    options.AddPolicy("znuny-ticket-attachment-read",
+        context => RateLimitPartition.GetFixedWindowLimiter(
+        AuthenticatedRateLimitKey.For(context),
+        _ => new FixedWindowRateLimiterOptions {
+            PermitLimit=120, Window=TimeSpan.FromMinutes(5), QueueLimit=0,
             AutoReplenishment=true
         }));
     options.AddPolicy("znuny-ticket-write", context => RateLimitPartition.GetFixedWindowLimiter(
-        context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ??
-            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        AuthenticatedRateLimitKey.For(context),
         _ => new FixedWindowRateLimiterOptions {
             PermitLimit=10, Window=TimeSpan.FromMinutes(5), QueueLimit=0,
             AutoReplenishment=true
@@ -453,8 +477,11 @@ app.Use(async (http,next)=>{
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();
-app.UseRateLimiter();
+// ASP.NET Core RateLimiter must run AFTER authentication when its policies
+// partition by ClaimsPrincipal. Otherwise every browser behind the same
+// NGINX proxy shares the proxy IP's 5-minute quota and hits spurious 429s.
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapGet("/health/live", () => Results.Ok(new

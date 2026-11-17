@@ -53,6 +53,16 @@ async function request<T>(url: string): Promise<T> {
   const result=await fetch(url,{credentials:'same-origin',cache:'no-store'});
   if(!result.ok){
     const details=await result.json().catch(()=>({})) as {error?:string;detail?:string};
+    if(result.status===429){
+      const fromPlenaro=result.headers.get('X-Plenaro-RateLimit')==='application';
+      const retry=Number(result.headers.get('Retry-After'));
+      const wait=Number.isFinite(retry)&&retry>0&&retry<=3600
+        ?' Erneut versuchen in etwa '+Math.ceil(retry)+' Sekunden.':'';
+      throw new Error((details.error||details.detail||
+        (fromPlenaro
+          ?'Das Plenaro-Anfragelimit wurde erreicht.'
+          :'Der vorgeschaltete Webserver hat die Anfrage begrenzt.'))+wait);
+    }
     throw new Error(details.error||details.detail||
       'Znuny-Daten konnten nicht geladen werden (HTTP '+result.status+').');
   }

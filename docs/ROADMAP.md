@@ -1,3 +1,24 @@
+## 17.11.2026 – Phase 6: Znuny-Dashboard 429 beheben (PR #46)
+
+- [x] Fehlermeldung im Frontend zugeordnet: `znunySyncApi.ts`
+  verwendet die HTTP-Antwort des Plenaro-/Gateway-Endpunkts;
+  remote Znuny-API-Fehler werden dagegen auf Gateway-Status umgesetzt.
+- [x] Fehler in Middleware-Reihenfolge gefunden:
+  `UseRateLimiter()` vor `UseAuthentication()` verursachte
+  gemeinsame IP-Quotas statt individueller Account-Quotas.
+- [x] Quotas nach Benutzer partitioniert; anonyme Login-Drosselung
+  bleibt nach IP; ein eigener stabiler Key für jeden Plenaro-Account.
+- [x] Interaktive Ticketreads 80/5 Minuten pro Benutzer und
+  Anhänge/Inlinebilder gesondert 120/5 Minuten pro Benutzer,
+  bestehende Schreiblimits unverändert.
+- [x] `X-Plenaro-RateLimit`-/`Retry-After`-Diagnostik und klare
+  429-Meldung im Frontend ergänzt.
+- [x] C#-Contract-Test zu separaten User-Limits trotz gleicher
+  Reverse-Proxy-IP und Frontend-Tests zu HTTP-429-Ursachen ergänzt.
+- [ ] CI grün / PR gemergt und echter Zwei-User-Dashboard-Test.
+- [ ] Falls weiterhin 429 ohne Plenaro-Kennung auftreten,
+  NGINX-Limits und Upstream-Gateway getrennt diagnostizieren.
+
 # Plenaro 2.0 – 7-Phasen-Roadmap
 
 Stand: 28.10.2026. Die ersten vier Meilensteine folgen dem bisherigen Gespräch (Docker → Weboberfläche → lokale Benutzer → Entra). Die späteren Phasen sind anhand des tatsächlich vorhandenen Desktop-Codes für eine vollständige Webmigration **konkretisiert**, nicht wörtlich aus einer früheren Liste übernommen.
