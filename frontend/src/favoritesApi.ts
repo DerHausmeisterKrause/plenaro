@@ -2,10 +2,14 @@ export type FavoriteApp={id:string;name:string;slug:string;enabled:boolean;
   availableToAll:boolean;upstreamUrl?:string;allowedUsers?:string[]};
 export type Favorite={id:string;appId:string;name:string;appName:string;
   slug:string;path:string;username:string;autoLogin:boolean;enabled:boolean;
-  sortOrder:number;hasPassword:boolean};
+  sortOrder:number;hasPassword:boolean;url?:string};
 export type FavoriteInput={appId:string;name:string;path:string;
   username:string;autoLogin:boolean;enabled:boolean;sortOrder:number;
   password?:string;clearPassword?:boolean};
+export type PersonalSiteInput={
+  name:string;url:string;username:string;autoLogin:boolean;enabled:boolean;
+  sortOrder:number;password?:string;clearPassword?:boolean;
+};
 export type AppInput={name:string;slug:string;upstreamUrl:string;
   enabled:boolean;availableToAll:boolean;allowedUsers:string[]};
 
@@ -46,3 +50,13 @@ export const updateApprovedApp=(id:string,data:AppInput)=>request<void>(
   '/api/v1/admin/favorite-apps/'+encodeURIComponent(id),'PUT',data);
 export const removeApprovedApp=(id:string)=>request<void>(
   '/api/v1/admin/favorite-apps/'+encodeURIComponent(id),'DELETE');
+/** No admin site approvals: each user owns the HTTPS URL and sort order. */
+export const createPersonalFavorite=(input:PersonalSiteInput)=>
+  request<{id:string}>('/api/v1/favorites/personal','POST',input);
+export const updatePersonalFavorite=(id:string,input:PersonalSiteInput)=>
+  request<void>('/api/v1/favorites/personal/'+encodeURIComponent(id),'PUT',input);
+export const removePersonalFavorite=(id:string)=>
+  request<void>('/api/v1/favorites/personal/'+encodeURIComponent(id),'DELETE');
+export const sortPersonalFavorites=(ids:string[])=>
+  request<void>('/api/v1/favorites/personal/order','PUT',{ids});
+
