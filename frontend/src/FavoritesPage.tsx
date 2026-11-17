@@ -2,110 +2,103 @@ import {useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
 import {Link,useParams} from 'react-router-dom';
 import {ArrowDown,ArrowUp,ExternalLink,Plus,RefreshCw,Save,ShieldCheck,
   Star,Trash2} from 'lucide-react';
-import {listUsers,type ManagedUser} from './userApi';
 import {
-  loadFavoriteApps,loadFavorites,createFavorite,updateFavorite,removeFavorite,
-  startFavorite,loadApprovedApps,createApprovedApp,updateApprovedApp,
-  removeApprovedApp,type AppInput,type FavoriteApp,type Favorite,
-  type FavoriteInput
+  loadFavorites,createPersonalFavorite,updatePersonalFavorite,
+  removePersonalFavorite,sortPersonalFavorites,startFavorite,
+  type Favorite,type PersonalSiteInput
 } from './favoritesApi';
 
-const blankFavorite=(appId=''):FavoriteInput=>({
-  appId,name:'',path:'/',username:'',autoLogin:false,enabled:true,
-  sortOrder:0,password:'',clearPassword:false
-});
-const blankApp=():AppInput=>({
-  name:'',slug:'',upstreamUrl:'https://',enabled:true,
-  availableToAll:false,allowedUsers:[]
+const blank=():PersonalSiteInput=>({
+  name:'',url:'https://',username:'',autoLogin:false,
+  enabled:true,sortOrder:0,password:'',clearPassword:false
 });
 function ErrorMessage({message}:{message:string}){
   return message?<p role="alert" className="um-feedback failure">{message}</p>:null;
 }
 
+/** Every user maintains unrestricted personal bookmark names and order.
+ * Proxy starts remain server-side, strictly scoped and HTTPS only.
+ * The centrally configured Knowledge Base is NOT a bookmark.
+ */
 export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
-  const [apps,setApps]=useState<FavoriteApp[]>([]);
   const [favorites,setFavorites]=useState<Favorite[]>([]);
   const [selected,setSelected]=useState('');
-  const [form,setForm]=useState<FavoriteInput>(blankFavorite());
+  const [form,setForm]=useState<PersonalSiteInput>(blank());
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [info,setInfo]=useState('');
   const [loaded,setLoaded]=useState(false);
   const reload=useCallback(async()=>{
-    const [newApps,entries]=await Promise.all([loadFavoriteApps(),loadFavorites()]);
-    setApps(newApps);setFavorites(entries);setLoaded(true);
+    const entries=await loadFavorites();
+    setFavorites(entries);setLoaded(true);
   },[]);
-  useEffect(()=>{void reload().catch(e=>setError(String(e)));},[reload]);
+  useEffect(()=>{void reload().catch(e=>
+    setError(e instanceof Error?e.message:'Favoriten konnten nicht geladen werden.'));},[reload]);
   const current=favorites.find(x=>x.id===selected);
   function choose(item:Favorite){
     setSelected(item.id);
-    setForm({appId:item.appId,name:item.name,path:item.path,
-      username:item.username,autoLogin:item.autoLogin,enabled:item.enabled,
-      sortOrder:item.sortOrder,password:'',clearPassword:false});
+    setForm({name:item.name,url:item.url??'https://',username:item.username,
+      autoLogin:item.autoLogin,enabled:item.enabled,sortOrder:item.sortOrder,
+      password:'',clearPassword:false});
     setError('');setInfo('');
   }
-  function newFavorite(){
-    setSelected('');setForm(blankFavorite(apps[0]?.id??''));
-    setError('');setInfo('');
+  function fresh(){
+    setSelected('');setForm(blank());setError('');setInfo('');
   }
   async function save(e:FormEvent){
     e.preventDefault();if(busy)return;
     setBusy(true);setError('');setInfo('');
     try{
-      if(!apps.some(a=>a.id===form.appId))
-        throw new Error('Bitte eine freigegebene Anwendung auswählen.');
-      if(!form.name.trim())throw new Error('Name fehlt.');
-      const toSave={...form,name:form.name.trim(),
+      const payload={...form,name:form.name.trim(),url:form.url.trim(),
+        username:form.username.trim(),
         sortOrder:current?form.sortOrder:favorites.length};
-      const id=current?current.id:(await createFavorite(toSave)).id;
-      if(current)await updateFavorite(current.id,toSave);
+      const id=current?current.id:(await createPersonalFavorite(payload)).id;
+      if(current)await updatePersonalFavorite(current.id,payload);
       await reload();
-      setSelected(id);setForm({...toSave,password:'',clearPassword:false});
-      setInfo('Favorit gespeichert.');
-      onChanged();
-    }catch(e){setError(e instanceof Error?e.message:'Speichern fehlgeschlagen.');}
-    finally{setBusy(false);}
+      setSelected(id);setForm({...payload,password:'',clearPassword:false});
+      setInfo('Deine Webseite wurde gespeichert.');onChanged();
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:'Favorit konnte nicht gespeichert werden.');
+    }finally{setBusy(false);}
   }
   async function erase(){
     if(!current||busy)return;
     if(!window.confirm('Favorit „'+current.name+'“ entfernen?'))return;
     setBusy(true);setError('');setInfo('');
     try{
-      await removeFavorite(current.id);newFavorite();await reload();
-      onChanged();setInfo('Favorit entfernt.');
-    }catch(e){setError(e instanceof Error?e.message:'Entfernen fehlgeschlagen.');}
-    finally{setBusy(false);}
+      await removePersonalFavorite(current.id);
+      fresh();await reload();onChanged();setInfo('Favorit entfernt.');
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:'Entfernen fehlgeschlagen.');
+    }finally{setBusy(false);}
   }
   async function move(direction:-1|1){
     if(!current||busy)return;
     const items=[...favorites].sort((a,b)=>a.sortOrder-b.sortOrder);
-    const index=items.findIndex(a=>a.id===current.id);
+    const index=items.findIndex(item=>item.id===current.id);
     const other=items[index+direction];
     if(!other)return;
+    const swap=items[index];
+    items[index]=other;items[index+direction]=swap;
     setBusy(true);setError('');
     try{
-      await updateFavorite(current.id,{
-        appId:current.appId,name:current.name,path:current.path,
-        username:current.username,autoLogin:current.autoLogin,
-        enabled:current.enabled,sortOrder:other.sortOrder,password:''
-      });
-      await updateFavorite(other.id,{
-        appId:other.appId,name:other.name,path:other.path,
-        username:other.username,autoLogin:other.autoLogin,
-        enabled:other.enabled,sortOrder:current.sortOrder,password:''
-      });
-      await reload();setForm(x=>({...x,sortOrder:other.sortOrder}));
+      await sortPersonalFavorites(items.map(item=>item.id));
+      await reload();
+      setForm(v=>({...v,sortOrder:index+direction}));
       onChanged();
-    }catch(e){setError(e instanceof Error?e.message:'Sortieren fehlgeschlagen.');}
-    finally{setBusy(false);}
+    }catch(reason){
+      setError(reason instanceof Error?reason.message:'Sortierung konnte nicht gespeichert werden.');
+    }finally{setBusy(false);}
   }
   return <section className="content-card favorites-panel">
-    <div className="um-section-title"><Star size={20}/><h2>Meine Favoriten</h2></div>
-    <p>Wie im klassischen Plenaro: Webseiten direkt als eigenen Reiter öffnen.
-      Du kannst nur Anwendungen wählen, die ein Administrator freigegeben hat.</p>
+    <div className="um-section-title"><Star size={20}/><h2>Meine Webseiten</h2></div>
+    <p>Lege deine eigenen HTTPS-Webseiten an, bearbeite sie und bestimme
+      die Reihenfolge. Eine Freigabe des Administrators für einzelne
+      Webseiten ist nicht erforderlich. Die Wissensdatenbank wird separat
+      eingerichtet und erscheint nicht in dieser Liste.</p>
     <div className="favorites-toolbar">
       <button type="button" className="button button-secondary"
-        onClick={newFavorite}><Plus size={15}/>Favorit hinzufügen</button>
+        onClick={fresh} disabled={busy}><Plus size={15}/>Webseite hinzufügen</button>
       <button type="button" className="button button-secondary"
         disabled={!current||busy} onClick={()=>void move(-1)}
         aria-label="Favorit nach oben"><ArrowUp size={15}/></button>
@@ -115,32 +108,31 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
     </div>
     <div className="favorites-editor-grid">
       <div className="favorites-list" aria-label="Meine Favoriten">
-        {favorites.map(f=><button type="button" key={f.id}
-          className={'favorites-list-item'+(f.id===selected?' selected':'')}
-          onClick={()=>choose(f)}>
-          <Star size={15}/><span>{f.name}</span>
+        {favorites.map(item=><button type="button" key={item.id}
+          className={'favorites-list-item'+(item.id===selected?' selected':'')}
+          onClick={()=>choose(item)}>
+          <Star size={15}/><span>{item.name}</span>
         </button>)}
-        {loaded&&!favorites.length&&<p>Noch keine Favoriten vorhanden.</p>}
+        {loaded&&!favorites.length&&<p>Noch keine Webseiten vorhanden.</p>}
       </div>
       <form className="um-form favorites-form" onSubmit={e=>void save(e)}>
-        <label htmlFor="fav-name">Name</label>
-        <input id="fav-name" value={form.name} maxLength={120} required
+        <label htmlFor="fav-name">Name der Webseite</label>
+        <input id="fav-name" value={form.name} required minLength={2} maxLength={120}
           onChange={e=>setForm({...form,name:e.target.value})}/>
-        <label htmlFor="fav-app">Freigegebene Webseite</label>
-        <select id="fav-app" value={form.appId} required disabled={!!current}
-          onChange={e=>setForm({...form,appId:e.target.value})}>
-          <option value="">Bitte auswählen</option>
-          {apps.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-        </select>
-        <label htmlFor="fav-path">Unterseite / Pfad</label>
-        <input id="fav-path" value={form.path} required
-          placeholder="/wiki/start" onChange={e=>setForm({...form,path:e.target.value})}/>
+        <label htmlFor="fav-url">Webadresse (HTTPS)</label>
+        <input id="fav-url" type="url" value={form.url} required maxLength={2048}
+          placeholder="https://example.org/unterseite"
+          onChange={e=>setForm({...form,url:e.target.value})}/>
+        <p className="um-hint">Die Adresse kannst du selbst eintragen oder später
+          ändern. Der Plenaro-Proxy öffnet die Webseite mit einer getrennten
+          Sitzung. Aus Sicherheitsgründen sind lokale Server-, Netzwerk- und
+          Metadaten-Adressen im persönlichen Proxy gesperrt.</p>
         <label htmlFor="fav-user">Anmeldename (optional)</label>
-        <input id="fav-user" value={form.username} autoComplete="off"
+        <input id="fav-user" value={form.username} autoComplete="off" maxLength={180}
           onChange={e=>setForm({...form,username:e.target.value})}/>
         <label htmlFor="fav-password">Passwort (optional)</label>
         <input id="fav-password" type="password" value={form.password??''}
-          placeholder={current?.hasPassword?'Gespeichert – leer lassen zum Beibehalten':'Neues Passwort'}
+          placeholder={current?.hasPassword?'Gespeichert – leer lassen zum Beibehalten':'Passwort'}
           autoComplete="new-password"
           onChange={e=>setForm({...form,password:e.target.value})}/>
         {current?.hasPassword&&<label className="favorites-check">
@@ -149,130 +141,29 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
               password:e.target.checked?'':form.password})}/>
           Gespeichertes Passwort löschen
         </label>}
-        <label className="favorites-check"><input type="checkbox" checked={form.enabled}
-          onChange={e=>setForm({...form,enabled:e.target.checked})}/>Aktiv</label>
-        <label className="favorites-check"><input type="checkbox" checked={form.autoLogin}
-          onChange={e=>setForm({...form,autoLogin:e.target.checked})}/>
+        <label className="favorites-check"><input type="checkbox"
+          checked={form.enabled} onChange={e=>
+            setForm({...form,enabled:e.target.checked})}/>Webseite aktiv</label>
+        <label className="favorites-check"><input type="checkbox"
+          checked={form.autoLogin} onChange={e=>
+            setForm({...form,autoLogin:e.target.checked})}/>
           Automatische Anmeldung über ein übliches HTML-Loginformular versuchen</label>
-        <p className="um-hint">Passwörter bleiben verschlüsselt auf dem Plenaro-Server.
-          SSO, Mehrfaktor-Anmeldung und individuelle Loginformulare benötigen gegebenenfalls
-          eine manuelle Anmeldung im eingebetteten Fenster.</p>
+        <p className="um-hint">Passwörter bleiben verschlüsselt gespeichert.
+          SSO, MFA und spezielle Loginverfahren können eine interaktive
+          Anmeldung erforderlich machen. Manche Webseiten verbieten die
+          Darstellung in eingebetteten Fenstern.</p>
         <ErrorMessage message={error}/>
         {info&&<p role="status" className="um-feedback success">{info}</p>}
         <div className="favorites-toolbar">
-          <button type="submit" className="button button-primary" disabled={busy||!apps.length}>
+          <button type="submit" className="button button-primary" disabled={busy}>
             <Save size={16}/>Speichern</button>
           {current&&<>
             <Link className="button button-secondary" to={'/favorites/'+current.id}>
               <ExternalLink size={15}/>Öffnen</Link>
             <button type="button" className="button button-secondary"
-              disabled={busy} onClick={()=>void erase()}><Trash2 size={15}/>Entfernen</button>
+              disabled={busy} onClick={()=>void erase()}>
+              <Trash2 size={15}/>Entfernen</button>
           </>}
-        </div>
-        {loaded&&!apps.length&&<p>Es sind noch keine Webanwendungen freigegeben.
-          Bitte in der Administration zuerst eine Anwendung anlegen.</p>}
-      </form>
-    </div>
-  </section>;
-}
-
-export function FavoriteAppsAdminPanel({onChanged}:{onChanged:()=>void}){
-  const [apps,setApps]=useState<FavoriteApp[]>([]);
-  const [people,setPeople]=useState<ManagedUser[]>([]);
-  const [selected,setSelected]=useState('');
-  const [form,setForm]=useState<AppInput>(blankApp());
-  const [busy,setBusy]=useState(false);
-  const [error,setError]=useState('');
-  const [info,setInfo]=useState('');
-  const [loaded,setLoaded]=useState(false);
-  const refresh=useCallback(async()=>{
-    const [entries,users]=await Promise.all([loadApprovedApps(),listUsers()]);
-    setApps(entries);setPeople(users);setLoaded(true);
-  },[]);
-  useEffect(()=>{void refresh().catch(e=>setError(String(e)));},[refresh]);
-  const current=apps.find(a=>a.id===selected);
-  function choose(app:FavoriteApp){
-    setSelected(app.id);
-    setForm({name:app.name,slug:app.slug,upstreamUrl:app.upstreamUrl??'https://',
-      enabled:app.enabled,availableToAll:app.availableToAll,
-      allowedUsers:app.allowedUsers??[]});
-    setError('');setInfo('');
-  }
-  function fresh(){setSelected('');setForm(blankApp());setError('');setInfo('');}
-  async function save(e:FormEvent){
-    e.preventDefault();if(busy)return;
-    setBusy(true);setError('');setInfo('');
-    try{
-      const payload={...form,name:form.name.trim(),slug:form.slug.trim().toLowerCase(),
-        upstreamUrl:form.upstreamUrl.trim()};
-      const id=current?current.id:(await createApprovedApp(payload)).id;
-      if(current)await updateApprovedApp(current.id,payload);
-      await refresh();setSelected(id);setForm(payload);
-      setInfo('Webanwendung freigegeben.');onChanged();
-    }catch(e){setError(e instanceof Error?e.message:'Speichern fehlgeschlagen.');}
-    finally{setBusy(false);}
-  }
-  async function erase(){
-    if(!current||busy)return;
-    if(!window.confirm('Anwendung entfernen? Zugehörige Favoriten werden gelöscht.'))return;
-    setBusy(true);setError('');
-    try{await removeApprovedApp(current.id);await refresh();fresh();
-      setInfo('Anwendung entfernt.');onChanged();}
-    catch(e){setError(e instanceof Error?e.message:'Löschen fehlgeschlagen.');}
-    finally{setBusy(false);}
-  }
-  return <section className="content-card favorites-panel">
-    <div className="um-section-title"><ShieldCheck size={20}/><h2>Webanwendungen freigeben</h2></div>
-    <p>Nur Administratoren bestimmen, welche HTTPS-Webseiten Plenaro als Proxy
-      bereitstellen darf. Benutzer können anschließend eigene Favoriten dazu anlegen.
-      Ein NGINX-Neustart pro Anwendung ist nicht erforderlich.</p>
-    <div className="favorites-toolbar">
-      <button type="button" className="button button-secondary" onClick={fresh}>
-        <Plus size={15}/>Anwendung hinzufügen</button>
-    </div>
-    <div className="favorites-editor-grid">
-      <div className="favorites-list" aria-label="Freigegebene Anwendungen">
-        {apps.map(a=><button key={a.id} type="button"
-          className={'favorites-list-item'+(a.id===selected?' selected':'')}
-          onClick={()=>choose(a)}>{a.name}</button>)}
-        {loaded&&!apps.length&&<p>Noch keine Anwendungen vorhanden.</p>}
-      </div>
-      <form className="um-form favorites-form" onSubmit={e=>void save(e)}>
-        <label htmlFor="app-name">Name</label>
-        <input id="app-name" value={form.name} required maxLength={120}
-          onChange={e=>setForm({...form,name:e.target.value})}/>
-        <label htmlFor="app-slug">Subdomain (z. B. wiki)</label>
-        <input id="app-slug" value={form.slug} required maxLength={40}
-          pattern="[a-z][a-z0-9-]+" onChange={e=>setForm({...form,slug:e.target.value})}/>
-        <label htmlFor="app-upstream">Interne HTTPS-Adresse (Serverursprung)</label>
-        <input id="app-upstream" type="url" value={form.upstreamUrl} required disabled={!!current}
-          onChange={e=>setForm({...form,upstreamUrl:e.target.value})}/>
-        <p className="um-hint">Nur HTTPS-Origin, etwa https://wiki.example.org/.
-          Die Zieladresse bleibt in der Administration; keine freie Zielwahl durch Benutzer.
-          Bitte keine echten Betriebsadressen ins GitHub-Repository kopieren.</p>
-        <label className="favorites-check"><input type="checkbox"
-          checked={form.enabled} onChange={e=>setForm({...form,enabled:e.target.checked})}/>
-          Anwendung aktiv</label>
-        <label className="favorites-check"><input type="checkbox"
-          checked={form.availableToAll}
-          onChange={e=>setForm({...form,availableToAll:e.target.checked})}/>
-          Für alle angemeldeten Plenaro-Benutzer freigeben</label>
-        {!form.availableToAll&&<fieldset className="favorites-users">
-          <legend>Erlaubte Benutzer</legend>
-          {people.map(p=><label className="favorites-check" key={p.id}>
-            <input type="checkbox" checked={form.allowedUsers.includes(p.id)}
-              onChange={e=>setForm({...form,allowedUsers:e.target.checked?
-                [...form.allowedUsers,p.id]:form.allowedUsers.filter(x=>x!==p.id)})}/>
-            {p.displayName} ({p.email})</label>)}
-        </fieldset>}
-        <ErrorMessage message={error}/>
-        {info&&<p role="status" className="um-feedback success">{info}</p>}
-        <div className="favorites-toolbar">
-          <button type="submit" disabled={busy} className="button button-primary">
-            <Save size={16}/>Speichern</button>
-          {current&&<button className="button button-secondary" type="button"
-            disabled={busy} onClick={()=>void erase()}>
-            <Trash2 size={15}/>Entfernen</button>}
         </div>
       </form>
     </div>
@@ -338,7 +229,7 @@ export function FavoritePage(){
         <button type="button" className="button button-secondary"
           onClick={()=>setRevision(n=>n+1)} disabled={loading}>
           <RefreshCw size={15}/>Neu verbinden</button>
-        <Link className="button button-secondary" to="/settings">Favoriten verwalten</Link>
+        <Link className="button button-secondary" to="/settings?section=favorites">Favoriten verwalten</Link>
       </div>
     </div>
     {error&&<div className="content-card znuny-portal-error" role="alert">
