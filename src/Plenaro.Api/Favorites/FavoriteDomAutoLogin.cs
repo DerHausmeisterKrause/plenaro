@@ -135,7 +135,8 @@ internal static class FavoriteDomAutoLogin
                 'button[type="submit"],input[type="submit"],button,'+
                 'input[type="button"]'));
             const button = buttons.find(el => active(el) && !forbidden(el) &&
-                (el.matches('button[type="submit"],input[type="submit"]') ||
+                ((!!form && el.matches(
+                    'button[type="submit"],input[type="submit"]')) ||
                  loginText(el) || /login|submit/i.test(
                     (el.getAttribute("name") || "") + " " +
                     (el.getAttribute("id") || ""))));
