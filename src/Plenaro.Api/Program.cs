@@ -327,6 +327,26 @@ builder.Services.AddAntiforgery(options =>
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected=async (rejected,ct) => {
+        // Distinguish Plenaro's own quota from an upstream error or an outer
+        // NGINX 429. Never include secrets, user IDs or remote IP addresses.
+        var response=rejected.HttpContext.Response;
+        response.StatusCode=StatusCodes.Status429TooManyRequests;
+        response.Headers.CacheControl="no-store";
+        response.Headers["X-Plenaro-RateLimit"]="application";
+        if(rejected.Lease.TryGetMetadata(MetadataName.RetryAfter,out var wait) &&
+           wait>TimeSpan.Zero){
+            var seconds=Math.Max(1,(int)Math.Ceiling(wait.TotalSeconds));
+            response.Headers.RetryAfter=seconds.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+        }
+        if(rejected.HttpContext.Request.Path.StartsWithSegments("/api"))
+            await response.WriteAsJsonAsync(new{
+                code="plenaro-rate-limited",
+                error="Zu viele Plenaro-Anfragen für dieses Konto. "+
+                    "Bitte kurz abwarten und anschließend erneut versuchen."
+            },ct);
+    };
     options.AddPolicy("znuny-test", context => RateLimitPartition.GetFixedWindowLimiter(
         AuthenticatedRateLimitKey.For(context),
         _ => new FixedWindowRateLimiterOptions {
