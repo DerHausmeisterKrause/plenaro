@@ -294,6 +294,38 @@ Assert(personalHtml.Contains(
 Assert((string?)injectPersonal.Invoke(null,new object[]{
     personalHtml,"/site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"})==personalHtml,
     "personal favorite shim is idempotent");
+// Browser navigations must not silently display an empty white 502 frame.
+// The diagnostic is static and never contains the user's upstream URL.
+var writeProxyError=typeof(FavoriteProxy).GetMethod("ProxyNavigationErrorAsync",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+var errorFrame=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+errorFrame.Request.Method="GET";
+errorFrame.Request.Headers.Accept="text/html";
+using var errorFrameBytes=new MemoryStream();
+errorFrame.Response.Body=errorFrameBytes;
+await (Task)writeProxyError.Invoke(null,new object[]{
+    errorFrame,502,"private-upstream-blocked",
+    "Für persönliche Webseiten ist dieses Netzwerkziel gesperrt.",
+    CancellationToken.None})!;
+var errorFrameContent=Encoding.UTF8.GetString(errorFrameBytes.ToArray());
+Assert(errorFrame.Response.StatusCode==502 &&
+    errorFrame.Response.Headers["X-Plenaro-Favorite-Error"]==
+        "private-upstream-blocked" &&
+    errorFrameContent.Contains("Diese Webseite konnte nicht angezeigt werden",
+        StringComparison.Ordinal) &&
+    errorFrameContent.Contains("Netzwerkziel gesperrt",StringComparison.Ordinal),
+    "failed iframe navigation returns understandable diagnostic HTML");
+var assetError=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+assetError.Request.Method="GET";
+assetError.Request.Headers.Accept="text/css";
+using var assetErrorBytes=new MemoryStream();
+assetError.Response.Body=assetErrorBytes;
+await (Task)writeProxyError.Invoke(null,new object[]{
+    assetError,502,"upstream-unavailable","nicht erreichbar",
+    CancellationToken.None})!;
+Assert(assetError.Response.StatusCode==502 && assetErrorBytes.Length==0,
+    "failed CSS/JS request does not return HTML with wrong content type");
+
 var invalidPrefixRejected=false;
 try{injectShim.Invoke(null,new object[]{fixtureHtml,"/../../rest"});}
 catch(System.Reflection.TargetInvocationException e) when(
