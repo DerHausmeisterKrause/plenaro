@@ -1,6 +1,6 @@
 # Plenaro 2.0 – aktueller Arbeitsstand
 
-**Stand: 03.11.2026 · aktive Entwicklungsphase: 6 (Znuny/OTRS und ITSM)**
+**Stand: 17.11.2026 · aktive Entwicklungsphasen: 6 (Znuny/OTRS-Abnahme) und 7 (Wiki/Favoriten/Sicherheit)**
 
 Dies ist die aktuelle Arbeitsliste. Die ausführliche [Roadmap](ROADMAP.md) enthält zusätzlich historische, teils **abgelöste** Implementierungsschritte. `[x]` bedeutet: Code/CI vorhanden, **nicht automatisch** am realen Zielserver abgenommen.
 
@@ -392,10 +392,11 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [ ] Live-Test mit echter interner/public HTTPS-Seite, unterschiedlichen SPAs, CSP/X-Frame-Options des äußeren NGINX und 2 Benutzerkonten. Manche fremden Websites können selbst mit Korrekturen keine eingebettete Ansicht unterstützen (SSO, CSP, CDN, JavaScript, Anti-Bot).
 - [ ] **Sicherheitspriorität [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40):** Benutzergesteuerte Favoriten auf dedizierte Browser-Origins migrieren. Der Shared-Path-Host trennt Browser-Cookies nach Pfad, aber keine Same-Origin-JavaScript-Zugriffe zwischen verschiedenen Pfaden. Bis zur vollständigen Origin-Isolation keine beliebigen fremden Skript-Webseiten als vertrauenswürdig einstufen.
 
-## 17.11.2026 – Fix für interne persönliche Favoriten (Phase 7; PR in Prüfung)
+## 17.11.2026 – Fix für interne persönliche Favoriten (Phase 7; PR #41 gemergt)
 
 - [x] Ursache von `private-upstream-blocked` bestätigt: neue `site-*`-Favoriten erreichen ohne gezielte Betreiber-Ausnahme nur öffentliche HTTPS-IP-Ziele; migrierte Alt-Freigaben funktionieren nur für ihre bestehende Origin.
 - [x] Konfiguration `PLENARO_FAVORITES_INTERNAL_ORIGINS`: ausschließlich exakte, durch Betreiber genehmigte HTTPS-Origins (Hostname und Port), keine pauschale Intranet-/Subnetzfreigabe; Wiki und vorhandene Logins bleiben unverändert.
 - [x] Bestehenden TCP-/DNS-Filter weiterbenutzt, Tests für exakte Domains, Port und ungültige Einträge ergänzt; Docker-Compose, .env und Proxy-Dokumentation aktualisiert.
-- [ ] CI/PR-Merge und tatsächlichen Zielserver-Browser-Test durchführen: echte Hosts eintragen, Container aktualisieren, Favorit neu verbinden.
+- [x] [PR #41](https://github.com/DerHausmeisterKrause/plenaro/pull/41) gemergt; [CI #44048722860](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44048722860) erfolgreich.
+- [ ] Zielserver-Browser-Test: echte freizugebende Hosts in `.env` eintragen, Container aktualisieren und Favoriten neu verbinden.
 - [ ] Getrennte Browser-Origins für selbst angelegte Favoriten (Issue #40) weiterhin priorisieren, bevor fremde JS-Webseiten als sicher gelten.
