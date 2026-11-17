@@ -765,9 +765,10 @@ public sealed partial class FavoriteProxy
             await ProxyNavigationErrorAsync(ctx,502,
                 blocked?"private-upstream-blocked":"upstream-unavailable",
                 blocked
-                    ?"Für frei angelegte Favoriten ist der Zugriff auf "+
-                      "interne oder lokale Netzwerkadressen gesperrt. "+
-                      "Öffne eine Intranet-Webseite direkt im neuen Tab."
+                    ?"Die Zieladresse ist aus Sicherheitsgründen gesperrt "+
+                      "(z. B. Loopback, Link-Local oder Metadaten-Adresse). "+
+                      "Interne HTTPS-Webseiten mit gültigem DNS und TLS "+
+                      "sind als Favoriten erlaubt."
                     :"Der Zielserver ist über den Plenaro-Proxy nicht erreichbar.",
                 ct);
         }catch(OperationCanceledException) when(!ct.IsCancellationRequested){

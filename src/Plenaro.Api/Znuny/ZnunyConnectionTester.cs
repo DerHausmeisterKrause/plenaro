@@ -83,7 +83,9 @@ public sealed class ZnunyConnectionTester(IHttpClientFactory clients)
         {
             var addresses = await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host,ct);
             // Restrict the actual TCP peer, not just the user-provided URL.
-            // RFC1918/private LAN hosts remain allowed for administrator-controlled installations.
+            // RFC1918/private LAN hosts are permitted for authenticated
+            // user favorites as well as administrator-controlled integrations.
+            // Keep rejecting loopback, link-local, and metadata endpoints.
             var allowed=addresses.FirstOrDefault(ip=>
                 Allowed(ip)&&(!publicOnly||PublicEndpointAllowed(ip)));
             if (allowed is null)
@@ -102,9 +104,10 @@ public sealed class ZnunyConnectionTester(IHttpClientFactory clients)
         }
     };
 
-    // Self-service favorite URLs must never become an SSRF entrypoint into
-    // corporate RFC1918 hosts, CGNAT, metadata services, or local IPv6
-    // infrastructure. Checked for every actual TCP connection after DNS.
+    // Optional public-only guard for clients that require an Internet-only
+    // destination. Favorite HTML proxies deliberately use the general
+    // Allowed() policy to reach private LAN services; both modes still
+    // validate the actual TCP peer after DNS resolution.
     internal static bool PublicEndpointAllowed(IPAddress ip)
     {
         if(!Allowed(ip))return false;

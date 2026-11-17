@@ -392,11 +392,14 @@ CI: https://github.com/DerHausmeisterKrause/plenaro/actions/runs/43001365087
 - [ ] Live-Test mit echter interner/public HTTPS-Seite, unterschiedlichen SPAs, CSP/X-Frame-Options des äußeren NGINX und 2 Benutzerkonten. Manche fremden Websites können selbst mit Korrekturen keine eingebettete Ansicht unterstützen (SSO, CSP, CDN, JavaScript, Anti-Bot).
 - [ ] **Sicherheitspriorität [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40):** Benutzergesteuerte Favoriten auf dedizierte Browser-Origins migrieren. Der Shared-Path-Host trennt Browser-Cookies nach Pfad, aber keine Same-Origin-JavaScript-Zugriffe zwischen verschiedenen Pfaden. Bis zur vollständigen Origin-Isolation keine beliebigen fremden Skript-Webseiten als vertrauenswürdig einstufen.
 
-## 17.11.2026 – Fix für interne persönliche Favoriten (Phase 7; PR #41 gemergt)
+## 17.11.2026 – Persönliche Intranet-Webseiten ohne .env-Freigabe (Phase 7)
 
-- [x] Ursache von `private-upstream-blocked` bestätigt: neue `site-*`-Favoriten erreichen ohne gezielte Betreiber-Ausnahme nur öffentliche HTTPS-IP-Ziele; migrierte Alt-Freigaben funktionieren nur für ihre bestehende Origin.
-- [x] Konfiguration `PLENARO_FAVORITES_INTERNAL_ORIGINS`: ausschließlich exakte, durch Betreiber genehmigte HTTPS-Origins (Hostname und Port), keine pauschale Intranet-/Subnetzfreigabe; Wiki und vorhandene Logins bleiben unverändert.
-- [x] Bestehenden TCP-/DNS-Filter weiterbenutzt, Tests für exakte Domains, Port und ungültige Einträge ergänzt; Docker-Compose, .env und Proxy-Dokumentation aktualisiert.
-- [x] [PR #41](https://github.com/DerHausmeisterKrause/plenaro/pull/41) gemergt; [CI #44048722860](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44048722860) erfolgreich.
-- [ ] Zielserver-Browser-Test: echte freizugebende Hosts in `.env` eintragen, Container aktualisieren und Favoriten neu verbinden.
-- [ ] Getrennte Browser-Origins für selbst angelegte Favoriten (Issue #40) weiterhin priorisieren, bevor fremde JS-Webseiten als sicher gelten.
+- [x] WPF-Referenz erneut geprüft: Webfavoriten waren für interne Webseiten vorgesehen.
+- [x] PR #41 mit exakter Betreiber-Freigabeliste wird funktional ersetzt: Im HTTPS-Favoriten-Proxy benötigen eigene `site-*`-Webseiten ab jetzt keine zusätzlichen `.env`-Origins mehr.
+- [x] Der bestehende sichere TCP-Handler akzeptiert RFC1918-LAN und IPv6-ULA, blockiert weiterhin Loopback, Link-Local, bekannte Metadaten-IPs, Multicast und nicht spezifizierte Ziele; HTTPS-Zertifikatsvalidierung und Eigentümer-/Sitzungsprüfungen bleiben aktiv.
+- [x] Überflüssige Allowlist-Datei, Compose-Variable und `.env`-Beispiele entfernt; Vertragsprüfungen für private und gesperrte Ziel-IPs ergänzt.
+- [ ] GitHub-CI abschließen und neue Version nach `main` übernehmen.
+- [ ] Produktionsabnahme: Interne und öffentliche HTTPS-Favoriten, CSS/JS, Anmeldungen, Wiki und zwei getrennte Benutzer testen.
+- [ ] **Bewusstes Sicherheitsrisiko:** Jeder Plenaro-Nutzer kann serverseitig interne HTTPS-Dienste erreichen; Firewall/Segmentierung und vertrauenswürdige Benutzer sicherstellen. Dedizierte Browser-Origin je frei angelegtem Favoriten bleibt als [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40) offen.
+
+Historie: Die Origin-Allowlist aus [PR #41](https://github.com/DerHausmeisterKrause/plenaro/pull/41) ist durch diese Änderung abgelöst.

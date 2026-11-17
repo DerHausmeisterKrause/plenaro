@@ -1,35 +1,34 @@
-## Betreiberfreigabe für persönliche Intranet-Webseiten (November 2026)
+## Persönliche interne HTTPS-Favoriten ohne .env-Freigabeliste (Stand 17.11.2026)
 
-Der Fehlercode `private-upstream-blocked` bedeutet bei persönlichen
-`site-*`-Favoriten eine **bewusste** Sperre des TCP-Ziels durch den
-SSRF-Schutz. Die funktionierende zentrale Wiki-Verbindung ist davon
-unabhängig. Bei bereits vor der Trennung freigegebenen Favoriten wird
-`favorite_apps.allow_private_upstream` für die **unveränderte** Origin
-weiterhin berücksichtigt; selbst angelegte/neue oder umadressierte Favoriten
-erhalten diesen Bestandschutz nicht.
+Mit der aktuellen Korrektur dürfen authentifizierte Nutzer unter
+**Einstellungen → Webseiten / Favoriten** beliebige HTTPS-Webseiten mit
+DNS-Host eintragen, darunter Firmen-Intranetdienste auf privaten IPv4-
+oder IPv6-Netzen. Die in PR #41 eingeführte
+`PLENARO_FAVORITES_INTERNAL_ORIGINS`-Freigabeliste wurde wieder entfernt:
+**Weder neue .env-Variablen noch eine separate Administratorfreigabe pro
+internem Favoriten sind erforderlich.** Bereits gespeicherte Favoriten
+werden nicht verändert.
 
-**Lösung ohne pauschale Öffnung des lokalen Netzes:**
-Der Betreiber darf unter `/opt/plenaro/.env` die **exakten**
-vertrauenswürdigen HTTPS-Ziel-Origins eintragen:
+Der HTML-Proxy bleibt an die jeweilige Favoriten-ID und den angemeldeten
+Besitzer gebunden, verwendet pro Sitzung einen eigenen serverseitigen
+Cookie-Container und lässt keine fremden Ziel-Hosts per Redirect zu.
+Nur HTTPS mit gültigem Zertifikat/Hostnamen ist zulässig. Beim tatsächlichen
+TCP-Verbindungsaufbau werden DNS-Antworten nochmals geprüft: Loopback
+(127.0.0.1, ::1), Link-Local (169.254.0.0/16, fe80::/10),
+Multicast, nicht spezifizierte Adressen und bekannte Metadata-Ziele bleiben
+gesperrt. Private LAN-IPs (RFC1918, IPv6-ULA) sind hingegen zugelassen.
 
-```dotenv
-PLENARO_FAVORITES_INTERNAL_ORIGINS=https://wiki.intern.example.org;https://cloud.intern.example.org:8443
-```
+**Sicherheitsfolge:** Jeder Plenaro-Benutzer kann damit **vom Plenaro-
+Server erreichbare interne HTTPS-Dienste ansprechen**, auch solche, auf
+die sein eigener Rechner keinen direkten Netzpfad hat. Das ist eine
+bewusste Erweiterung der Berechtigungen und keine vollständige
+SSRF-Abwehr. Plenaro deshalb nur mit vertrauenswürdigen Konten betreiben
+und den Server-Netzwerkzugriff auf kritische Verwaltungsdienste per
+Netzsegmentierung und Firewall begrenzen. Unverändert bleibt zudem das
+separate Sicherheitsproblem einer gemeinsamen Browser-Origin für
+verschiedene Favoriten: [Issue #40](https://github.com/DerHausmeisterKrause/plenaro/issues/40).
 
-Die Beispielnamen ersetzen! Nur `https://host` oder
-`https://host:port`, getrennt mit Semikolon, **keine Pfade,
-Subdomains als Wildcard, Credentials oder Subnetze**. Benutzer können
-weiterhin ihre Favoriten selbst anlegen; die Berechtigung für den
-serverseitigen Zugriff auf **private IPs** ist jedoch auf diese
-Administratoren-Liste begrenzt. Die Prüfung ist auf Hostname und Port
-exakt, nicht auf Namenspräfix/Suffix. Ein fehlerhafter Eintrag wird
-abgelehnt. Bei allen anderen persönlichen Upstreams bleiben nur
-öffentlich routbare Ziele erlaubt. Auch bei freigegebenen internen
-Origins blockiert der bestehende `SecureHandler` weiterhin Loopback,
-Link-Local und Metadaten-Adressen. DNS wird bei jedem TCP-Connect neu
-geprüft, HTTPS-Zertifikate und Hostnamen werden weiter validiert.
-
-Nach der Änderung:
+Beim Update von `main` genügt:
 
 ```sh
 cd /opt/plenaro
@@ -38,21 +37,13 @@ docker compose up -d --build --no-deps --force-recreate web
 docker compose up -d --no-deps --force-recreate nginx
 ```
 
-Neu verbinden und im Browser neu laden. Bei internen Zertifikaten
-gegebenenfalls `PLENARO_TRUSTED_CA_FILE` auf die vertrauenswürdige
-**CA** setzen (niemals Zertifikatsprüfung ausschalten).
-Zur Diagnose in F12 → Netzwerk den ersten `/site-.../`-
-Dokumentrequest prüfen: der Code `private-upstream-blocked`
-sollte für explizit freigegebene, vom Container tatsächlich erreichbare
-Origins verschwinden. Darauf folgende 502 können DNS/TLS/Firewall-
-Ursachen haben; Login- oder JS-Fehler sind gesondert zu prüfen.
-
-**Sicherheitsvorbehalt:** Ein Shared-Path-Host `apps-plenaro.../site-...`
-ist keine Browser-Origin-Isolation. Nur bewusst vertrauenswürdige
-Webseiten darin einbetten; für beliebige fremde Skript-Webseiten
-bleibt die Umstellung auf dedizierte Browser-Origins (Issue #40) offen.
-Dieses Update ändert weder Wiki-Zugriff noch andere Anmeldungen,
-Cookies, gespeicherte Passwörter oder Datenbanktabellen.
+Danach den Favoriten neu verbinden. Wenn der interne Zielserver
+ein firmeneigenes Zertifikat besitzt, muss dessen vertrauenswürdige CA
+im Webcontainer hinterlegt sein; Hostnamen- und TLS-Prüfung bleiben
+aktiv. Ein erneuter 502-Fehler ist anhand des
+`X-Plenaro-Favorite-Error`-Headers von der bisherigen privaten
+IP-Sperre zu unterscheiden. Nicht jede Webanwendung ist wegen CSP,
+SSO, JavaScript-Ressourcen oder WebSockets im iframe kompatibel.
 
 ---
 
@@ -62,7 +53,7 @@ Persönliche Webseiten (`site-<UUID>`) haben einen eigenen serverseitigen Cookie
 
 Ein HTTP-502/504/403/401 als Hauptnavigation wird künftig als lesbares Diagnose-HTML angezeigt. Der Header `X-Plenaro-Favorite-Error` benennt den Fehler ohne Benutzer-/URL-Daten:
 
-- `private-upstream-blocked`: neue persönliche Seite zeigt auf privaten/localhost/Metadaten-IP-Bereich; serverseitiger Proxy lehnt dies absichtlich ab.
+- `private-upstream-blocked`: Ziel verweist auf weiterhin gesperrte lokale/reservierte Adressen (Loopback, Link-Local, Metadaten usw.); normale RFC1918-LAN-Ziele sind erlaubt.
 - `upstream-redirect`: Zielseite leitet auf anderen Host (z. B. WWW-Canonical-Host) um; korrekte finale HTTPS-Adresse als persönlichen Favoriten speichern.
 - `upstream-unavailable`/`upstream-timeout`: Proxy-Netzwerkverbindung nicht möglich.
 - `proxy-session-expired`/`proxy-session-revoked`: Sitzungs-Cookie und Appberechtigung nicht mehr gültig, per „Neu verbinden“ neue Sitzung starten.
@@ -84,7 +75,7 @@ Zusätzlich gibt es in jedem Favoriten den Link **„Originalseite öffnen“**.
 
 # Stand 17.11.2026 – Self-Service-Favoriten und eigenständige Wissensdatenbank
 
-**Aktueller Stand:** Webseiten werden unter `Einstellungen → Webseiten / Favoriten` direkt mit Namen und vollständiger HTTPS-Adresse pro Benutzer angelegt und sortiert. Eine Einzel-Freigabe durch die Administration ist nicht mehr erforderlich. Für persönliche Proxys gelten strengere Netzwerkgrenzen: keine lokalen/privaten IP-Ziele, nur öffentlich routbare HTTPS-Endpunkte. Das verhindert eine SSRF-Verbindung aus Plenaro in das interne Netzwerk.
+**Aktueller Stand:** Webseiten werden unter `Einstellungen → Webseiten / Favoriten` direkt mit Namen und vollständiger HTTPS-Adresse pro Benutzer angelegt und sortiert. Eine Einzel-Freigabe durch die Administration ist nicht mehr erforderlich. Persönliche HTTPS-Webseiten dürfen inzwischen auch interne LAN-Ziele erreichen, ohne dass sie vom Administrator einzeln freigegeben werden müssen. Loopback, Link-Local und bekannte Metadaten-Adressen bleiben gesperrt; das Risiko serverseitiger Zugriffe auf andere interne HTTPS-Dienste wird durch Zugriffskontrolle und Firewall-Segmentierung begrenzt.
 
 **Wissensdatenbank:** Die zentrale Serveradresse bleibt unter `Einstellungen → Wissensdatenbank` adminseitig verwaltet. Benutzer speichern nur ihre persönlichen Wiki-Anmeldedaten. `wiki_user_connections` ist getrennt von `user_favorites`; die Wiki-Seite erzeugt beim Einrichten **keinen Favoriten**. Der erprobte FavoriteProxy, Confluence-Autologin, die Einmal-Bootstrap-URL, die Sitzungstrennung und die browserseitigen Wiki-Pfadkorrekturen bleiben bestehen.
 
