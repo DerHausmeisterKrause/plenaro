@@ -1,3 +1,85 @@
+## 17.11.2026 – WPF-DOM-Autofill für ATOSS und JavaScript-Favoriten (PR #45)
+
+Die klassische Desktop-Implementierung unter
+`DerHausmeisterKrause/project_tool/Services/WebShortcutBrowserSessionManager.cs`
+nutzt WebView2 und sucht nach dem tatsächlichen Rendering wiederholt im DOM,
+nicht nur im vom Server ausgelieferten HTML. **Das ist der zentrale Grund,
+weshalb bisher im Web bei ATOSS die Felder leer blieben:** Die Web-Version
+konnte zuvor nur ein einfaches HTML-Formular serverseitig über POST abschicken,
+nicht die dynamischen ATOSS-/ZK-Loginfelder im Browser befüllen.
+
+### Wie es jetzt funktioniert
+
+Bei einem persönlichen Favoriten mit `Auto Login`, Benutzername und
+gespeichertem Vault-Passwort wird **auf einem separaten HTTPS-Hostname pro
+Favorit** ein früher, an diesen Host gebundener Browser-Script-Helper
+eingefügt. Er übernimmt die WPF-Selektoren für `Benutzername`,
+`Kennwort`, `z-focustextbox-real`, Feldnamen, IDs und `autocomplete`,
+benutzt den nativen `HTMLInputElement.prototype.value`-Setter,
+löst `focus`/`input`/`change`/`blur` aus und verwendet ein
+Login-Submit per Formular, eindeutigem Button oder Enter. Nachladen
+per JS wird mit festen Zeitpunkten 0, 250, 750, 1.500, 2.500, 5.000 und
+8.500 ms sowie einem zeitlich begrenzten DOM-Beobachter aufgefangen.
+Doppelte Anmeldungen werden pro Proxy-Start unterbunden; zusätzlich wird
+der frühere serverseitige HTML-Loginversuch für diese dedizierten
+Favoriten **nicht** mehr ausgeführt. Bei sichtbarem Passwortwechsel oder
+fremden DOM-Hosts findet keine automatische Anmeldung statt.
+
+**Sicherheitsgrenze:** Die Klartext-Zugangsdaten werden aus dem AES-GCM-Vault
+nur nach gültiger, zum Besitzer gehörender Favoritensitzung ausgelesen
+und **ausschließlich in HTML auf dem eindeutigen Favoriten-Host**
+zum Ausfüllen bereitgestellt. Auf dem geteilten
+`apps-plenaro.../site-<UUID>/`-Host ist dies ausdrücklich **deaktiviert**.
+Passwörter gehören niemals in einen öffentlichen Host, Log, HAR, JS-Console
+oder Support-Screenshot. Eine bösartige/kompromittierte **Zielwebseite selbst**
+könnte wie bei einer normalen Anmeldung ihre Zugangsdaten sehen. Andere
+Favoriten erhalten dank separater Browser-Origin keinen gleichen DOM-Zugriff.
+Zusätzlich sendet der Proxy `Origin-Agent-Cluster: ?1`.
+Wiki, Ticketsystem und Plenaros eigener Login bleiben davon unberührt.
+Issue #40 bleibt für alte und nicht isolierte Pfad-Favoriten offen.
+
+### Einmalige technische Voraussetzung
+
+Um ein persönliches Favoritenfenster auf einen eigenen Host zu verlegen,
+muss mindestens **eine** der bestehenden Konfigurationen bereits
+bereitgestellt sein:
+
+```dotenv
+# Option A – Wildcard-Subdomains
+PLENARO_FAVORITES_BASE_DOMAIN=apps.example.org
+# erzeugt site-<UUID>.apps.example.org
+
+# Option B – Ein-Label-Template für bestehendes *.example.org
+PLENARO_FAVORITES_HOST_TEMPLATE={slug}-plenaro.example.org
+# erzeugt site-<UUID>-plenaro.example.org
+```
+
+Zusätzlich braucht das externe/innere NGINX eine passende
+Wildcard-Hostweiterleitung, DNS-Wildcard auf den Plenaro-Proxy und ein
+für die erzeugten Namen gültiges TLS-Wildcard-Zertifikat. Bei vorhandenem
+Shared-Pfadhost **und** passendem Alias wird der persönliche Favorit beim
+nächsten `Neu verbinden` automatisch auf seinen eigenen Host geleitet,
+ohne pro interner Zielwebseite eine neue `.env`-Freigabe anzulegen.
+Der zentrale Wiki-Pfadhost bleibt unverändert. Ist kein separater
+Alias eingerichtet, funktionieren Favoriten weiterhin im bisherigen
+Shared-Pfadmodus und die UI erklärt, weshalb **kein Browser-Passwort-
+Autofill** erfolgen darf. Die alte serverseitige HTML-Anmeldung bleibt
+dort erhalten.
+
+### Diagnose ohne Geheimnisse
+
+Im Browser F12 → Netzwerk → erste **HTML-Dokumentantwort** des dedizierten
+Favoriten kontrollieren: `X-Plenaro-Autofill: dedicated-dom` bedeutet,
+dass das Laufzeitskript ausgeliefert wurde (nicht, dass die ATOSS-
+Anmeldung bestätigt wurde). Ohne dedizierten Host erscheint statt dessen
+der Hinweis zur nötigen Host-Isolation. Weiterhin offene Fälle sind
+externe SSO-/OAuth-Weiterleitungen, MFA/CAPTCHA, WebSockets und fremde
+Frame-Origins; deren Inhalte oder Passwörter dürfen nicht durch
+unsichere Ausnahmen auf die gemeinsame Origin übernommen werden.
+Der Live-Test mit echter ATOSS-Version bleibt notwendig.
+
+---
+
 ## 17.11.2026 – Verbesserte klassische Auto-Anmeldung, klare Grenze bei JavaScript-Loginfeldern
 
 Ursache: Die Desktop-Vorlage `Services/WebShortcutBrowserSessionManager.cs`
