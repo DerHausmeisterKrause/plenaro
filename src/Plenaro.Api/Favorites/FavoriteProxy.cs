@@ -159,12 +159,16 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                 _pending.TryRemove(pair.Key,out _);
         if(_sessions.Count>=200)throw new InvalidOperationException("Session limit reached.");
         var root=new Uri(upstream.GetLeftPart(UriPartial.Authority));
-        // User-defined sites accept only public TCP destinations. The
-        // centrally configured wiki retains its administrator-controlled
-        // internal HTTPS connectivity.
+        // Personal sites stay public-only unless their EXACT HTTPS origin
+        // was approved by the operator, or this is a previously approved
+        // legacy favorite. User-editable URLs cannot grant this exception.
+        // The central wiki keeps its existing internal HTTPS connectivity.
+        var isPersonal=favorite.Slug.StartsWith("site-",StringComparison.Ordinal);
+        var explicitlyApproved=isPersonal&&FavoriteInternalOrigins.IsApproved(
+            configuration[FavoriteInternalOrigins.ConfigurationKey],root);
         var handler=ZnunyConnectionTester.SecureHandler(
-            publicOnly:favorite.Slug.StartsWith("site-",StringComparison.Ordinal)
-                && !favorite.AllowPrivateUpstream);
+            publicOnly:isPersonal &&
+                !favorite.AllowPrivateUpstream && !explicitlyApproved);
         handler.UseCookies=true;
         handler.CookieContainer=new CookieContainer(256,64,8192);
         handler.AutomaticDecompression=DecompressionMethods.GZip|
