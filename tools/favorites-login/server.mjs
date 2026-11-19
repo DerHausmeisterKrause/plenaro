@@ -212,6 +212,17 @@ export async function loginOnce(body){
         }catch{/* refuse invalid URLs */}
         return route.abort('blockedbyclient');
       });
+      // Playwright HTTP routing does not cover WebSockets; intercept these
+      // separately so untrusted scripts cannot connect to Docker/metadata
+      // endpoints from the browser worker.
+      await ctx.routeWebSocket('**/*',ws=>{
+        try{
+          const target=new URL(ws.url());
+          if(target.protocol==='wss:'&&target.host===url.host)
+            return ws.connectToServer();
+        }catch{/* reject malformed WS URL */}
+        ws.close({code:1008,reason:'Not permitted'});
+      });
       const imported=body.cookies
         .filter(x=>x&&typeof x.name==='string'&&typeof x.value==='string'&&
           x.name.length<=256&&x.value.length<=4096&&
