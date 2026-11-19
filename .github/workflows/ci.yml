@@ -441,16 +441,21 @@ jobs:
           curl -fsS -b "$COOKIE" -X POST "$API/api/v1/classic-import/preview" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$IMPORT_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin); assert (d["newTasks"],d["newSegments"],d["newTimeEntries"],d["newMarkers"])==(1,1,1,1)'
           echo 'CI checkpoint: classic-import preview accepted'
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/tasks/" | python3 -c 'import json,sys;assert all(x["title"]!="Importierte Altaufgabe" for x in json.load(sys.stdin))'
+          echo 'CI checkpoint: import user isolation OK'
           BATCH_ID=$(curl -fsS -b "$COOKIE" -X POST "$API/api/v1/classic-import/commit" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$IMPORT_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["inserted"]==4;print(d["batchId"])')
           test -n "$BATCH_ID"
+          echo 'CI checkpoint: import v1 committed'
           curl -fsS -b "$COOKIE" "$API/api/v1/tasks/" | python3 -c 'import json,sys;assert any(t["title"]=="Importierte Altaufgabe" for t in json.load(sys.stdin))'
           curl -fsS -b "$COOKIE" "$API/api/v1/notifications/settings" | python3 -c 'import json,sys;assert json.load(sys.stdin)["leadMinutes"]==4'
+          echo 'CI checkpoint: imported task and notification settings OK'
           curl -fsS -b "$COOKIE" -X POST "$API/api/v1/classic-import/preview" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$IMPORT_JSON" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["newTasks"]==d["newSegments"]==d["newTimeEntries"]==d["newMarkers"]==0'
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/day-markers/?year=2025&month=2" | python3 -c 'import json,sys;assert not any(x["day"]=="2025-02-12" for x in json.load(sys.stdin))'
+          echo 'CI checkpoint: import replay and day marker isolation OK'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X DELETE "$API/api/v1/classic-import/batches/$BATCH_ID" -H "X-CSRF-TOKEN: $USER_CSRF")" = "404"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X DELETE "$API/api/v1/classic-import/batches/$BATCH_ID")" = "400"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X DELETE "$API/api/v1/classic-import/batches/$BATCH_ID" -H "X-CSRF-TOKEN: $CSRF")" = "204"
           curl -fsS -b "$COOKIE" "$API/api/v1/tasks/" | python3 -c 'import json,sys;assert not any(x["title"]=="Importierte Altaufgabe" for x in json.load(sys.stdin))'
+          echo 'CI checkpoint: import v1 undo OK'
           # Classic archive v2: no replay, per-owner archive, idempotence, safe undo.
           IMPORT_V2=$(printf '%s' "$IMPORT_JSON" | python3 tools/ci_classic_archive_fixture.py)
           curl -fsS -b "$COOKIE" -X POST "$API/api/v1/classic-import/preview" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d "$IMPORT_V2" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert (d["newMetadata"],d["newBookings"],d["newMonthly"])==(1,1,1)'
