@@ -44,7 +44,7 @@ Assert(Plenaro.Api.Identity.AuthenticatedRateLimitKey.For(rateUserA)!=
 // of one approved Znuny AGENT (not one ticket or local user).
 var dayLimit=Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.MaximumMinutes;
 Assert(dayLimit==1440,"Znuny daily booked-time limit is exactly 24 hours");
-var allowed=Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.CanBook;
+Func<long,int,bool> allowed=Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.CanBook;
 Assert(allowed(0,15)&&allowed(1425,15)&&allowed(1200,240) &&
     !allowed(1425,30) && !allowed(1440,15) &&
     !allowed(1441,15) && !allowed(0,1455) &&
