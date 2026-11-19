@@ -109,9 +109,9 @@ Assert(AcceptCookie(atossOrigin,
     !AcceptCookie(atossOrigin,
         LoginCookie("AUTH","mocked","unrelated.example.org","/",true)) &&
     !AcceptCookie(atossOrigin,
-        LoginCookie("Bad\\r\\nName","mocked","atoss.example.org","/",true)) &&
+        LoginCookie("Bad\r\nName","mocked","atoss.example.org","/",true)) &&
     !AcceptCookie(atossOrigin,
-        LoginCookie("AUTH","mocked","atoss.example.org","//evil\\n",true)),
+        LoginCookie("AUTH","mocked","atoss.example.org","//evil\n",true)),
     "headless ATOSS login imports HTTPS-only host-scoped session cookies, "+
     "rejects foreign domains and injected cookie headers");
 
