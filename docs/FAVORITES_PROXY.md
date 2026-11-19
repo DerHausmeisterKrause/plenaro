@@ -1,3 +1,62 @@
+## 19.11.2026 – ATOSS-Autologin ohne zusätzliche Favoriten-Aliasse
+
+Der Benutzer möchte den vorhandenen, funktionierenden
+`https://apps-plenaro.example.org/site-<UUID>/`-Favoriten beibehalten.
+Dafür gibt es jetzt eine **alternative, serverseitige Browser-Anmeldung**:
+Ein privater Playwright-Chromium-Prozess führt ausschließlich den Login
+am bereits erlaubten HTTPS-Upstream aus und übergibt die abgeschlossene
+Cookiesitzung dem bisherigen Favoriten-HttpClient. Die eigentliche
+eingebettete Webseite läuft **unverändert** auf dem gemeinsamen Host.
+Kein dedizierter Name oder neues TLS-Zertifikat ist notwendig.
+
+Aktivieren mit:
+
+```bash
+cd /opt/plenaro
+git switch main
+git pull --ff-only
+docker compose --profile browser-login up -d --build
+docker compose --profile browser-login ps
+```
+
+Das Browser-Profil ist optional und startet einen zusätzlichen
+unprivilegierten Browserprozess ohne freigegebenen Host-Port. Wenn das
+Profil nicht aktiv ist, bleibt der bestehende konventionelle HTML-
+Auto-Login unverändert. Das Passwort ist weiterhin im Vault gespeichert
+und wird **nicht** in die HTML-Ausgabe des gemeinsamen Favoriten-Hosts
+injiziert. Keine Änderung an `.env` oder den bestehenden Favoriten-
+Adressen notwendig. `PLENARO_FAVORITES_PERSONAL_DEDICATED=false`
+beibehalten, wenn noch in `.env` angegeben.
+
+**Funktionsweise:** Chromium übernimmt die typischen Desktop-ATOSS-/
+ZK-Selektoren, wartet bis zu zehn Sekunden auf nachgeladene Felder,
+füllt per echten Eingaben aus und löst nur eine eindeutige Anmeldung aus.
+Bei positivem Formularwechsel und vorhandenen sicheren Upstream-
+Sitzungscookies werden diese mit beschränktem Umfang, überprüftem
+HTTPS-Zielhost und erneut HTTPS-only in das persönliche Proxy-Cookiejar
+übertragen. Der Browser wird nach dem Login geschlossen. Keine
+Cookies oder Passwörter im Debug-Log.
+
+Für benutzerdefinierte unternehmensinterne Zertifikate weiterhin
+`PLENARO_TRUSTED_CA_FILE` verwenden; derselbe vertrauenswürdige
+CA-PEM wird auch vom Browserworker in den Zertifikatsspeicher geladen.
+
+**Live-Abnahme:** Favoriten-Einstellungen: Benutzername, Passwort und
+Auto-Login speichern, Webseite öffnen und `Neu verbinden` auswählen.
+Bei unerwartet erneutem Anmeldeformular prüfen, ob
+`favorites-login` im Docker-Compose-Profil healthy ist, ob das
+Browserimage die private CA kennt und ob ATOSS seine Sitzung mit
+Cookies statt ausschließlichem Browser-LocalStorage verwaltet.
+Authentisierung mit CAPTCHA, externer SSO-Umleitung oder MFA wird
+nicht umgangen. Ein synthetischer Chromium-Vertragstest ersetzt
+keine Prüfung gegen die echte ATOSS-Installation.
+
+Dieser Modus fügt **keine** DNS-/TLS-Aliasse hinzu; der vorherige
+WPF-kompatible dedizierte Hostmodus bleibt optional für andere
+Anforderungen bestehen.
+
+---
+
 ## 19.11.2026 – ATOSS-Anmeldung: Hinweis weg, isolierten Host betriebsbereit machen
 
 Die störende Karte `Automatisches Ausfüllen noch nicht aktiv` wird
