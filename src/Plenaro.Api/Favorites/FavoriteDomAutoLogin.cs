@@ -161,16 +161,24 @@ internal static class FavoriteDomAutoLogin
                     (element.textContent || element.value || "").trim());
             const loginText = element =>
                 /^(anmelden|anmeldung|login|log in|sign in|einloggen)$/i.test(
-                    (element.textContent || element.value || "").trim());
+                    (element.getAttribute("aria-label") ||
+                     element.getAttribute("title") ||
+                     element.textContent || element.value || "").trim());
+            // ZK-based ATOSS installations may render login actions as
+            // <a class="z-button"> / [role=button] rather than HTML buttons.
+            // Never click an arbitrary link: only exact login labels or
+            // explicitly named login/submit controls are eligible.
             const buttons = Array.from(area.querySelectorAll(
                 'button[type="submit"],input[type="submit"],button,'+
-                'input[type="button"]'));
+                'input[type="button"],a[role="button"],[role="button"],'+
+                'a.z-button,.z-button'));
             const button = buttons.find(el => active(el) && !forbidden(el) &&
                 ((!!form && el.matches(
                     'button[type="submit"],input[type="submit"]')) ||
-                 loginText(el) || /login|submit/i.test(
+                 loginText(el) || /(?:^|[-_])(login|submit)(?:$|[-_])/i.test(
                     (el.getAttribute("name") || "") + " " +
-                    (el.getAttribute("id") || ""))));
+                    (el.getAttribute("id") || "") + " " +
+                    (el.getAttribute("class") || ""))));
             if (form && typeof form.requestSubmit === "function") {
               markSubmitted();
               form.requestSubmit();
