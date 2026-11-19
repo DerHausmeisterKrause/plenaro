@@ -1,4 +1,4 @@
-## 19.11.2026 – Höchste Priorität: Znuny-Agent je Tag maximal 24h buchen
+## 19.11.2026 – Höchste Priorität: Znuny-Agent je Tag maximal 24h buchen (PR #47 gemergt)
 
 - [x] Altes WPF-Tool `Services/TicketSystemService.cs` und
   `ViewModels/TodayViewModel.cs` als Referenz geprüft:
@@ -18,7 +18,8 @@
 - [x] C#-Regressionstests und realer PostgreSQL-/HTTP-CI-Smoke mit
   verschiedenen Tickets, Pending/Confirmed/Rejected und zwei Agenten
   ergänzt.
-- [ ] CI/PR-Merge und Produktivabnahme nach Deployment.
+- [x] [PR #47](https://github.com/DerHausmeisterKrause/plenaro/pull/47) nach `main` übernommen; [CI #44505339958](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44505339958) grün mit realem Datenbank-/HTTP-Quota-Smoke, Frontend, Znuny-Vertragstests und Docker-Start.
+- [ ] Produktivabnahme nach Deployment.
 - [ ] Übergreifende externe Buchungen direkt aus OTRS oder dem WPF-Tool:
   Für absolut systemweite Begrenzung ist zusätzlich eine
   Znuny/OTRS-seitige Validierung auf `TimeUnit` nötig.
