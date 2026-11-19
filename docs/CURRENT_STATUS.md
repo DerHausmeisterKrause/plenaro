@@ -1,4 +1,4 @@
-## 19.11.2026 – ATOSS: Browser-Login und Favoriten-Hinweis (PR #49)
+## 19.11.2026 – ATOSS: Browser-Login und Favoriten-Hinweis (PR #49 gemergt)
 
 - [x] Unerwünschten dauerhaften Hinweis `Automatisches Ausfüllen noch
   nicht aktiv` aus `FavoritePage` entfernt, ohne die funktionierende
@@ -13,7 +13,8 @@
 - [x] Diagnose `tools/check_favorite_autologin_host.sh` prüft ohne
   Zugangsdaten dedizierten Host auf DNS, gültiges HTTPS und die
   exakt erwartete Proxy-Health-Antwort.
-- [ ] GitHub-CI/PR-Merge und Deployment auf echtem Plenaro-Host.
+- [x] [PR #49](https://github.com/DerHausmeisterKrause/plenaro/pull/49) nach `main` gemergt; [CI #44524726181](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44524726181) vollständig grün (Backend, Frontend, ZK-DOM-Tests, NGINX und Docker-Smoke).
+- [ ] Deployment auf echtem Plenaro-Host, DNS/TLS/NGINX-Alias und Live-ATOSS-Abnahme.
 - [ ] Infrastrukturvoraussetzung für **tatsächlich funktionierenden**
   ATOSS-Browser-Autofill: interner DNS-Eintrag (bei genau einem
   Favoriten einzelner CNAME zulässig) für den generierten Host,
