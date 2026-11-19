@@ -589,3 +589,22 @@ jobs:
           secure -b "$JAR" "$HTTPS/api/v1/admin/secrets/" | grep -q '"ci.token"'
           docker compose exec -T database psql -U plenaro -d plenaro -Atc \
             "SELECT ciphertext <> convert_to('CI_VALUE_ONLY', 'UTF8') FROM encrypted_secrets WHERE secret_name='ci.token'" | grep -qx 't'
+
+  # Separate opt-in image: the regular Docker smoke stays lightweight and
+  # unchanged for installations that do not need ATOSS/ZK browser login.
+  favorites-browser-login:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JavaScript and Compose profile
+        run: |
+          node --check tools/favorites-login/server.mjs
+          node --check tools/favorites-login/worker.test.mjs
+          docker compose --profile browser-login config --quiet
+      - name: Build private Playwright worker (pinned browser/driver)
+        run: docker build -f tools/favorites-login/Dockerfile -t plenaro-favorites-login-ci .
+      - name: Real Chromium ATOSS/ZK login contract (no actual credentials)
+        run: |
+          docker run --rm --shm-size=128m --entrypoint node \
+            plenaro-favorites-login-ci /app/worker.test.mjs
