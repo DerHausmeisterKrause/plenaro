@@ -127,6 +127,7 @@ bool MatchesHomeOffice(JsonElement ev,DateOnly day)=>
 var hoExisting=new{
     id="synthetic-event-123",
     subject="Homeoffice am 2026-11-19",
+    bodyPreview="Homeoffice am 2026-11-19",
     isAllDay=true,
     isCancelled=false,
     showAs="workingElsewhere",
@@ -142,6 +143,7 @@ Assert(MatchesHomeOffice(existingHoJson.RootElement,hoDay) &&
     "Graph search reuses WPF-created event only on its exact calendar day");
 using var otherHoJson=JsonDocument.Parse(JsonSerializer.Serialize(new {
     id="different",subject="Homeoffice am 2026-11-19",
+    bodyPreview="Homeoffice am 2026-11-19",
     isAllDay=true,showAs="busy",
     location=new{displayName="Meetingraum"},
     start=new{dateTime="2026-11-19T00:00:00"},
