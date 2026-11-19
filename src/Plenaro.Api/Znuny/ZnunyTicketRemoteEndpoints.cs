@@ -116,6 +116,31 @@ public static class ZnunyTicketRemoteEndpoints
                 "eine gezielte Testbuchung oder Testantwort nicht verifizierbar."});
         });
 
+        // Display-only daily quota, computed from the same authoritative
+        // pending/confirmed booking journal as the locked write path. The
+        // value can change concurrently, so the write transaction always
+        // rechecks it rather than trusting this read or the browser.
+        group.MapGet("/tickets/time/daily-limit",async(HttpContext http,
+            UserManager<ApplicationUser> users,IConfiguration config,
+            SecretVault vault,CancellationToken ct)=>{
+            var context=await Context(http,users,config,vault,null,false,ct);
+            if(context.Error is { } denied)return denied;
+            if(context.AgentId is not >0)return Results.Forbid();
+            var day=ZnunyAgentDailyBookingLimit.BookingDay(DateTimeOffset.UtcNow);
+            await using var db=await Open(config,ct);
+            await using var tx=await db.BeginTransactionAsync(ct);
+            var used=await ZnunyAgentDailyBookingLimit.ReservedMinutesAsync(
+                db,tx,context.AgentId.Value,day,ct);
+            return Results.Ok(new{
+                day=day.ToString("yyyy-MM-dd",
+                    System.Globalization.CultureInfo.InvariantCulture),
+                limitMinutes=ZnunyAgentDailyBookingLimit.MaximumMinutes,
+                reservedMinutes=used,
+                remainingMinutes=Math.Max(0L,
+                    ZnunyAgentDailyBookingLimit.MaximumMinutes-used)
+            });
+        }).RequireRateLimiting("znuny-ticket-read");
+
         // The booking journal is committed BEFORE sending anything to Znuny.
         // A pending entry remains pending on network error or uncertain ACK.
         // Never retry automatically, including after an app restart.
