@@ -71,7 +71,7 @@ describe('Favorite iframe bootstrap',()=>{
     await waitFor(()=>expect(mocks.startFavorite).toHaveBeenCalledTimes(1));
   });
 
-  it('explains why WPF-style autofill is disabled on a shared personal host',async()=>{
+  it('does not interrupt a working shared favorite with a persistent autofill warning',async()=>{
     const site={...favorite,name:'ATOSS',slug:'site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       autoLogin:true,hasPassword:true};
     mocks.loadFavorites.mockResolvedValue([site]);
@@ -80,9 +80,9 @@ describe('Favorite iframe bootstrap',()=>{
         '_plenaro/favorite-bootstrap?token=example-test',
     });
     renderStrictFavorite();
-    expect(await screen.findByText('Automatisches Ausfüllen noch nicht aktiv')).toBeTruthy();
-    expect(screen.getByText(/Wildcard-DNS/)).toBeTruthy();
     expect(await screen.findByTitle('ATOSS')).toBeTruthy();
+    expect(screen.queryByText('Automatisches Ausfüllen noch nicht aktiv')).toBeNull();
+    expect(screen.queryByText(/Wildcard-DNS/)).toBeNull();
   });
 
   it('keeps the warning hidden when a personal favorite has its own origin',async()=>{
