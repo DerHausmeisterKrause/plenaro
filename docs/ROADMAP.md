@@ -1,3 +1,26 @@
+## 19.11.2026 – Phase 7: ATOSS ohne DNS-Alias, vorhandenen Shared-Favoriten-Host behalten
+
+- [x] Anforderung präzisiert: Keine Hostnamen, DNS-Aliasse oder
+  Wildcard-Zertifikate anlegen. Vorhandenes Shared-Proxy-Routing behalten.
+- [x] WPF-Anmeldelogik im Desktop `WebShortcutBrowserSessionManager`
+  (DOM-Ausfüllen nach JavaScript-Rendern) mit Web-Proxy-Variante abgeglichen.
+- [x] Optionalen Playwright-Chromium-Worker nur im internen Docker-Netz
+  als neues Compose-Profil `browser-login` implementiert.
+- [x] Über den bestehenden Personal-Favoritenstart Vault-Anmeldedaten nur
+  intern dem Browserworker übergeben und bestätigte Upstream-Cookies im
+  getrennten HttpClient-Jar wiederverwenden.
+- [x] Bisherigen klassischen HTML-Login beim deaktivierten Worker erhalten;
+  ohne DNS-Bereitstellung niemals auf dedizierten Host umleiten.
+- [x] HTTPS-CA-Trust, Cross-Origin-/WebSocket-/Metadaten-Sperren
+  und kontrollierte Cookie-Übernahme ohne Klartext im Shared-Browser.
+- [x] Node/Chromium- und .NET-Vertragstests ergänzt.
+- [ ] CI grün, PR merge, Deployment `docker compose --profile browser-login up -d --build`.
+- [ ] ATOSS live prüfen (reine Cookie-Sitzung versus WebStorage, dynamische
+  Login-Elemente); nötigenfalls gezielte ATOSS-ZK-Anpassungen vornehmen.
+- [ ] Externe SSO/MFA-Logins nicht automatisch umgehen; weiter getrennt.
+
+---
+
 ## 19.11.2026 – Phase 7: ATOSS-DOM-Anmeldung und Favoriten-Banner (PR #49 gemergt)
 
 - [x] WPF-Vorlage
