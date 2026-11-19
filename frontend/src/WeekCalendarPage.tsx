@@ -7,6 +7,7 @@ import { graphStatus, readOutlookWeek, disconnectOutlook, type GraphStatus, type
 import { listTasks, localDate, type WorkTask } from './tasksApi';
 import { listWeekSegments, rescheduleTaskSegment, type TaskSegment } from './taskWorkApi';
 import { calendarMove, conflictingLocalSegments, halfHourFromPosition, intervalsOverlap } from './segmentPlanner';
+import { outlookAllDayOccursOnDay } from './todayAgenda';
 
 function startOfWeek(value: Date) {
   const date = new Date(value.getFullYear(), value.getMonth(), value.getDate());
@@ -183,7 +184,9 @@ export function WeekCalendarPage() {
 
   const today = localDate();
   const localCount = tasks.filter(t => t.plannedFor && days.some(d => localDate(d) === t.plannedFor)).length;
-  const eventsOn = (date: string) => outlook.filter(e => e.start && localDate(new Date(e.start)) === date);
+  const eventsOn = (date: string) => outlook.filter(e =>
+    e.isAllDay ? outlookAllDayOccursOnDay(e,date)
+      : e.start && localDate(new Date(e.start)) === date);
   const selectedTasks = tasks.filter(t => t.plannedFor === selectedDay);
   const selectedMarker = markers.find(m => m.day === selectedDay);
   const selectedEvents = eventsOn(selectedDay);
