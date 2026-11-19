@@ -1,4 +1,4 @@
-## 19.11.2026 – Outlook-Ganztagstermine: exklusive Enddatumsgrenze
+## 19.11.2026 – Outlook-Ganztagstermine: exklusive Enddatumsgrenze (PR #51 gemergt)
 
 - [x] Ursache der doppelten Tagesanzeige eingegrenzt: Ein UTC-Midnight-
   Ganztags-`end` wird durch die deutsche Zeitzone 01:00/02:00 Uhr am
@@ -11,7 +11,7 @@
   auch für mehrtägige Ganztagstermine.
 - [x] Regressionsfälle für 18./19.11.2026, Sommer-/Winterzeit und
   echte Mitternachtstermine ergänzt.
-- [ ] CI und Merge.
+- [x] [PR #51](https://github.com/DerHausmeisterKrause/plenaro/pull/51) gemergt; [CI #44537370389](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44537370389) grün (UI, Backend, Verträge und Docker-Smoke).
 - [ ] Im echten Outlook-Konto am 19.11. prüfen:
   „Buß- und Bettag“ darf nicht mehr erscheinen. Kein API-/Container-Umbau.
 
