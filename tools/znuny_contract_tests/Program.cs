@@ -86,6 +86,70 @@ Assert(Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.LockKey(
         10,new DateOnly(2026,11,19)),
     "advisory lock is shared across every ticket/account of one agent on one day");
 
+// WPF HomeOfficeService parity: delegated Graph calendar creation is one
+// all-day appointment, exclusive next-day end, NO reminder and exactly the
+// working-elsewhere Outlook status. No mail/calendar request is sent in tests.
+var homeOffice=typeof(Plenaro.Api.DayMarkers.HomeOfficeCalendarService);
+var hoDay=new DateOnly(2026,11,19);
+Assert(Plenaro.Api.DayMarkers.HomeOfficeCalendarService.Subject(hoDay)==
+    "Homeoffice am 2026-11-19",
+    "homeoffice Outlook subject matches WPF date and exact spelling");
+var hoPayloadMethod=homeOffice.GetMethod("CreateEventBody",
+    BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic)!;
+var hoPayload=hoPayloadMethod.Invoke(null,new object[]{
+    hoDay,Guid.Parse("00000000-0000-4000-8000-000000000017")
+})!;
+using var hoJson=JsonDocument.Parse(JsonSerializer.Serialize(hoPayload));
+var hp=hoJson.RootElement;
+Assert(hp.GetProperty("subject").GetString()=="Homeoffice am 2026-11-19" &&
+    hp.GetProperty("body").GetProperty("content").GetString()==
+        "Homeoffice am 2026-11-19" &&
+    hp.GetProperty("start").GetProperty("dateTime").GetString()==
+        "2026-11-19T00:00:00" &&
+    hp.GetProperty("start").GetProperty("timeZone").GetString()==
+        "W. Europe Standard Time" &&
+    hp.GetProperty("end").GetProperty("dateTime").GetString()==
+        "2026-11-20T00:00:00" &&
+    hp.GetProperty("isAllDay").GetBoolean() &&
+    !hp.GetProperty("isReminderOn").GetBoolean() &&
+    hp.GetProperty("showAs").GetString()=="workingElsewhere" &&
+    hp.GetProperty("location").GetProperty("displayName").GetString()==
+        "An anderem Ort tätig" &&
+    hp.GetProperty("categories").GetArrayLength()==0 &&
+    hp.GetProperty("transactionId").GetString()==
+        "00000000-0000-4000-8000-000000000017" &&
+    !hp.TryGetProperty("attendees",out _),
+    "Graph HO appointment is WPF-like, all-day, workingElsewhere, no reminder or invites");
+var hoMatch=homeOffice.GetMethod("MatchesExisting",
+    BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic)!;
+bool MatchesHomeOffice(JsonElement ev,DateOnly day)=>
+    (bool)hoMatch.Invoke(null,new object[]{ev,day})!;
+var hoExisting=new{
+    id="synthetic-event-123",
+    subject="Homeoffice am 2026-11-19",
+    isAllDay=true,
+    isCancelled=false,
+    showAs="workingElsewhere",
+    location=new{displayName="An anderem Ort tätig"},
+    start=new{dateTime="2026-11-19T00:00:00.0000000",
+        timeZone="W. Europe Standard Time"},
+    end=new{dateTime="2026-11-20T00:00:00.0000000",
+        timeZone="W. Europe Standard Time"}
+};
+using var existingHoJson=JsonDocument.Parse(JsonSerializer.Serialize(hoExisting));
+Assert(MatchesHomeOffice(existingHoJson.RootElement,hoDay) &&
+    !MatchesHomeOffice(existingHoJson.RootElement,hoDay.AddDays(1)),
+    "Graph search reuses WPF-created event only on its exact calendar day");
+using var otherHoJson=JsonDocument.Parse(JsonSerializer.Serialize(new {
+    id="different",subject="Homeoffice am 2026-11-19",
+    isAllDay=true,showAs="busy",
+    location=new{displayName="Meetingraum"},
+    start=new{dateTime="2026-11-19T00:00:00"},
+    end=new{dateTime="2026-11-20T00:00:00"}
+}));
+Assert(!MatchesHomeOffice(otherHoJson.RootElement,hoDay),
+    "unrelated busy Outlook event must never count as owned Homeoffice");
+
 // ATOSS/ZK login in the SHARED favorites proxy must keep credentials on
 // the backend, and import only HTTPS cookies scoped to the approved upstream.
 var loginHelper=typeof(FavoriteProxy).Assembly.GetType(
