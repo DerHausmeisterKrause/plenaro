@@ -123,7 +123,8 @@ public static class DayMarkerEndpoints
 
         group.MapPut("/{day}", async (string day, MarkerInput input,
             HttpContext http, IConfiguration config, UserManager<ApplicationUser> users,
-            IAntiforgery antiforgery, CancellationToken ct) =>
+            IAntiforgery antiforgery,HomeOfficeCalendarService calendar,
+            CancellationToken ct) =>
         {
             if (!await ValidCsrfAsync(http, antiforgery)) return CsrfError();
             if (!TryDate(day, out var parsed) ||
@@ -133,6 +134,29 @@ public static class DayMarkerEndpoints
             if (owner is null) return Results.Unauthorized();
 
             await using var db = await OpenAsync(config, ct);
+            // Desktop HomeOfficeService.RemoveAsync deletes only Plenaro-owned
+            // matching Outlook appointments when an HO day is deselected.
+            // This server-side guard applies to every client (also Today),
+            // not just a particular UI route.
+            if (!input.IsHo)
+            {
+                await using var oldMarker = new NpgsqlCommand("""
+                    SELECT is_ho FROM day_markers WHERE user_id=@owner AND day=@day
+                    """,db);
+                oldMarker.Parameters.AddWithValue("owner",owner.Value);
+                oldMarker.Parameters.Add("day",NpgsqlDbType.Date).Value=parsed;
+                if (await oldMarker.ExecuteScalarAsync(ct) is true)
+                {
+                    try{
+                        var token=await calendar.PrepareTokenAsync(owner.Value,ct);
+                        await calendar.RemoveAsync(db,owner.Value,parsed,token,ct);
+                    }catch(HomeOfficeCalendarService.CalendarFailure failure){
+                        return Results.Conflict(new{
+                            error=failure.Message,
+                            code=failure.SafeToRetry?"calendar-consent":"calendar-unknown"});
+                    }
+                }
+            }
             if (input.DayType == "Normal" && !input.IsBr && !input.IsHo)
             {
                 await using var remove = new NpgsqlCommand(
