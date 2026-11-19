@@ -1,3 +1,30 @@
+## 19.11.2026 – Höchste Priorität: Znuny-Agent je Tag maximal 24h buchen
+
+- [x] Altes WPF-Tool `Services/TicketSystemService.cs` und
+  `ViewModels/TodayViewModel.cs` als Referenz geprüft:
+  Ticket-Zeitbuchung über die 15-Minuten-`TimeUnit`, aber keine
+  agentenweite Tages-Sperre.
+- [x] Buchungsjournal `znuny_ticket_time_bookings` als bereits
+  vorhandene Wahrheit für alle **Plenaro**-Buchungsversuche verwendet.
+- [x] Agent-ID und Europe/Berlin-Tag für jede Buchung festhalten;
+  Migration `0030` mit Backfill und Index.
+- [x] Backend-Limit exakt 1.440 über alle Tickets und Plenaro-Benutzer
+  eines Znuny-Agenten, auf gerundete `TimeUnit` anwenden, 409 vor
+  remote Znuny-Schreibversuch.
+- [x] Parallele Transfers mithilfe eines Agenten-/Tag-Advisory-Locks
+  serialisiert; `pending` blockiert, `rejected` nicht, auch nach Reboot.
+- [x] Tageskontingent unter `GET /tickets/time/daily-limit` sichtbar;
+  Timer zeigt Restminuten und Grenzverletzung.
+- [x] C#-Regressionstests und realer PostgreSQL-/HTTP-CI-Smoke mit
+  verschiedenen Tickets, Pending/Confirmed/Rejected und zwei Agenten
+  ergänzt.
+- [ ] CI/PR-Merge und Produktivabnahme nach Deployment.
+- [ ] Übergreifende externe Buchungen direkt aus OTRS oder dem WPF-Tool:
+  Für absolut systemweite Begrenzung ist zusätzlich eine
+  Znuny/OTRS-seitige Validierung auf `TimeUnit` nötig.
+
+---
+
 ## 17.11.2026 – Phase 6: Znuny-Dashboard 429 beheben (PR #46 – gemergt)
 
 - [x] Fehlermeldung im Frontend zugeordnet: `znunySyncApi.ts`
