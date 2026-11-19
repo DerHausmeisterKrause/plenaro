@@ -216,7 +216,9 @@ export async function loginOnce(body){
         .filter(x=>x&&typeof x.name==='string'&&typeof x.value==='string'&&
           x.name.length<=256&&x.value.length<=4096&&
           typeof x.domain==='string'&&
-          x.domain.replace(/^\./,'').toLowerCase()===url.hostname.toLowerCase())
+          (x.domain.replace(/^\./,'').toLowerCase()===url.hostname.toLowerCase() ||
+           url.hostname.toLowerCase().endsWith('.'+
+             x.domain.replace(/^\./,'').toLowerCase())))
         .map(x=>({name:x.name,value:x.value,url:origin,
           httpOnly:x.httpOnly===true,secure:true}));
       if(imported.length)await ctx.addCookies(imported);
@@ -225,7 +227,9 @@ export async function loginOnce(body){
       const result=await performLogin(page,origin,body.username,body.password);
       if(!result.ok)return {authenticated:false,cookies:[],reason:result.reason};
       const cookies=(await ctx.cookies(origin))
-        .filter(x=>x.secure&&x.domain.replace(/^\./,'').toLowerCase()===url.hostname.toLowerCase())
+        .filter(x=>x.domain.replace(/^\./,'').toLowerCase()===url.hostname.toLowerCase() ||
+          url.hostname.toLowerCase().endsWith('.'+
+            x.domain.replace(/^\./,'').toLowerCase()))
         .slice(0,64)
         .map(x=>({name:x.name,value:x.value,domain:x.domain,
           path:x.path,secure:true,httpOnly:x.httpOnly}));
@@ -269,4 +273,5 @@ const server=http.createServer(async(req,res)=>{
 });
 server.requestTimeout=30000;
 server.headersTimeout=10000;
-server.listen(PORT,'0.0.0.0',()=>process.stdout.write('favorites-login ready\n'));
+if(process.argv[1]&&fileURLToPath(import.meta.url)===process.argv[1])
+  server.listen(PORT,'0.0.0.0',()=>process.stdout.write('favorites-login ready\n'));
