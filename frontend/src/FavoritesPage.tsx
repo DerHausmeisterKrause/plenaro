@@ -180,7 +180,6 @@ export function FavoritePage(){
   const {id}=useParams();
   const [favorite,setFavorite]=useState<Favorite|null>(null);
   const [url,setUrl]=useState('');
-  const [sharedAutoLogin,setSharedAutoLogin]=useState(false);
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(true);
   const [revision,setRevision]=useState(0);
@@ -189,11 +188,11 @@ export function FavoritePage(){
   // an already invalid single-use bootstrap token. Share ONE in-flight
   // request across both effect invocations for the same favorite/revision.
   const startup=useRef<{
-    key:string;promise:Promise<{item:Favorite;url:string;shared:boolean}>
+    key:string;promise:Promise<{item:Favorite;url:string}>
   }|null>(null);
   useEffect(()=>{
     let active=true;
-    setLoading(true);setError('');setUrl('');setSharedAutoLogin(false);
+    setLoading(true);setError('');setUrl('');
     const key=(id??'')+':'+revision;
     if(startup.current?.key!==key){
       const promise=(async()=>{
@@ -215,14 +214,13 @@ export function FavoritePage(){
           destination.username!==''||destination.password!==''||
           (!legacyBootstrap&&!sharedBootstrap))
           throw new Error('Ungültige Favoriten-Proxy-Adresse.');
-        return {item,url:destination.toString(),shared:sharedBootstrap};
+        return {item,url:destination.toString()};
       })();
       startup.current={key,promise};
     }
-    void startup.current.promise.then(({item,url,shared})=>{
+    void startup.current.promise.then(({item,url})=>{
       if(active){
         setFavorite(item);setUrl(url);
-        setSharedAutoLogin(item.autoLogin&&item.hasPassword&&shared);
       }
     }).catch(e=>{
       if(active){setError(e instanceof Error?e.message:'Webseite nicht erreichbar.');
@@ -249,15 +247,6 @@ export function FavoritePage(){
       <strong>Favorit konnte nicht geöffnet werden</strong><p>{error}</p></div>}
     {loading&&!error&&<div role="status" className="znuny-native-loading">
       Webseite wird geöffnet …</div>}
-    {sharedAutoLogin&&<div className="content-card" role="status">
-      <strong>Automatisches Ausfüllen noch nicht aktiv</strong>
-      <p>Diese Webseite läuft über den gemeinsamen Favoriten-Host.
-        Aus Sicherheitsgründen überträgt Plenaro gespeicherte Passwörter
-        nur an einen eigenen HTTPS-Host für genau diesen Favoriten.
-        Dafür benötigt der Betreiber Wildcard-DNS, ein passendes TLS-Zertifikat
-        und eine konfigurierte Favoriten-Hostvorlage. Bis dahin ist eine
-        manuelle Anmeldung möglich.</p>
-    </div>}
     {!error&&url&&<div className="znuny-portal-frame-wrap znuny-native-frame-wrap">
       <div className="znuny-portal-security-caption">
         <ShieldCheck size={14}/>Webseite über den Plenaro-Proxy. Manche
