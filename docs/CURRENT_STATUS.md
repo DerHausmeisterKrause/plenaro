@@ -1,4 +1,4 @@
-## 19.11.2026 – Bestätigter HO-Antrag erzeugt WPF-kompatiblen Outlook-Ganztagstermin
+## 19.11.2026 – Bestätigter HO-Antrag erzeugt WPF-kompatiblen Outlook-Ganztagstermin (PR #52 gemergt)
 
 **Desktop-Vorlage geprüft:**
 `project_tool/Services/HomeOfficeService.cs::SubmitAsync/RemoveAsync`
@@ -41,8 +41,8 @@ Homeoffice-Termin gelöscht.
   `Calendars.ReadWrite` in den Benutzer-Einstellungen.
 - [x] Frontend- und .NET-Vertragstests für Kalenderfelder, bestehende
   WPF-Terminsignatur, bestehende BR-Mail und fehlende Doppelerstellung.
-- [ ] GitHub-CI/PR-Merge und echter M365-Live-Test mit einem Testdatum.
-  Die reale M365-Tenant-Freigabe ist durch CI nicht ersetzbar.
+- [x] [PR #52](https://github.com/DerHausmeisterKrause/plenaro/pull/52) nach `main` gemergt; [CI #44553467789](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44553467789) grün: Backend/Frontend, Graph-Payload-/WPF-Verträge, vollständiger Docker-Smoke inklusive Migration 0031 und vorhandene Tests.
+- [ ] Produktiv-Deployment, delegierte Freigabe `Calendars.ReadWrite` und echter M365-Test mit einem Testdatum. Die reale Tenant-Freigabe ist durch CI nicht ersetzbar.
 
 **Kein** neuer Container, DNS-Alias, Outlook-COM oder App-only-Graph-
 Schreibrecht. Kalenderzugriff ausschließlich auf das eigene delegierte
