@@ -75,7 +75,7 @@ internal static class FavoriteHeadlessLogin
                     if(!ValidCookie(origin,cookie))continue;
                     try{
                         jar.Add(origin,new Cookie(cookie.Name,cookie.Value,
-                            cookie.Path){Secure=cookie.Secure,
+                            cookie.Path){Secure=true,
                             HttpOnly=cookie.HttpOnly});
                     }catch(CookieException){/* Invalid cookie cannot escape worker. */}
                 }
@@ -103,8 +103,7 @@ internal static class FavoriteHeadlessLogin
         // (e.g. atoss.example.org from app.atoss.example.org).
         // The imported cookie is nevertheless host-only in this dedicated
         // HttpClient jar, never forwarded to another upstream.
-        return cookie.Secure &&
-            (domain.Equals(origin.Host,StringComparison.OrdinalIgnoreCase) ||
+        return (domain.Equals(origin.Host,StringComparison.OrdinalIgnoreCase) ||
              origin.Host.EndsWith("."+domain,
                  StringComparison.OrdinalIgnoreCase));
     }
