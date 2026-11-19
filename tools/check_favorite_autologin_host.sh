@@ -4,12 +4,13 @@
 set -euo pipefail
 
 host="${1:-}"
-if [[ ! "$host" =~ ^site-[a-fA-F0-9]{32}(-plenaro\.intern\.test\.org|\.apps-plenaro\.intern\.test\.org)$ ]]; then
+if [[ ! "$host" =~ ^site-[a-fA-F0-9]{32}[.-][a-zA-Z0-9.-]+$ ]] ||
+   [[ "$host" == *..* || "$host" == *. || "$host" == *- ]]; then
   cat >&2 <<'USAGE'
 Verwendung:
-  bash tools/check_favorite_autologin_host.sh site-<32-HEX>-plenaro.intern.test.org
+  bash tools/check_favorite_autologin_host.sh site-<32-HEX>-plenaro.example.org
   oder:
-  bash tools/check_favorite_autologin_host.sh site-<32-HEX>.apps-plenaro.intern.test.org
+  bash tools/check_favorite_autologin_host.sh site-<32-HEX>.apps.example.org
 
 Dieses Skript prueft nur DNS, HTTPS und Proxy-Health; niemals Passwoerter.
 USAGE
