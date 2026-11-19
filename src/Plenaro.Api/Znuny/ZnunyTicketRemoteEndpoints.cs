@@ -177,16 +177,49 @@ public static class ZnunyTicketRemoteEndpoints
                 seconds=time.UnbookedSeconds;
                 if(seconds<=0 || seconds>864000)
                     return Results.Conflict(new{error="Keine gültige ungebuchte Zeit vorhanden."});
-                minutes=checked((int)(((seconds+899)/900)*15));
+                minutes=ZnunyAgentDailyBookingLimit.RoundedMinutes(seconds);
+
+                // A ticket-level lock alone cannot protect the agent's
+                // DAILY 24-hour quota: simultaneous bookings in two tickets
+                // would both pass. The agent+Berlin-day transaction lock
+                // serializes all Plenaro users and tickets of this Znuny
+                // agent, and remains held until the pending row commits.
+                var day=ZnunyAgentDailyBookingLimit.BookingDay(DateTimeOffset.UtcNow);
+                await ZnunyAgentDailyBookingLimit.AcquireAgentDayLockAsync(
+                    db,tx,context.AgentId!.Value,day,ct);
+                var reserved=await ZnunyAgentDailyBookingLimit.ReservedMinutesAsync(
+                    db,tx,context.AgentId.Value,day,ct);
+                if(!ZnunyAgentDailyBookingLimit.CanBook(reserved,minutes)){
+                    var remaining=Math.Max(0L,
+                        ZnunyAgentDailyBookingLimit.MaximumMinutes-reserved);
+                    return Results.Conflict(new{
+                        code="znuny-agent-daily-limit",
+                        error="Zeitbuchung abgelehnt: Ein Znuny-Agent darf am "+
+                            "Kalendertag insgesamt maximal 24 Stunden buchen. "+
+                            "Bereits gebucht oder ungeklärt: "+reserved+
+                            " Minuten, verbleibend: "+remaining+
+                            " Minuten, angefordert: "+minutes+
+                            " Minuten (auf 15 Minuten aufgerundet).",
+                        day=day.ToString("yyyy-MM-dd",
+                            System.Globalization.CultureInfo.InvariantCulture),
+                        limitMinutes=ZnunyAgentDailyBookingLimit.MaximumMinutes,
+                        reservedMinutes=reserved,remainingMinutes=remaining,
+                        requestedMinutes=minutes
+                    });
+                }
                 await using var insert=new NpgsqlCommand("""
                     INSERT INTO znuny_ticket_time_bookings
-                      (id,user_id,ticket_id,source_seconds,booked_minutes,
-                       cost_center,order_value,short_description,note,status)
-                    VALUES(@id,@user,@ticket,@seconds,@minutes,
-                           @cost,@order,@description,@note,'pending')
+                      (id,user_id,agent_id,booking_day,ticket_id,
+                       source_seconds,booked_minutes,cost_center,order_value,
+                       short_description,note,status)
+                    VALUES(@id,@user,@agent,@day,@ticket,
+                           @seconds,@minutes,@cost,@order,
+                           @description,@note,'pending')
                     """,db,tx);
                 insert.Parameters.AddWithValue("id",id);
                 insert.Parameters.AddWithValue("user",context.UserId.Value);
+                insert.Parameters.AddWithValue("agent",context.AgentId!.Value);
+                insert.Parameters.Add("day",NpgsqlTypes.NpgsqlDbType.Date).Value=day;
                 insert.Parameters.AddWithValue("ticket",ticketId);
                 insert.Parameters.AddWithValue("seconds",seconds);
                 insert.Parameters.AddWithValue("minutes",minutes);
