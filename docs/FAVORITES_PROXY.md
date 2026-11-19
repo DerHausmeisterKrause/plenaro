@@ -1,3 +1,67 @@
+## 19.11.2026 – ATOSS-Anmeldung: Hinweis weg, isolierten Host betriebsbereit machen
+
+Die störende Karte `Automatisches Ausfüllen noch nicht aktiv` wird
+nicht mehr in der persönlichen Favoritenansicht angezeigt. Das
+**ändert nicht** die strenge Browser-Origin-Grenze. Der klassische
+serverseitige HTML-Login bleibt auf `apps-plenaro...` erhalten.
+Für die dynamischen ATOSS/ZK-Formularfelder ist der Browser-Script-
+Autofill auf einem eigenen Host erforderlich.
+
+Der AutoFill-Helfer unterstützt jetzt zusätzlich ZK-Loginaktionen
+vom Typ `a.z-button`, `[role=button]` und explizite ARIA-Beschriftungen,
+die keine nativen Submit-Buttons sind, und schließt fremde Buttons aus.
+
+### Schnellstmögliche Einrichtung für EINEN vorhandenen Favoriten
+
+1. Der gesuchte Host lautet nach aktueller Vorlage:
+   `site-0f496700e7e94e4c979464058a4d5810-plenaro.intern.test.org`.
+   **Auf dem intern benutzten DNS-Server** einen A-Eintrag zu derselben
+   NGINX-IP wie `apps-plenaro.intern.test.org` einrichten, alternativ
+   einen **CNAME für genau diesen Namen** auf
+   `apps-plenaro.intern.test.org`. Das muss auch vom Browser-PC aus
+   funktionieren; ein Eintrag in `/etc/hosts` des Docker-Hosts
+   allein reicht nicht.
+2. Das von NGINX ausgelieferte TLS-Zertifikat muss den Namen abdecken.
+   Ein Zertifikat `*.intern.test.org` deckt die einstufige
+   `site-...-plenaro.intern.test.org`-Vorlage ab;
+   `*.plenaro.intern.test.org` **nicht**. Zusätzlich muss
+   das äußere NGINX diesen Host an den Plenaro-Proxy weiterleiten.
+   Ein einzelner CNAME ersetzt kein gültiges Zertifikat.
+3. Auf dem Docker-Host ohne Geheimnisse verifizieren:
+   ```bash
+   bash tools/check_favorite_autologin_host.sh \
+     site-0f496700e7e94e4c979464058a4d5810-plenaro.intern.test.org
+   ```
+   Der HTTPS-Health-Pfad muss exakt
+   `plenaro-favorite-proxy-ready` zurückgeben.
+   Auch am Windows-/Browser-PC DNS und HTTPS verifizieren.
+4. Nach erfolgreicher Prüfung in `/opt/plenaro/.env` aktivieren:
+   ```dotenv
+   PLENARO_FAVORITES_PATH_ORIGIN=https://apps-plenaro.intern.test.org
+   PLENARO_FAVORITES_HOST_TEMPLATE={slug}-plenaro.intern.test.org
+   PLENARO_FAVORITES_PERSONAL_DEDICATED=true
+   ```
+   Danach `docker compose up -d --force-recreate web` und im
+   Favoriten `Neu verbinden`. Bestehende Shared-Favoriten bleiben
+   solange funktional, bis das Opt-in aktiviert ist.
+5. In F12 → Network beim ersten HTML-GET die Antwort
+   `X-Plenaro-Autofill: dedicated-dom` suchen. Dieser Header
+   besagt, dass das echte DOM-Skript übertragen wurde. Die
+   erfolgreiche Anmeldung muss danach **an ATOSS selbst** beobachtet
+   werden; der Header allein bestätigt sie noch nicht.
+
+Für viele Favoriten statt Einzel-CNAME ein gezieltes Wildcard-DNS,
+ein passendes Zertifikat und entsprechendes NGINX-Hostrouting
+bereitstellen. Ein globales `*.intern.test.org`-DNS-Rewrite kann
+unbeteiligte interne Dienste beeinträchtigen und sollte ohne Prüfung
+des internen DNS-Konzepts nicht pauschal eingeführt werden.
+
+Aus Sicherheitsgründen kein `unsafe`-JavaScript-Autofill oder
+Passwortübergabe auf der Shared-Origin. Captcha, externe SSO-Domains
+oder zusätzliche MFA sind dadurch nicht automatisch gelöst.
+
+---
+
 ## 19.11.2026 – Sofort-Fix für nicht auflösbare persönliche Favoriten-Hosts
 
 Der Fehler `DNS_PROBE_FINISHED_NXDOMAIN` bei
