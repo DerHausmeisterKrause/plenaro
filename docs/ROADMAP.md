@@ -1,3 +1,32 @@
+## 19.11.2026 – Phase 5/7: Homeoffice-Antrag legt Outlook-Termin „An anderem Ort tätig“ an
+
+- [x] WPF-Vorlage `HomeOfficeService` und `OutlookInteropService`
+  mit dem Web-HO-Ablauf verglichen (ganztägig, Arbeitsort, Verfügbarkeit,
+  eindeutiger Termin, E-Mail danach und sichere Terminlöschung).
+- [x] `Calendars.ReadWrite` nur im expliziten OAuth-Kalenderfluss
+  ergänzt, separate Vorabprüfung neben `Mail.Send`.
+- [x] Serverseitigen Graph-Homeoffice-Kalendereintrag mit
+  `workingElsewhere`, `An anderem Ort tätig`, `isAllDay=true`,
+  lokalem 00:00 bis exklusivem 00:00 am Folgetag und ohne Erinnerung
+  implementiert.
+- [x] Vorhandene exakt passende WPF-/Plenaro-Termine erkennen, bei
+  Mehrdeutigkeit abbrechen; nach unklarem POST keine automatische
+  Erzeugungswiederholung.
+- [x] Eindeutiges DB-Journal pro Benutzer/Datum in Migration 0031;
+  HO-Termin vor Mail, BR-only bleibt unverändert; keine zweite Mail
+  nach bereits akzeptiertem BR-Antrag.
+- [x] Automatische sichere Kalenderlöschung beim Abwählen von HO,
+  erneute Anmeldung mit neuer Graph-Transaktions-ID erlaubt.
+- [x] HO-Bestätigung im Schnellschalter `Heute` und im Tagesmarker-
+  Dialog einheitlich; UI und Outlook-Berechtigungshinweise ergänzt.
+- [x] Frontend- und Backend-Kontrakte mit synthetischen Testdaten.
+- [ ] CI, PR-Merge, Produktiv-Deployment.
+- [ ] Delegierte `Calendars.ReadWrite`-Freigabe im Zieltenant,
+  echter HO-Test (Mail und Outlook-Termin), erneutes Speichern,
+  Entfernen und Nachprüfen des Termins im Outlook-Kalender.
+
+---
+
 ## 19.11.2026 – Outlook-Ganztagstermine: exklusive Enddatumsgrenze (PR #51 gemergt)
 
 - [x] Ursache der doppelten Tagesanzeige eingegrenzt: Ein UTC-Midnight-
