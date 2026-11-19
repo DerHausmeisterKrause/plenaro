@@ -1,3 +1,56 @@
+## 19.11.2026 – Bestätigter HO-Antrag erzeugt WPF-kompatiblen Outlook-Ganztagstermin
+
+**Desktop-Vorlage geprüft:**
+`project_tool/Services/HomeOfficeService.cs::SubmitAsync/RemoveAsync`
+und `Services/OutlookInteropService.cs::UpsertHomeOfficeAppointment`.
+Die WPF-Version erstellt **vor dem E-Mail-Versand** einen ganztägigen
+Kalendereintrag und wiederverwendet einen bereits passenden Termin.
+Beim Abwählen von HO wird nur ein eigener, eindeutig signierter
+Homeoffice-Termin gelöscht.
+
+- [x] `HomeOfficeCalendarService` implementiert:
+  `POST /v1.0/me/calendar/events` im persönlichen delegierten Graph-Kontext.
+  Titel und Inhalt `Homeoffice am yyyy-MM-dd`; Start am HO-Tag
+  00:00, Ende am Folgetag 00:00 in `W. Europe Standard Time`,
+  `isAllDay=true`, `isReminderOn=false`,
+  `showAs="workingElsewhere"`, Standort `An anderem Ort tätig`,
+  keine Teilnehmer oder Kategorien.
+- [x] Vor jedem HO-Antrag wird `Calendars.ReadWrite` zusammen mit
+  bestehendem `Mail.Send` geprüft; der explizite Microsoft-365-OAuth-
+  Verknüpfungsfluss fordert Kalender-Schreibrechte neu an.
+  Der gewöhnliche Entra-Login wird nicht hochgestuft.
+- [x] Suche in genau dem betreffenden Outlook-Tag nach der vollständigen
+  Plenaro-/WPF-Termin-Signatur, Reuse bei einem Treffer, Abbruch bei
+  mehreren Treffern; keine Änderung an fremden Terminen.
+- [x] Migration `0031_homeoffice_calendar_events.sql`:
+  einzigartiges `(user_id,day)`-Journal mit Transaktions-ID und
+  `processing/created/unknown/removed` gegen doppelte POSTs nach
+  parallel gestarteten Anträgen, Abstürzen und unklaren Graph-Antworten.
+- [x] `/api/v1/br-requests/{day}/send`: Bei HO erst Termin anlegen/
+  wiederverwenden, anschließend wie bisher genau einen Mailversand.
+  BR **ohne HO** bleibt Mail-only. Auch bei bereits akzeptierter BR-Mail
+  wird eine neu hinzugefügte HO-Markierung im Outlook-Kalender angelegt,
+  ohne die alte Mail erneut zu versenden.
+- [x] Abwählen von HO entfernt über das Marker-PUT nur Outlook-Termine
+  mit **passender Plenaro-Homeoffice-Signatur**; erneutes HO kann
+  einen neuen, deduplizierten Graph-Transaktionsversuch anlegen.
+- [x] Beide HO-Oberflächen: Tagesmarker-Dialog und Schnellschalter
+  `Heute` verlangen Bestätigung vor Kalender/Mail. Kein Neben-
+  effekt bei `Nein`, keine erneute Aktion beim bloßen Bearbeiten.
+- [x] Reconnect-Link zu expliziter Einwilligung
+  `Calendars.ReadWrite` in den Benutzer-Einstellungen.
+- [x] Frontend- und .NET-Vertragstests für Kalenderfelder, bestehende
+  WPF-Terminsignatur, bestehende BR-Mail und fehlende Doppelerstellung.
+- [ ] GitHub-CI/PR-Merge und echter M365-Live-Test mit einem Testdatum.
+  Die reale M365-Tenant-Freigabe ist durch CI nicht ersetzbar.
+
+**Kein** neuer Container, DNS-Alias, Outlook-COM oder App-only-Graph-
+Schreibrecht. Kalenderzugriff ausschließlich auf das eigene delegierte
+Postfach nach einer bestätigten HO-Aktion. `Mail.Send` wird
+weiterhin maximal einmal pro Benutzer und Datum ausgeführt.
+
+---
+
 ## 19.11.2026 – Outlook-Ganztagstermine einen Tag zu lang in „Heute“ (PR #51 gemergt)
 
 **Gemeldeter Fehler:** Der Ganztagstermin „Buß- und Bettag (§)“ vom
