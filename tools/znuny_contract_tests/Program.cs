@@ -40,6 +40,52 @@ Assert(Plenaro.Api.Identity.AuthenticatedRateLimitKey.For(rateUserA)!=
         "ip:10.0.0.15",
     "authenticated users behind one proxy get independent Znuny quotas; unauthenticated get IP keys");
 
+// Highest priority: hard 24-hour limit for all Plenaro time bookings
+// of one approved Znuny AGENT (not one ticket or local user).
+var dayLimit=Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.MaximumMinutes;
+Assert(dayLimit==1440,"Znuny daily booked-time limit is exactly 24 hours");
+Func<long,int,bool> allowed=Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.CanBook;
+Assert(allowed(0,15)&&allowed(1425,15)&&allowed(1200,240) &&
+    !allowed(1425,30) && !allowed(1440,15) &&
+    !allowed(1441,15) && !allowed(0,1455) &&
+    !allowed(-15,15) && !allowed(0,1) && !allowed(0,0),
+    "daily agent limit accepts exactly 24h, rejects overbooking and malformed units");
+Assert(Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.RoundedMinutes(1)==15 &&
+    Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.RoundedMinutes(900)==15 &&
+    Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.RoundedMinutes(901)==30 &&
+    Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.RoundedMinutes(86400)==1440 &&
+    Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.RoundedMinutes(86401)==1455,
+    "quota counts ACTUAL rounded Znuny TimeUnit minutes, not raw timer seconds");
+Assert(!allowed(0,
+    Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.RoundedMinutes(86401)),
+    "even one over-24h booking must be rejected before TicketUpdate");
+Assert(Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.BookingDay(
+        new DateTimeOffset(2026,11,19,22,59,59,TimeSpan.Zero))==
+        new DateOnly(2026,11,19) &&
+    Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.BookingDay(
+        new DateTimeOffset(2026,11,19,23,0,0,TimeSpan.Zero))==
+        new DateOnly(2026,11,20) &&
+    Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.BookingDay(
+        new DateTimeOffset(2026,7,1,21,59,59,TimeSpan.Zero))==
+        new DateOnly(2026,7,1) &&
+    Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.BookingDay(
+        new DateTimeOffset(2026,7,1,22,0,0,TimeSpan.Zero))==
+        new DateOnly(2026,7,2),
+    "daily quota uses exact Europe/Berlin boundaries in winter and summer");
+Assert(Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.LockKey(
+        10,new DateOnly(2026,11,19)) !=
+       Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.LockKey(
+        11,new DateOnly(2026,11,19)) &&
+    Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.LockKey(
+        10,new DateOnly(2026,11,19)) !=
+    Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.LockKey(
+        10,new DateOnly(2026,11,20)) &&
+    Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.LockKey(
+        10,new DateOnly(2026,11,19)) ==
+    Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.LockKey(
+        10,new DateOnly(2026,11,19)),
+    "advisory lock is shared across every ticket/account of one agent on one day");
+
 // Favoriten-Wildcard ist zunächst nur eine reservierte, niemals
 // als Plenaro-Login-Host verwendbare Origin.
 Assert(!FavoriteHostGuard.IsUnassignedAlias(

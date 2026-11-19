@@ -107,6 +107,12 @@ export const restartInitialImport=async()=>{
 export const resetCentralCache=async()=>{
   await mutate('/api/v1/admin/znuny/sync/reset','POST',{confirmation:'ZNUNY CACHE ZURUECKSETZEN'});
 };
+export type ZnunyDailyBookingLimit={
+  day:string;limitMinutes:number;reservedMinutes:number;remainingMinutes:number;
+};
+/** Informational only: the write endpoint enforces the locked 24h agent/day cap. */
+export const getZnunyDailyBookingLimit=()=>request<ZnunyDailyBookingLimit>(
+  '/api/v1/znuny/tickets/time/daily-limit');
 export const getTicketAccess=()=>request<TicketAccess>('/api/v1/znuny/tickets/status');
 export type TicketListFilters = {
   query:string;queue:string;state:string;

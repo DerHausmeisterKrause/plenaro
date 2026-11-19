@@ -16,6 +16,35 @@ it('rounds only at booking: 1s->15m, 900s->15m, 901s->30m, 4200s->75m',()=>{
   expect(parseTimerDuration('nonsense')).toBeNull();
 });
 
+it('shows exact per-agent daily reservation including pending bookings',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async (input:string)=>{
+    const url=String(input);
+    if(url==='/api/v1/znuny/tickets/time/daily-limit')
+      return {ok:true,status:200,json:async()=>({
+        day:'2026-11-19',limitMinutes:1440,
+        reservedMinutes:1425,remainingMinutes:15
+      })};
+    if(url==='/api/v1/znuny/tickets/77/time')
+      return {ok:true,status:200,json:async()=>({
+        bookedSeconds:1800,runningSeconds:0,runningSince:null,
+        adjustedMinutes:0,sessionCount:0,
+        transferredSeconds:0,unbookedSeconds:1800
+      })};
+    if(url.endsWith('/time/bookings'))
+      return {ok:true,status:200,json:async()=>([])};
+    if(url.endsWith('/booking-fields'))
+      return {ok:true,status:200,json:async()=>({
+        costCenter:'',order:'',costCenterOptions:[],orderOptions:[]
+      })};
+    throw Error('Unexpected '+url);
+  }));
+  render(<ZnunyTicketTimerPanel ticketId="77"/>);
+  expect(await screen.findByText(/Heute 2026-11-19: 1425 von/)).toBeTruthy();
+  expect(screen.getByText(/15 Minuten verfügbar/)).toBeTruthy();
+  expect(screen.getByText(/Diese Buchung übersteigt das verbleibende Tageskontingent/))
+    .toBeTruthy();
+});
+
 it('preserves seconds, clamps at zero/240 hours, and never adjusts transferred bookings',()=>{
   expect(quickAdjustUnbookedSeconds(901,15)).toBe(1801);
   expect(quickAdjustUnbookedSeconds(901,-15)).toBe(1);
