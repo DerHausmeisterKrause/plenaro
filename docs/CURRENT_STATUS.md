@@ -1,4 +1,4 @@
-## 19.11.2026 – Outlook-Ganztagstermine einen Tag zu lang in „Heute“ (Fix)
+## 19.11.2026 – Outlook-Ganztagstermine einen Tag zu lang in „Heute“ (PR #51 gemergt)
 
 **Gemeldeter Fehler:** Der Ganztagstermin „Buß- und Bettag (§)“ vom
 18.11.2026 wurde fälschlich auch am 19.11.2026 angezeigt. Der Outlook-Graph-
@@ -22,8 +22,8 @@ hingegen nur der 18.11.
 - [x] Regressionsfälle für 18./19.11.2026, Berliner Mitternacht,
   Sommerzeitwechsel, mehrtägige Ganztagstermine, fehlerhafte Zeiten und
   echte Terminüberschneidungen ergänzt.
-- [ ] CI, Merge und produktiver Blick in den Reiter „Heute“.
-  Keine neue Infrastruktur, kein Container, keine Graph-/Entra-Änderung.
+- [x] [PR #51](https://github.com/DerHausmeisterKrause/plenaro/pull/51) nach `main` gemergt; [CI #44537370389](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44537370389) vollständig erfolgreich (Frontend-Regressionen, Backend, Znuny-Verträge, NGINX, Docker-Smoke und Browserworker-Job).
+- [ ] Produktiver Blick in den Reiter „Heute“ nach Aktualisierung: Buß- und Bettag darf am 19.11.2026 nicht erscheinen. Keine neue Infrastruktur, kein Container, keine Graph-/Entra-Änderung.
 
 ---
 
