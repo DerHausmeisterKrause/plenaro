@@ -17,11 +17,12 @@ USAGE
 fi
 
 echo "1/3 DNS des dedizierten Favoriten-Hosts: $host"
-if ! getent ahostsv4 "$host" | head -n 1; then
+if ! records="$(getent ahostsv4 "$host")"; then
   echo >&2 "DNS nicht vorhanden. Lege im internen DNS einen A-/CNAME-Eintrag"
   echo >&2 "fuer DIESEN Host oder ein geeignetes Wildcard-DNS an."
   exit 1
 fi
+printf '%s\n' "$records" | sed -n '1p'
 
 echo "2/3 HTTPS-Zertifikat und NGINX-Proxy"
 if ! body="$(curl --fail --silent --show-error --max-time 12 "https://$host/_plenaro/favorite-health")"; then
