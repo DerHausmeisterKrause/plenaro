@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace Plenaro.Api.Favorites;
 
@@ -33,7 +32,7 @@ internal static class FavoriteHeadlessLogin
     /// the pre-existing classic HTML fallback.
     /// </returns>
     internal static async Task<bool> TryAsync(
-        HttpClient upstreamClient,CookieContainer jar,Uri origin,Uri entry,
+        CookieContainer jar,Uri origin,Uri entry,
         string username,string password,CancellationToken ct)
     {
         if(origin.Scheme!=Uri.UriSchemeHttps || entry.Scheme!=Uri.UriSchemeHttps ||
@@ -48,7 +47,8 @@ internal static class FavoriteHeadlessLogin
                 c.Secure,c.HttpOnly)).ToArray();
         using var request=new HttpRequestMessage(HttpMethod.Post,WorkerUrl){
             Content=new StringContent(JsonSerializer.Serialize(new BrowserRequest(
-                entry.AbsoluteUri,username,password,cookies)),
+                entry.AbsoluteUri,username,password,cookies),
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)),
                 Encoding.UTF8,"application/json")
         };
         HttpResponseMessage reply;
@@ -86,7 +86,9 @@ internal static class FavoriteHeadlessLogin
 
     internal static bool ValidCookie(Uri origin,WorkerCookie cookie)
     {
-        if(string.IsNullOrWhiteSpace(cookie.Name)||
+        if(cookie is null || cookie.Value is null ||
+           cookie.Domain is null || cookie.Path is null ||
+           string.IsNullOrWhiteSpace(cookie.Name)||
            cookie.Name.Length>256 || cookie.Value.Length>4096 ||
            cookie.Path.Length is <1 or >512 ||
            !cookie.Path.StartsWith('/') ||
