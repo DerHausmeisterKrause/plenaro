@@ -1,3 +1,22 @@
+## 19.11.2026 – Outlook-Ganztagstermine: exklusive Enddatumsgrenze
+
+- [x] Ursache der doppelten Tagesanzeige eingegrenzt: Ein UTC-Midnight-
+  Ganztags-`end` wird durch die deutsche Zeitzone 01:00/02:00 Uhr am
+  nächsten Tag; bisheriger Zeitoverlap berücksichtigt dies falsch.
+- [x] WPF-Bestand geprüft: Outlook `IsAllDay` verwendet Start-/Enddatum,
+  `EffectiveEndDateExclusive` statt Uhrzeitüberlappung.
+- [x] `frontend/src/todayAgenda.ts`: Ganztagstermine nach inklusivem
+  Startkalendertag und exklusivem Endkalendertag filtern.
+- [x] `frontend/src/WeekCalendarPage.tsx`: dieselbe Regel verwenden,
+  auch für mehrtägige Ganztagstermine.
+- [x] Regressionsfälle für 18./19.11.2026, Sommer-/Winterzeit und
+  echte Mitternachtstermine ergänzt.
+- [ ] CI und Merge.
+- [ ] Im echten Outlook-Konto am 19.11. prüfen:
+  „Buß- und Bettag“ darf nicht mehr erscheinen. Kein API-/Container-Umbau.
+
+---
+
 ## 19.11.2026 – Phase 7: ATOSS ohne DNS-Alias, vorhandenen Shared-Favoriten-Host behalten (PR #50 gemergt)
 
 - [x] Anforderung präzisiert: Keine Hostnamen, DNS-Aliasse oder
