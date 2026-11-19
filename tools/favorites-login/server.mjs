@@ -2,6 +2,7 @@ import http from 'node:http';
 import dns from 'node:dns/promises';
 import net from 'node:net';
 import {chromium} from 'playwright';
+import {fileURLToPath} from 'node:url';
 
 const PORT=3030;
 const MAX_BODY=32*1024;
@@ -142,7 +143,7 @@ async function findSubmit(frame,form){
   return null;
 }
 
-async function performLogin(page,origin,username,password){
+export async function performLogin(page,origin,username,password){
   let found=null;
   const deadline=Date.now()+10000;
   while(Date.now()<deadline){
@@ -213,7 +214,7 @@ export async function loginOnce(body){
       });
       const imported=body.cookies
         .filter(x=>x&&typeof x.name==='string'&&typeof x.value==='string'&&
-          x.name.length<=256&&x.value.length<=4096&&x.secure===true&&
+          x.name.length<=256&&x.value.length<=4096&&
           typeof x.domain==='string'&&
           x.domain.replace(/^\./,'').toLowerCase()===url.hostname.toLowerCase())
         .map(x=>({name:x.name,value:x.value,url:origin,
@@ -227,7 +228,7 @@ export async function loginOnce(body){
         .filter(x=>x.secure&&x.domain.replace(/^\./,'').toLowerCase()===url.hostname.toLowerCase())
         .slice(0,64)
         .map(x=>({name:x.name,value:x.value,domain:x.domain,
-          path:x.path,secure:x.secure,httpOnly:x.httpOnly}));
+          path:x.path,secure:true,httpOnly:x.httpOnly}));
       return {authenticated:cookies.length>0,cookies,
         reason:cookies.length>0?'confirmed':'no-session-cookies'};
     }finally{await ctx.close();}
