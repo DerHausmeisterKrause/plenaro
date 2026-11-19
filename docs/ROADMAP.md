@@ -1,4 +1,4 @@
-## 19.11.2026 – Phase 7/6: Favoriten-DNS-Fallback und Znuny-Tagesanzeige
+## 19.11.2026 – Phase 7/6: Favoriten-DNS-Fallback und Znuny-Tagesanzeige (PR #48 gemergt)
 
 - [x] Ursache der `site-...-plenaro.intern.test.org`-DNS-Fehler
   aus PR #45 lokalisiert: automatische Umleitung auf generierte Alias-Domain
@@ -16,7 +16,8 @@
 - [x] Dynamischer Rest aus API `/api/v1/znuny/tickets/time/daily-limit`;
   kein Verwechseln mit gewähltem Reportmonat oder externen Znuny-Zeiten.
 - [x] React-Tests für Fortschritt, volle Auslastung, Rest und Warnungen.
-- [ ] CI, Merge und produktiver DNS-/Ticket-Test.
+- [x] [PR #48](https://github.com/DerHausmeisterKrause/plenaro/pull/48) gemergt; [CI #44508791675](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44508791675) erfolgreich mit Backend-/Frontend-/Favoriten-/Znuny-Verträgen und Docker-Smoke.
+- [ ] Produktiver DNS-/Ticket-Test nach dem Deployment.
 - [ ] Dedizierten DNS-/TLS-Host für vollständigen JavaScript-ATOSS-
   Autologin im Zielnetz bereitstellen; Shared-Origin unsicher für
   clientseitige Credential-Autofill-Skripte.
