@@ -246,7 +246,7 @@ beforeEach(() => {
     if (path === '/api/v1/br-requests/preflight') return {
       ok:true,status:200,json:async()=>({ready:true}),
     };
-    if (/^\\/api\\/v1\\/br-requests\\/\\d{4}-\\d{2}-\\d{2}\\/send$/.test(path)) return {
+    if (path.startsWith('/api/v1/br-requests/') && path.endsWith('/send')) return {
       ok:true,status:200,json:async()=>({
         status:'accepted',message:'Outlook-Termin und Mail angelegt.'
       }),
