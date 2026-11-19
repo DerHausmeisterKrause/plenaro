@@ -1,4 +1,4 @@
-## 19.11.2026 – Favoriten-NXDOMAIN und täglicher 24h-Fortschrittsbalken (Fix)
+## 19.11.2026 – Favoriten-NXDOMAIN und täglicher 24h-Fortschrittsbalken (PR #48 gemergt)
 
 **Favoriten-Regression:** PR #45 wählte für jeden persönlichen `site-<UUID>`-
 Favoriten automatisch die aus `PLENARO_FAVORITES_HOST_TEMPLATE` abgeleitete
@@ -30,8 +30,8 @@ konnte nicht aufgelöst werden. Die vorher funktionierende
   unverändert verbindliche Quelle (PostgreSQL-Guard).
 - [x] UI-Tests zu Minutenwerten, vollständiger Belegung,
   Accessibility-Attributen und Warnung bei Überschreitung.
-- [ ] CI und PR-Merge, danach Zielhost-Docker-Neustart und echte
-  Favoriten-/ATOSS-Abnahme.
+- [x] [PR #48](https://github.com/DerHausmeisterKrause/plenaro/pull/48) in `main` gemergt; [CI #44508791675](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44508791675) vollständig grün (Backend, Frontend, Znuny- und Favoriten-Kontrakte, NGINX und Docker-Smoke).
+- [ ] Zielhost-Docker-Neustart, Favoritenöffnung und ATOSS-Abnahme im realen Netzwerk.
 - [ ] Für funktionsfähiges ATOSS-DOM-Autofill wildcardfähige DNS-/TLS-
   Infrastruktur einrichten und dann ausschließlich mit Opt-in
   dedizierte Hosts auswählen.
