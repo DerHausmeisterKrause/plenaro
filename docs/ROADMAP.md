@@ -1,4 +1,4 @@
-## 19.11.2026 – Phase 7: ATOSS ohne DNS-Alias, vorhandenen Shared-Favoriten-Host behalten
+## 19.11.2026 – Phase 7: ATOSS ohne DNS-Alias, vorhandenen Shared-Favoriten-Host behalten (PR #50 gemergt)
 
 - [x] Anforderung präzisiert: Keine Hostnamen, DNS-Aliasse oder
   Wildcard-Zertifikate anlegen. Vorhandenes Shared-Proxy-Routing behalten.
@@ -14,7 +14,8 @@
 - [x] HTTPS-CA-Trust, Cross-Origin-/WebSocket-/Metadaten-Sperren
   und kontrollierte Cookie-Übernahme ohne Klartext im Shared-Browser.
 - [x] Node/Chromium- und .NET-Vertragstests ergänzt.
-- [ ] CI grün, PR merge, Deployment `docker compose --profile browser-login up -d --build`.
+- [x] [PR #50](https://github.com/DerHausmeisterKrause/plenaro/pull/50) in `main`, [CI #44532005260](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44532005260) grün mit echten Chromium-Vertragstests, Worker-Health-/Nonroot-Smoke und vollständigem Docker-Smoke.
+- [ ] Produktiv-Deployment `docker compose --profile browser-login up -d --build`.
 - [ ] ATOSS live prüfen (reine Cookie-Sitzung versus WebStorage, dynamische
   Login-Elemente); nötigenfalls gezielte ATOSS-ZK-Anpassungen vornehmen.
 - [ ] Externe SSO/MFA-Logins nicht automatisch umgehen; weiter getrennt.
