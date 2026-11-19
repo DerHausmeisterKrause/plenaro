@@ -86,6 +86,35 @@ Assert(Plenaro.Api.Znuny.ZnunyAgentDailyBookingLimit.LockKey(
         10,new DateOnly(2026,11,19)),
     "advisory lock is shared across every ticket/account of one agent on one day");
 
+// ATOSS/ZK login in the SHARED favorites proxy must keep credentials on
+// the backend, and import only HTTPS cookies scoped to the approved upstream.
+var loginHelper=typeof(FavoriteProxy).Assembly.GetType(
+    "Plenaro.Api.Favorites.FavoriteHeadlessLogin")!;
+var workerCookieType=loginHelper.GetNestedType("WorkerCookie",
+    BindingFlags.Public|BindingFlags.NonPublic)!;
+var cookieCtor=workerCookieType.GetConstructors(
+    BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic).Single(
+        x=>x.GetParameters().Length==6);
+object LoginCookie(string name,string value,string domain,string path,bool secure)
+    =>cookieCtor.Invoke(new object[]{name,value,domain,path,secure,true});
+var validateCookie=loginHelper.GetMethod("ValidCookie",
+    BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic)!;
+bool AcceptCookie(Uri target,object cookie)=>(bool)validateCookie.Invoke(
+    null,new object[]{target,cookie})!;
+var atossOrigin=new Uri("https://atoss.example.org/");
+Assert(AcceptCookie(atossOrigin,
+        LoginCookie("JSESSIONID","mocked","atoss.example.org","/",false)) &&
+    AcceptCookie(atossOrigin,
+        LoginCookie("AUTH","mocked",".example.org","/",true)) &&
+    !AcceptCookie(atossOrigin,
+        LoginCookie("AUTH","mocked","unrelated.example.org","/",true)) &&
+    !AcceptCookie(atossOrigin,
+        LoginCookie("Bad\r\nName","mocked","atoss.example.org","/",true)) &&
+    !AcceptCookie(atossOrigin,
+        LoginCookie("AUTH","mocked","atoss.example.org","//evil\n",true)),
+    "headless ATOSS login imports HTTPS-only host-scoped session cookies, "+
+    "rejects foreign domains and injected cookie headers");
+
 // Favoriten-Wildcard ist zunächst nur eine reservierte, niemals
 // als Plenaro-Login-Host verwendbare Origin.
 Assert(!FavoriteHostGuard.IsUnassignedAlias(

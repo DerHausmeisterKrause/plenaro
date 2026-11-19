@@ -589,3 +589,48 @@ jobs:
           secure -b "$JAR" "$HTTPS/api/v1/admin/secrets/" | grep -q '"ci.token"'
           docker compose exec -T database psql -U plenaro -d plenaro -Atc \
             "SELECT ciphertext <> convert_to('CI_VALUE_ONLY', 'UTF8') FROM encrypted_secrets WHERE secret_name='ci.token'" | grep -qx 't'
+
+  # Separate opt-in image: the regular Docker smoke stays lightweight and
+  # unchanged for installations that do not need ATOSS/ZK browser login.
+  favorites-browser-login:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      POSTGRES_PASSWORD: ci-only-not-for-production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JavaScript and Compose profile
+        run: |
+          node --check tools/favorites-login/server.mjs
+          node --check tools/favorites-login/worker.test.mjs
+          docker compose --profile browser-login config --quiet
+      - name: Build private Playwright worker (pinned browser/driver)
+        run: docker build -f tools/favorites-login/Dockerfile -t plenaro-favorites-login-ci .
+      - name: Real Chromium ATOSS/ZK login contract (no actual credentials)
+        run: |
+          docker run --rm --shm-size=128m --entrypoint node \
+            plenaro-favorites-login-ci /app/worker.test.mjs
+      - name: Worker startup smoke (nonroot user and internal health)
+        run: |
+          set -euo pipefail
+          docker run -d --name plenaro-favorites-login-health \
+            --security-opt no-new-privileges \
+            --cap-drop=NET_RAW --cap-drop=SYS_ADMIN --cap-drop=SYS_PTRACE \
+            --shm-size=128m plenaro-favorites-login-ci
+          trap 'docker rm -f plenaro-favorites-login-health >/dev/null 2>&1 || true' EXIT
+          ready=0
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if docker exec plenaro-favorites-login-health node -e \
+              "require('node:http').get('http://127.0.0.1:3030/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))" \
+              >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            docker logs plenaro-favorites-login-health
+            exit 1
+          fi
+          docker top plenaro-favorites-login-health |
+            grep -Eq 'pwuser.*node'

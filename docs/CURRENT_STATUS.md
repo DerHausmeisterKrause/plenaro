@@ -1,3 +1,55 @@
+## 19.11.2026 – ATOSS-Autologin ohne zusätzliche DNS-Aliasse (serverseitiger Browser)
+
+**Explizite Nutzerentscheidung:** Der bereits funktionierende Favoriten-Host
+`https://apps-plenaro.example.org/site-<UUID>/` bleibt erhalten. KEINE
+neuen CNAMEs, Wildcard-DNS, TLS-SAN-Namen oder dedizierte Favoriten-Origins
+als Voraussetzung. Die Warnkarte wurde bereits mit PR #49 entfernt.
+
+**Technischer Ansatz:** Optionaler interner Einmal-Browserdienst
+`favorites-login` auf Basis der offiziellen Playwright-Chromium-Laufzeit.
+Beim persönlichen Favoriten-Start mit Auto-Login und verschlüsseltem Vault-
+Passwort startet er einen echten Chromium-Browser im Docker-Netz, öffnet
+**ausschließlich die vom bestehenden HTTPS-Favoriten-Proxy bereits genehmigte
+Upstream-Origin**, füllt dynamische ATOSS/ZK-Eingabefelder, führt die echte
+Anmeldeaktion aus und gibt **nur bestätigte Upstream-Sitzungscookies** an
+die benutzergebundene HttpClient-CookieJar weiter. Der reguläre Proxy
+liefert danach wie zuvor die Seiten unter dem geteilten `/site-.../` aus.
+
+- [x] Kein Anmeldeskript mit Klartext-Passwort auf dem gemeinsamen Browser-
+  Host. Kein Eintrag in HTML, Browser-JS, HAR oder Browserkonsole.
+- [x] Normaler HTML-Autologin als Fallback, wenn das optionale Browser-
+  Profil nicht gestartet ist. Keine doppelte Anmeldung nach einem
+  tatsächlichen Chromium-Versuch (auch bei unklarer Antwort).
+- [x] Neues Compose-Profil `browser-login` ohne Portfreigabe: der
+  interne Dienst ist nur im Docker-Netz erreichbar. Start:
+  `docker compose --profile browser-login up -d --build`.
+- [x] ZK-/ATOSS-Feldsuche nach Benutzername, Kennwort und dynamischen
+  ZK-Buttons, auch in same-origin-Frames. Kein Klicken auf beliebige
+  Elemente, fremde SSO-Origin, MFA und unbekannte Loginformate.
+- [x] HTTPS-Zertifikatsvalidierung bleibt aktiv. Interne
+  `PLENARO_TRUSTED_CA_FILE` wird vor Chromium-Start ins OS-Truststore
+  eingebunden; keine globale TLS-Deaktivierung.
+- [x] Same-origin-HTTP/WebSocket-Netzwerkfilter und IP-Sperren (Loopback,
+  Link-Local, Metadaten), maximal zwei parallele Logins. Aufgerufen wird
+  nur die bereits durch Plenaro validierte Ziel-Origin.
+- [x] Rückgabe ausschließlich zustandsloser, validierter Cookies
+  (Host-/Domainprüfung, sichere Pfade, maximale Größe). Für das bestehende
+  HttpClient-Jar werden sie erneut als **HTTPS-only und host-only** gesetzt;
+  der Chromium-Browser wird nach dem Versuch zerstört.
+- [x] Separater CI-Job baut den optionalen Worker und führt einen
+  synthetischen Test in echtem Chromium aus: nachgeladenes ZK-Login,
+  Sitzungscookie, kein fremder Reset-Button. Dotnet-Vertragstest prüft
+  zulässige/abgelehnte Sessioncookies.
+- [ ] CI, PR-Merge und Produktivtest mit **echtem ATOSS**.
+
+**Abgrenzung:** Echte Apps verwenden u. U. lokale Browser-Speicher,
+unbekannte zusätzliche APIs, externe SSO und MFA. Nur nach beobachteter
+echter ATOSS-Anmeldung als vollständig funktionsfähig bezeichnen.
+Browser-Worker wird nur für den Login, nicht für jede Folgeseite benötigt,
+solange die Session cookies-basiert funktioniert.
+
+---
+
 ## 19.11.2026 – ATOSS: Browser-Login und Favoriten-Hinweis (PR #49 gemergt)
 
 - [x] Unerwünschten dauerhaften Hinweis `Automatisches Ausfüllen noch

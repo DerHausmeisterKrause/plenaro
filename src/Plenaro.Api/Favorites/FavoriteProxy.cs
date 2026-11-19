@@ -215,9 +215,26 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                 var password=await vault.GetForIntegrationAsync("user",user,
                     FavoritesEndpoints.PasswordName(favorite.Id),ct);
                 if(!string.IsNullOrEmpty(password) &&
-                   !string.IsNullOrWhiteSpace(favorite.Username))
-                    await TryLoginAsync(client,root,new Uri(root,favorite.Path),
-                        favorite.Username,password,ct);
+                   !string.IsNullOrWhiteSpace(favorite.Username)){
+                    // On the existing shared apps-plenaro /site-... host,
+                    // browser-side password injection would leak credentials
+                    // across same-origin favorites. Use a PRIVATE headless
+                    // browser instead and import only approved upstream
+                    // session cookies into THIS user's isolated proxy jar.
+                    // If the optional worker is absent, retain the original
+                    // conventional server-side HTML login behavior.
+                    var browserAttempted=false;
+                    if(favorite.Slug.StartsWith("site-",StringComparison.Ordinal)
+                        && IsPathHost(external.Host))
+                        browserAttempted=await FavoriteHeadlessLogin.TryAsync(
+                            handler.CookieContainer,root,
+                            new Uri(root,favorite.Path),
+                            favorite.Username,password,ct);
+                    if(!browserAttempted)
+                        await TryLoginAsync(client,root,
+                            new Uri(root,favorite.Path),
+                            favorite.Username,password,ct);
+                }
             }
         }catch(Exception e) when(!requireWikiAutoLogin&&!ct.IsCancellationRequested &&
             e is HttpRequestException or InvalidOperationException or TaskCanceledException){
