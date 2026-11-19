@@ -1,3 +1,28 @@
+## 19.11.2026 – Phase 7/6: Favoriten-DNS-Fallback und Znuny-Tagesanzeige
+
+- [x] Ursache der `site-...-plenaro.intern.test.org`-DNS-Fehler
+  aus PR #45 lokalisiert: automatische Umleitung auf generierte Alias-Domain
+  ohne tatsächliche DNS-/TLS-Bereitstellung.
+- [x] Persönliche Favoriten bei vorhandenem Shared-Origin-Pfadhost
+  automatisch wieder unter `apps-plenaro.../site-.../` öffnen.
+  Die vorhandene Template-Konfiguration reicht **nicht** zum Opt-in.
+- [x] `PLENARO_FAVORITES_PERSONAL_DEDICATED` als explizite Option für
+  fertig eingerichtete Wildcard-DNS-/TLS-Origins ergänzen.
+- [x] ATOSS-Passwortschutz erhalten: kein Browser-DOM-Autofill auf
+  gemeinsamer Origin; bisheriges klassisches HTML-Login bleibt bestehen.
+- [x] Backend-Kontrakttests für opt-in / nicht opt-in konfiguriert.
+- [x] Einheitliche, barrierearme 24h-Zeitbuchungsanzeige für heute
+  sowohl im Zeitreport als auch kompakt beim Ticket-Timer ergänzt.
+- [x] Dynamischer Rest aus API `/api/v1/znuny/tickets/time/daily-limit`;
+  kein Verwechseln mit gewähltem Reportmonat oder externen Znuny-Zeiten.
+- [x] React-Tests für Fortschritt, volle Auslastung, Rest und Warnungen.
+- [ ] CI, Merge und produktiver DNS-/Ticket-Test.
+- [ ] Dedizierten DNS-/TLS-Host für vollständigen JavaScript-ATOSS-
+  Autologin im Zielnetz bereitstellen; Shared-Origin unsicher für
+  clientseitige Credential-Autofill-Skripte.
+
+---
+
 ## 19.11.2026 – Höchste Priorität: Znuny-Agent je Tag maximal 24h buchen (PR #47 gemergt)
 
 - [x] Altes WPF-Tool `Services/TicketSystemService.cs` und
