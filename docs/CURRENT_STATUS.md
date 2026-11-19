@@ -1,4 +1,4 @@
-## 19.11.2026 – ATOSS-Autologin ohne zusätzliche DNS-Aliasse (serverseitiger Browser)
+## 19.11.2026 – ATOSS-Autologin ohne zusätzliche DNS-Aliasse (PR #50 gemergt)
 
 **Explizite Nutzerentscheidung:** Der bereits funktionierende Favoriten-Host
 `https://apps-plenaro.example.org/site-<UUID>/` bleibt erhalten. KEINE
@@ -40,7 +40,8 @@ liefert danach wie zuvor die Seiten unter dem geteilten `/site-.../` aus.
   synthetischen Test in echtem Chromium aus: nachgeladenes ZK-Login,
   Sitzungscookie, kein fremder Reset-Button. Dotnet-Vertragstest prüft
   zulässige/abgelehnte Sessioncookies.
-- [ ] CI, PR-Merge und Produktivtest mit **echtem ATOSS**.
+- [x] [PR #50](https://github.com/DerHausmeisterKrause/plenaro/pull/50) gemergt; [CI #44532005260](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44532005260) vollständig grün, einschließlich Backend-/Frontend-Verträge, vollständigem Docker-Smoke, echtem Chromium-ZK-Login und Start des Workers mit beschränkten Rechten.
+- [ ] Optionales Profil `browser-login` auf dem produktiven Host starten und echten ATOSS-Login bestätigen. Keine DNS-/TLS-Aliasse nötig.
 
 **Abgrenzung:** Echte Apps verwenden u. U. lokale Browser-Speicher,
 unbekannte zusätzliche APIs, externe SSO und MFA. Nur nach beobachteter
