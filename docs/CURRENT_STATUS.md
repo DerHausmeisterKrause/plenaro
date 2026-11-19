@@ -1,4 +1,4 @@
-## 19.11.2026 – KRITISCH: maximale 24h Znuny-Zeitbuchungen pro Agent/Kalendertag
+## 19.11.2026 – KRITISCH: maximale 24h Znuny-Zeitbuchungen pro Agent/Kalendertag (PR #47 gemergt)
 
 **Sicherheits-/Geschäftsregel:** Plenaro darf pro admin-freigegebenem
 Znuny-Agenten, über **alle Tickets und alle diesem Agenten zugewiesenen
@@ -26,7 +26,8 @@ statt der Sekunden des lokalen Timers.
 - [x] Vertrags- und Browser-Tests für genau 24h, Überschreitung,
   15-Minuten-Rundung, Sommer-/Winterzeit, unterschiedliche Agenten,
   offene/abgelehnte Buchungen und Datenbank-/HTTP-Verhalten ergänzt.
-- [ ] PR-Merge/CI und echter Deployment-Test mit mehreren Tickets.
+- [x] [PR #47](https://github.com/DerHausmeisterKrause/plenaro/pull/47) gemergt; [CI #44505339958](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44505339958) vollständig grün einschließlich realem PostgreSQL-/HTTP-Test, Backfill-Migration, Backend, Frontend und Docker-Smoke. Anzeige-Endpunkt wurde so korrigiert, dass kein bereits konfigurierter Remote-Znuny-Server erforderlich ist.
+- [ ] Produktivabnahme nach Deployment mit mehreren Tickets und zugeordneten Agenten.
 
 **Reichweite:** Diese Sperre schützt alle **über Plenaro vorgenommenen**
 Zeitbuchungen. Buchungen, die ein Agent außerhalb von Plenaro direkt in
