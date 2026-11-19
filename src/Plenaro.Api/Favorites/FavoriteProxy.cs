@@ -227,7 +227,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                     if(favorite.Slug.StartsWith("site-",StringComparison.Ordinal)
                         && IsPathHost(external.Host))
                         browserAttempted=await FavoriteHeadlessLogin.TryAsync(
-                            client,handler.CookieContainer,root,
+                            handler.CookieContainer,root,
                             new Uri(root,favorite.Path),
                             favorite.Username,password,ct);
                     if(!browserAttempted)
