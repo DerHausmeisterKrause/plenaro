@@ -614,6 +614,8 @@ jobs:
         run: |
           set -euo pipefail
           docker run -d --name plenaro-favorites-login-health \
+            --security-opt no-new-privileges \
+            --cap-drop=NET_RAW --cap-drop=SYS_ADMIN --cap-drop=SYS_PTRACE \
             --shm-size=128m plenaro-favorites-login-ci
           trap 'docker rm -f plenaro-favorites-login-health >/dev/null 2>&1 || true' EXIT
           ready=0
