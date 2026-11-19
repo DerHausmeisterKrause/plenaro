@@ -225,6 +225,28 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/znuny/native/start" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"ticketId":null}')" = "409"
           echo 'CI checkpoint: native HTML proxy enforces local authentication, CSRF and separate HTTPS origin'
           docker compose exec -T database psql -U plenaro -d plenaro -c "INSERT INTO znuny_cached_tickets(ticket_id,ticket_number,title,queue,state,state_type,owner_agent_id,responsible_agent_id,created_at,changed_at) VALUES ('42','2026#42','Nur Admin','Admin','open','open',42,NULL,'2026-01-01','2026-01-02'),('77','2016#77','Altes offenes User-Ticket','IT','open','open',77,NULL,'2016-01-01','2026-01-02'),('78','2026#78','Anderer Mitarbeiter verantwortlich','IT','new','new',77,42,'2026-01-03','2026-01-04'),('79','2026#79','Standard OTRS User','IT','new','new',1,NULL,'2026-01-03','2026-01-04'),('80','2026#80','Ohne Besitzer','IT','new','new',NULL,NULL,'2026-01-03','2026-01-04'),('81','2026#81','Erledigtes User-Ticket','IT','closed successful','closed',77,NULL,'2026-01-03','2026-01-04')"
+          # A Znuny AGENT must never exceed 1440 booked minutes in one
+          # Europe/Berlin calendar day across DIFFERENT tickets. Pending
+          # bookings reserve capacity after an uncertain remote response.
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/time/daily-limit" |
+            python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["limitMinutes"]==1440 and d["reservedMinutes"]==0 and d["remainingMinutes"]==1440'
+          docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "INSERT INTO znuny_ticket_time_bookings(id,user_id,agent_id,booking_day,ticket_id,source_seconds,booked_minutes,status) SELECT '77777777-7777-4777-8777-777777777771',b.user_id,77,(now() AT TIME ZONE 'Europe/Berlin')::date,'77',85500,1425,'pending' FROM znuny_approved_agent_bindings b WHERE b.agent_id=77"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/time/daily-limit" |
+            python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["reservedMinutes"]==1425 and d["remainingMinutes"]==15'
+          # Second ticket shares the quota even though it has a different ID.
+          docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "INSERT INTO znuny_ticket_time_bookings(id,user_id,agent_id,booking_day,ticket_id,source_seconds,booked_minutes,status) SELECT '77777777-7777-4777-8777-777777777772',b.user_id,77,(now() AT TIME ZONE 'Europe/Berlin')::date,'78',900,15,'confirmed' FROM znuny_approved_agent_bindings b WHERE b.agent_id=77"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/time/daily-limit" |
+            python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["reservedMinutes"]==1440 and d["remainingMinutes"]==0'
+          curl -fsS -b "$COOKIE" "$API/api/v1/znuny/tickets/time/daily-limit" |
+            python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["reservedMinutes"]==0 and d["remainingMinutes"]==1440'
+          # Definitively rejected time does not block capacity; an
+          # unresolved pending booking must still block it.
+          docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "UPDATE znuny_ticket_time_bookings SET status='rejected' WHERE id='77777777-7777-4777-8777-777777777772'"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/time/daily-limit" |
+            python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["reservedMinutes"]==1425 and d["remainingMinutes"]==15'
+          docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "DELETE FROM znuny_ticket_time_bookings WHERE id IN ('77777777-7777-4777-8777-777777777771','77777777-7777-4777-8777-777777777772')"
+          echo 'CI checkpoint: agent-wide 24-hour booking quota, pending/rejected status and independent agents'
+
           # New policy: owner/responsible and explicitly planned/tagged
           # tickets remain available even when no personal GenericInterface
           # session is configured; ONLY the unassigned candidate pool needs
