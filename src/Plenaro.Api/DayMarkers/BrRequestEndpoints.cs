@@ -84,8 +84,8 @@ public static class BrRequestEndpoints
             var user=await Owner(http,users);
             if(user is null)return Results.Unauthorized();
             await using var db=await Open(config,ct);
-            var input=await Recipients(db,user.Id,ct);
-            if(!TryNormalize(input,out var recipients))
+            var recipientSettings=await Recipients(db,user.Id,ct);
+            if(!TryNormalize(recipientSettings,out var recipients))
                 return Results.BadRequest(new{error="Die persönlichen E-Mail-Empfänger sind ungültig."});
             if(string.IsNullOrWhiteSpace(recipients.Recipient1)&&
                string.IsNullOrWhiteSpace(recipients.Recipient2))
