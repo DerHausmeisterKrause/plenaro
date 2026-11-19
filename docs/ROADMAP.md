@@ -1,3 +1,23 @@
+## 19.11.2026 – Phase 7: ATOSS-DOM-Anmeldung und Favoriten-Banner
+
+- [x] WPF-Vorlage
+  `project_tool/Services/WebShortcutBrowserSessionManager.cs`
+  erneut mit aktuellem Browser-DOM-Helper verglichen.
+- [x] Persistente Statuskarte `Automatisches Ausfüllen noch nicht aktiv`
+  aus der Favoritenansicht entfernt.
+- [x] ATOSS/ZK-`a.z-button`/`role=button` mit exakt passender
+  Login-Beschriftung ergänzt, ohne unbeteiligte Aktionen auszuführen.
+- [x] Browser-Regressionsfälle für ZK-Button und
+  nicht-relevante Buttons ergänzt.
+- [x] Einfache dedizierte DNS-/HTTPS-/Proxy-Health-Diagnose
+  in `tools/check_favorite_autologin_host.sh` ergänzt.
+- [ ] CI, Merge und echter ATOSS-Test.
+- [ ] Infrastruktur für dedizierten Fav-Host mit DNS/TLS/NGINX
+  einrichten; erst danach explizites Opt-in aktivieren.
+- [ ] Erst dann echtes WPF-kompatibles DOM-Autofill unter ATOSS bestätigen.
+
+---
+
 ## 19.11.2026 – Phase 7/6: Favoriten-DNS-Fallback und Znuny-Tagesanzeige (PR #48 gemergt)
 
 - [x] Ursache der `site-...-plenaro.intern.test.org`-DNS-Fehler

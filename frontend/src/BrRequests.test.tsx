@@ -1,5 +1,5 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {DayMarkersPanel} from './DayMarkersPanel';
 import {BrRecipientsSettingsPanel} from './BrRecipientsSettingsPanel';
 
@@ -52,11 +52,20 @@ beforeEach(()=>{
 });
 afterEach(cleanup);
 
+// The initial async marker list can still apply its follow-up effects as
+// inputs become visible. Flush that hydration BEFORE simulating a quick
+// user click, otherwise the test races with the UI's initial state sync.
+async function clickLoadedMarker(label:string){
+  const control=await screen.findByLabelText(label);
+  await act(async()=>{await Promise.resolve();});
+  fireEvent.click(control);
+  await waitFor(()=>expect((control as HTMLInputElement).checked).toBe(true));
+}
+
 describe('BR marker confirmation and mail delivery',()=>{
   it('cancelling the question saves no BR marker and sends no email',async()=>{
     render(<DayMarkersPanel initialDay="2026-11-16"/>);
-    const marker=await screen.findByLabelText('BR-Tag markieren');
-    fireEvent.click(marker);
+    await clickLoadedMarker('BR-Tag markieren');
     fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
     expect(screen.getByRole('dialog').textContent).toContain(
       'Willst du wirklich am 16.11.2026 Homeoffice beantragen?');
@@ -107,7 +116,7 @@ describe('BR marker confirmation and mail delivery',()=>{
   it('does not send a new HO request when the user chooses No',async()=>{
     vi.stubGlobal('confirm',vi.fn(()=>false));
     render(<DayMarkersPanel initialDay="2026-11-16"/>);
-    fireEvent.click(await screen.findByLabelText('HO – Homeoffice'));
+    await clickLoadedMarker('HO – Homeoffice');
     fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
     fireEvent.click(screen.getByRole('button',{name:'Nein'}));
     expect(mocks.saveDayMarker).not.toHaveBeenCalled();

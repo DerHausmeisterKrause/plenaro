@@ -1,3 +1,35 @@
+## 19.11.2026 – ATOSS: Browser-Login und Favoriten-Hinweis (PR #49)
+
+- [x] Unerwünschten dauerhaften Hinweis `Automatisches Ausfüllen noch
+  nicht aktiv` aus `FavoritePage` entfernt, ohne die funktionierende
+  Shared-Favoritenansicht oder vorhandene gespeicherte Passwörter
+  zu verändern.
+- [x] ATOSS/ZK-DOM-Login-Helfer auf dedizierter HTTPS-Origin kann neben
+  HTML-Submitbuttons auch explizit als `a.z-button`, `[role=button]`
+  bzw. ARIA-Label gerenderte **eindeutige** Loginaktionen bedienen;
+  andere Buttons oder Passwortänderungen werden nicht geklickt.
+- [x] Vertragstests: dynamischer ATOSS/ZK-Anmeldebutton wird genau
+  einmal ausgelöst, fremde Buttons nicht, Shared-Host-Warnung fehlt.
+- [x] Diagnose `tools/check_favorite_autologin_host.sh` prüft ohne
+  Zugangsdaten dedizierten Host auf DNS, gültiges HTTPS und die
+  exakt erwartete Proxy-Health-Antwort.
+- [ ] GitHub-CI/PR-Merge und Deployment auf echtem Plenaro-Host.
+- [ ] Infrastrukturvoraussetzung für **tatsächlich funktionierenden**
+  ATOSS-Browser-Autofill: interner DNS-Eintrag (bei genau einem
+  Favoriten einzelner CNAME zulässig) für den generierten Host,
+  passendes TLS-Wildcard/SAN-Zertifikat, äußerer NGINX-VHost und
+  `PLENARO_FAVORITES_PERSONAL_DEDICATED=true`. Ohne diese Schritte
+  bleibt der sichere Shared-Host-Fallback mit klassischem HTML-Login;
+  die bloße Entfernung des Hinweises aktiviert noch kein DOM-Autofill.
+- [ ] Echte ATOSS-Anmeldung auf der isolierten Origin testen.
+  `X-Plenaro-Autofill: dedicated-dom` bestätigt nur die Skriptauslieferung.
+
+**Sicherheitsgrenze:** Kein JavaScript-Passwort-Autofill auf dem
+gemeinsamen Favoriten-Host und keine stillschweigende Umschaltung auf
+nicht auflösbare Subdomains. Kein automatisches Umgehen von MFA/SSO.
+
+---
+
 ## 19.11.2026 – Favoriten-NXDOMAIN und täglicher 24h-Fortschrittsbalken (PR #48 gemergt)
 
 **Favoriten-Regression:** PR #45 wählte für jeden persönlichen `site-<UUID>`-
