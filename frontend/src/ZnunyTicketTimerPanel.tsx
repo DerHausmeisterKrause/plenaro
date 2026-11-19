@@ -1,9 +1,11 @@
 import {useEffect,useState,type FormEvent} from 'react';
 import {Check,Clock3,Play,RefreshCw,Square,X} from 'lucide-react';
 import {
-  bookZnunyTime,readTicketTime,readZnunyBookingFields,readZnunyBookings,
-  reconcileZnunyBooking,setTicketUnbookedSeconds,startTicketTime,stopTicketTime,
+  bookZnunyTime,getZnunyDailyBookingLimit,readTicketTime,readZnunyBookingFields,
+  readZnunyBookings,reconcileZnunyBooking,setTicketUnbookedSeconds,
+  startTicketTime,stopTicketTime,
   type TicketTimeSummary,type ZnunyBooking,type ZnunyBookingFields,
+  type ZnunyDailyBookingLimit,
   type ZnunyFieldOption,
 } from './znunySyncApi';
 import {secondsToClock} from './taskWorkApi';
@@ -40,6 +42,7 @@ export function ZnunyTicketTimerPanel({ticketId,defaultDescription='Zeitbuchung'
   const [clockInput,setClockInput]=useState('00:00:00');
   const [fields,setFields]=useState<ZnunyBookingFields|null>(null);
   const [bookings,setBookings]=useState<ZnunyBooking[]>([]);
+  const [dailyLimit,setDailyLimit]=useState<ZnunyDailyBookingLimit|null>(null);
   const [cost,setCost]=useState('');
   const [order,setOrder]=useState('');
   const [costSearch,setCostSearch]=useState('');
@@ -57,10 +60,14 @@ export function ZnunyTicketTimerPanel({ticketId,defaultDescription='Zeitbuchung'
   },[]);
   useEffect(()=>{
     let active=true;
-    setSummary(null);setFields(null);setBookings([]);setCost('');setOrder('');
+    setSummary(null);setFields(null);setBookings([]);setDailyLimit(null);
+    setCost('');setOrder('');
     setDescription(defaultDescription);setEditing(false);
     setNotice('');setError('');setFieldsError('');
     if(ticketId) {
+      void getZnunyDailyBookingLimit().then(data=>{
+        if(active)setDailyLimit(data);
+      }).catch(()=>{ /* Backend remains authoritative; do not invent quota. */ });
       void readTicketTime(ticketId).then(data=>{if(active)setSummary(data);})
         .catch(e=>{if(active)setError(e instanceof Error?e.message:'Timer nicht verfügbar.');});
       void readZnunyBookings(ticketId).then(data=>{if(active)setBookings(data);})
@@ -114,6 +121,8 @@ export function ZnunyTicketTimerPanel({ticketId,defaultDescription='Zeitbuchung'
     const [time,history]=await Promise.all([
       readTicketTime(ticketId),readZnunyBookings(ticketId)]);
     setSummary(time);setBookings(history);setTick(Date.now());
+    void getZnunyDailyBookingLimit().then(setDailyLimit)
+      .catch(()=>{ /* A stale display can never override the server gate. */ });
   }
   async function transfer(){
     if(!ticketId||busy||!summary||!fields)return;
@@ -266,6 +275,18 @@ export function ZnunyTicketTimerPanel({ticketId,defaultDescription='Zeitbuchung'
         </label>
         <p className="classic-wpf-help">Erfasst: {Math.ceil(unbooked/60)} Min. ·
           <strong> an Znuny: {preview} Min.</strong> (immer auf volle 15 Min. aufgerundet)</p>
+        <p className="classic-wpf-help">
+          Tagesgrenze: maximal 24 Stunden pro Znuny-Agent (alle Plenaro-Tickets
+          zusammen, Kalenderzeit Europe/Berlin).
+          {dailyLimit&&<> Heute {dailyLimit.day}: {dailyLimit.reservedMinutes} von
+            {' '}{dailyLimit.limitMinutes} Minuten gebucht oder noch ungeklärt;
+            {' '}{dailyLimit.remainingMinutes} Minuten verfügbar.</>}
+        </p>
+        {dailyLimit && preview>dailyLimit.remainingMinutes &&
+          <p role="status" className="um-feedback failure">
+            Diese Buchung übersteigt das verbleibende Tageskontingent des Agenten.
+            Die verbindliche Prüfung erfolgt vor dem Schreiben nach Znuny.
+          </p>}
         <button type="button" className="button button-primary"
           disabled={busy||editing||!fields||!summary||
             pending||preview<=0}
