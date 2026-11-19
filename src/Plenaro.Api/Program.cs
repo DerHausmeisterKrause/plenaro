@@ -76,6 +76,7 @@ builder.Services.AddHttpClient("Plenaro.Graph", http =>
 });
 builder.Services.AddScoped<GraphCalendarService>();
 builder.Services.AddScoped<BrMailService>();
+builder.Services.AddScoped<HomeOfficeCalendarService>();
 builder.Services.AddHttpClient("Plenaro.Znuny", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(10);
@@ -200,8 +201,9 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
         options.SaveTokens = false; // Access/refresh tokens NEVER go in auth cookies.
         options.Scope.Clear();
         options.Scope.Add("User.Read");
-        options.Scope.Add("Calendars.Read");
-        // Explicit OAuth reconnect grants optional delegated mail sending.
+        options.Scope.Add("Calendars.ReadWrite");
+        // Explicit OAuth reconnect grants optional delegated mail sending
+        // AND calendar writes for confirmed Homeoffice requests only.
         // Never request Mail.Send during normal Plenaro/Entra sign-in.
         options.Scope.Add("Mail.Send");
         options.Scope.Add("offline_access");

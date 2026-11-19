@@ -18,6 +18,7 @@ public static class BrRequestEndpoints
 {
     public sealed record RecipientSettings(string Recipient1="",string Recipient2="");
     public sealed record BrRequestStatus(string Status);
+    public sealed record PreflightInput(bool HomeOffice=false);
 
     public static void MapPlenaroBrRequests(this WebApplication app)
     {
@@ -75,15 +76,16 @@ public static class BrRequestEndpoints
         // check AFTER user confirms but BEFORE saving the day marker, so
         // a missing mailbox, recipient or delegated Mail.Send token cannot
         // result in a misleading "requested" day without any send attempt.
-        group.MapPost("/preflight",async(HttpContext http,
+        group.MapPost("/preflight",async(PreflightInput input,HttpContext http,
             IAntiforgery anti,UserManager<ApplicationUser> users,
-            IConfiguration config,BrMailService sender,CancellationToken ct)=>{
+            IConfiguration config,BrMailService sender,
+            HomeOfficeCalendarService calendar,CancellationToken ct)=>{
             if(!await ValidCsrf(http,anti))return CsrfError();
             var user=await Owner(http,users);
             if(user is null)return Results.Unauthorized();
             await using var db=await Open(config,ct);
-            var input=await Recipients(db,user.Id,ct);
-            if(!TryNormalize(input,out var recipients))
+            var recipientSettings=await Recipients(db,user.Id,ct);
+            if(!TryNormalize(recipientSettings,out var recipients))
                 return Results.BadRequest(new{error="Die persönlichen E-Mail-Empfänger sind ungültig."});
             if(string.IsNullOrWhiteSpace(recipients.Recipient1)&&
                string.IsNullOrWhiteSpace(recipients.Recipient2))
@@ -91,32 +93,39 @@ public static class BrRequestEndpoints
                     error="Bitte zuerst unter Einstellungen → Aufgaben & Kalender mindestens einen E-Mail-Empfänger hinterlegen."});
             try{
                 _=await sender.PrepareTokenAsync(user.Id,ct);
+                if(input.HomeOffice)
+                    _=await calendar.PrepareTokenAsync(user.Id,ct);
                 return Results.Ok(new{ready=true});
             }catch(BrMailService.MailFailure failure){
                 return Results.Conflict(new{error=failure.Message,code="mail-consent"});
+            }catch(HomeOfficeCalendarService.CalendarFailure failure){
+                return Results.Conflict(new{error=failure.Message,code="calendar-consent"});
             }
         }).RequireRateLimiting("znuny-native-start");
 
         group.MapPost("/{day}/send",async(string day,HttpContext http,
             IAntiforgery anti,UserManager<ApplicationUser> users,
-            IConfiguration config,BrMailService sender,CancellationToken ct)=>{
+            IConfiguration config,BrMailService sender,
+            HomeOfficeCalendarService calendar,CancellationToken ct)=>{
             if(!await ValidCsrf(http,anti))return CsrfError();
             if(!TryDay(day,out var parsed))
                 return Results.BadRequest(new{error="Ungültiger BR-Tag."});
             var user=await Owner(http,users);
             if(user is null)return Results.Unauthorized();
             await using var db=await Open(config,ct);
-            // A request can only be sent for a BR marker already persisted by
-            // this exact user, never for an arbitrary client-supplied date.
+            // The server, NEVER the client, chooses whether this request has
+            // the HO-calendar side effect. BR-only markers still send only mail.
+            bool isHomeOffice;
             await using(var marker=new NpgsqlCommand("""
-                SELECT EXISTS(SELECT 1 FROM day_markers
-                  WHERE user_id=@uid AND day=@day AND (is_br OR is_ho))
+                SELECT is_ho FROM day_markers
+                WHERE user_id=@uid AND day=@day AND (is_br OR is_ho)
                 """,db)){
                 marker.Parameters.AddWithValue("uid",user.Id);
                 marker.Parameters.Add("day",NpgsqlDbType.Date).Value=parsed;
-                if(await marker.ExecuteScalarAsync(ct) is not true)
+                if(await marker.ExecuteScalarAsync(ct) is not bool ho)
                     return Results.Conflict(new{
                         error="Bitte zuerst den HO- oder BR-Marker für diesen Tag speichern."});
+                isHomeOffice=ho;
             }
             var configRecipients=await Recipients(db,user.Id,ct);
             if(!TryNormalize(configRecipients,out var recipients))
@@ -133,6 +142,21 @@ public static class BrRequestEndpoints
             catch(BrMailService.MailFailure e){
                 return Results.Conflict(new{error=e.Message,code="mail-consent"});
             }
+            // WPF parity: create/reuse the all-day working-elsewhere appointment
+            // BEFORE sending HO mail. No event for BR-only requests. The
+            // calendar journal reserves a unique user/day side effect and
+            // checks the real Outlook calendar for old WPF-created entries.
+            if(isHomeOffice){
+                try{
+                    var calendarToken=await calendar.PrepareTokenAsync(user.Id,ct);
+                    await calendar.EnsureCreatedAsync(
+                        db,user.Id,parsed,calendarToken,ct);
+                }catch(HomeOfficeCalendarService.CalendarFailure failure){
+                    return Results.Conflict(new{
+                        error=failure.Message,
+                        code=failure.SafeToRetry?"calendar-consent":"calendar-unknown"});
+                }
+            }
             // Unique primary key + ON CONFLICT prevents concurrent double mails,
             // including after a request timeout or a service restart.
             await using(var claim=new NpgsqlCommand("""
@@ -142,10 +166,24 @@ public static class BrRequestEndpoints
                 """,db)){
                 claim.Parameters.AddWithValue("uid",user.Id);
                 claim.Parameters.Add("day",NpgsqlDbType.Date).Value=parsed;
-                if(await claim.ExecuteNonQueryAsync(ct)==0)
+                if(await claim.ExecuteNonQueryAsync(ct)==0){
+                    // A BR request may already have been mailed before HO
+                    // was added. Create the missing HO appointment once, but
+                    // never send that earlier mail a second time.
+                    await using var state=new NpgsqlCommand("""
+                        SELECT status FROM br_mail_requests
+                        WHERE user_id=@uid AND day=@day
+                        """,db);
+                    state.Parameters.AddWithValue("uid",user.Id);
+                    state.Parameters.Add("day",NpgsqlDbType.Date).Value=parsed;
+                    var prior=await state.ExecuteScalarAsync(ct) as string;
+                    if(isHomeOffice && prior=="accepted")
+                        return Results.Ok(new{status="accepted",
+                            message="Ganztägiger Outlook-Homeoffice-Termin angelegt oder wiederverwendet. Eine bereits versandte E-Mail wird nicht erneut gesendet."});
                     return Results.Conflict(new{
                         error="Für diesen Tag existiert bereits ein Versandversuch. Kein erneuter automatischer Versand (Doppelversandschutz).",
                         code="already-submitted"});
+                }
             }
 
             try{
@@ -153,7 +191,9 @@ public static class BrRequestEndpoints
                 await sender.SendAsync(token,parsed,user.DisplayName,addresses,ct);
                 await SaveState(db,user.Id,parsed,"accepted",CancellationToken.None);
                 return Results.Ok(new{status="accepted",
-                    message="Microsoft Graph hat den Versand angenommen. Die tatsächliche Zustellung ist noch nicht bestätigt."});
+                    message=isHomeOffice
+                        ? "Ganztägiger Outlook-Termin „Homeoffice“ (An anderem Ort tätig) angelegt oder wiederverwendet. Microsoft Graph hat die E-Mail angenommen; Zustellung nicht garantiert."
+                        : "Microsoft Graph hat den Versand angenommen. Die tatsächliche Zustellung ist noch nicht bestätigt."});
             }catch(BrMailService.MailFailure e){
                 if(e.SafeToRetry){
                     await using var remove=new NpgsqlCommand("""

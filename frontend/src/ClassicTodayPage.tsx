@@ -12,6 +12,7 @@ import {
   type CachedTicket, type TicketAccess, type TicketAgendaSegment, type TicketListFilters,
 } from './znunySyncApi';
 import { agendaTimeLabel, buildTodayAgenda, localDayBounds } from './todayAgenda';
+import {GermanDay,preflightHomeofficeMail,sendBrRequest} from './brRequestsApi';
 
 type Tab = 'today' | 'active' | 'new' | 'completed' | 'local';
 const labels: {key:Tab;label:string}[] = [
@@ -49,6 +50,7 @@ export function ClassicTodayPage() {
   const [calendarError,setCalendarError]=useState('');
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
+  const [confirmHomeOffice,setConfirmHomeOffice]=useState(false);
   const [refresh,setRefresh]=useState(0);
 
   useEffect(()=>{
@@ -162,14 +164,31 @@ export function ClassicTodayPage() {
     }catch(e){setError(e instanceof Error?e.message:'Kandidatenfilter konnte nicht gespeichert werden.');}
     finally{setToggleBusy(false);}
   }
-  async function setMarkerValue(type:DayType,isBr:boolean,isHo:boolean) {
+  async function setMarkerValue(type:DayType,isBr:boolean,isHo:boolean,
+    confirmed=false) {
     if(busy)return;
+    const newHo=isHo&&!marker?.isHo;
+    if(newHo&&!confirmed){
+      setConfirmHomeOffice(true);
+      return;
+    }
     setBusy(true);setError('');setNotice('');
+    let saved=false;
     try{
+      if(newHo)await preflightHomeofficeMail(true);
       await saveDayMarker(day,type,isBr,isHo);
-      setRefresh(x=>x+1);setNotice('Tagesmarker gespeichert.');
-    }catch(e){setError(e instanceof Error?e.message:'Tagesmarker konnte nicht gespeichert werden.');}
-    finally{setBusy(false);}
+      saved=true;
+      setRefresh(x=>x+1);
+      if(newHo){
+        const result=await sendBrRequest(day);
+        setNotice(result.message);
+      }else setNotice('Tagesmarker gespeichert.');
+    }catch(e){
+      setError((saved&&newHo
+        ?'HO-Marker gespeichert, aber Outlook-Termin/E-Mail nicht vollständig bestätigt: '
+        :'Homeoffice wurde nicht beantragt: ')+
+        (e instanceof Error?e.message:'Unbekannter Fehler.'));
+    }finally{setBusy(false);}
   }
   const today=new Date(day+'T12:00:00');
 
@@ -212,6 +231,26 @@ export function ClassicTodayPage() {
                 !marker?.isBr,marker?.isHo??false)}>BR</button>
           </div>
         </div>
+        {confirmHomeOffice&&<div className="homeoffice-dialog-backdrop">
+          <section className="homeoffice-dialog content-card" role="dialog"
+            aria-modal="true" aria-labelledby="today-homeoffice-confirm-title">
+            <h3 id="today-homeoffice-confirm-title">Homeoffice beantragen</h3>
+            <p>Willst du wirklich am <strong>{GermanDay(day)}</strong> Homeoffice beantragen?</p>
+            <p className="um-hint">Plenaro legt einen ganztägigen Outlook-Termin
+              mit dem Verfügbarkeitsstatus „An anderem Ort tätig“ an oder verwendet
+              einen vorhandenen Termin und versendet danach die Homeoffice-E-Mail.</p>
+            <div className="homeoffice-dialog-actions">
+              <button type="button" className="button button-secondary"
+                onClick={()=>setConfirmHomeOffice(false)}>Nein</button>
+              <button type="button" className="button button-primary"
+                onClick={()=>{
+                  setConfirmHomeOffice(false);
+                  void setMarkerValue(marker?.dayType??'Normal',
+                    marker?.isBr??false,true,true);
+                }}>Ja, beantragen</button>
+            </div>
+          </section>
+        </div>}
         <div className="content-card plenaro-today-list">
           <div className="plenaro-list-title">
             <h2>{labels.find(item=>item.key===tab)?.label}:</h2>

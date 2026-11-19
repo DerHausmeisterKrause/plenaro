@@ -47,7 +47,7 @@ export function BrRecipientsSettingsPanel(){
     <div className="um-section-title"><Mail size={20}/>
       <h2 id="br-mail-settings">BR-Beantragung per E-Mail</h2>
     </div>
-    <p>Lege selbst fest, wer bei einem bestätigten BR-Antrag eine E-Mail erhält.
+    <p>Lege selbst fest, wer bei einem bestätigten HO- oder BR-Antrag eine E-Mail erhält.
       Wie im früheren Plenaro gibt es zwei persönliche Empfänger, der zweite ist optional.</p>
     {loading?<p role="status">Lade BR-Empfänger …</p>:
     <form className="um-form" onSubmit={e=>void submit(e)}>
@@ -62,13 +62,19 @@ export function BrRecipientsSettingsPanel(){
         value={form.recipient2}
         onChange={e=>setForm({...form,recipient2:e.target.value})}/>
       <p className="um-hint">Die Mail wird aus deinem persönlichen Microsoft-365-Postfach
-        mit der einmalig administrativ freigegebenen delegierten Berechtigung
-        Mail.Send versendet. Bei bestehender gültiger Verbindung ist keine
-        weitere Benutzerfreigabe vor jedem Antrag erforderlich.</p>
+        mit delegiertem Mail.Send versendet. Bei einem HO-Antrag erstellt
+        Plenaro zusätzlich einen ganztägigen Termin mit dem Outlook-Status
+        „An anderem Ort tätig“ und benötigt dafür Calendars.ReadWrite.
+        Eine bestehende Verbindung muss gegebenenfalls einmalig
+        erneut mit Kalender-Schreibberechtigung freigegeben werden.</p>
       {outlook?.connected?
         <p role="status" className="um-feedback success">Microsoft 365 ist verbunden.
           Der Versand verwendet deine bestehende Verbindung automatisch.
-          Ob Mail.Send vom Token tatsächlich freigegeben ist, prüft Plenaro beim Senden.</p>:
+          Ob Mail.Send und Calendars.ReadWrite tatsächlich freigegeben sind,
+          prüft Plenaro beim Beantragen.
+          <a href="/api/v1/graph/connect/start">
+            Microsoft-365-Berechtigungen aktualisieren</a>
+        </p>:
         outlook?.enabled&&outlook.linked?
           <div className="um-feedback failure" role="status">
             Für dein Microsoft-Konto ist derzeit keine gespeicherte Outlook-Verbindung vorhanden.

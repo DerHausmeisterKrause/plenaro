@@ -85,6 +85,7 @@ describe('BR marker confirmation and mail delivery',()=>{
     await waitFor(()=>expect(mocks.saveDayMarker).toHaveBeenCalledWith(
       '2026-11-16','Normal',true,false));
     await waitFor(()=>expect(mocks.sendBrRequest).toHaveBeenCalledWith('2026-11-16'));
+    expect(mocks.preflightHomeofficeMail).toHaveBeenCalledWith(false);
     expect(refreshed).toHaveBeenCalledTimes(1);
   });
 
@@ -98,6 +99,37 @@ describe('BR marker confirmation and mail delivery',()=>{
     await waitFor(()=>expect(mocks.saveDayMarker).toHaveBeenCalledWith(
       '2026-11-16','Normal',false,true));
     await waitFor(()=>expect(mocks.sendBrRequest).toHaveBeenCalledWith('2026-11-16'));
+    expect(mocks.preflightHomeofficeMail).toHaveBeenCalledWith(true);
+  });
+
+  it('requests the Outlook calendar even if the BR mail was already accepted',async()=>{
+    // BR was previously mailed; now HO is switched on for the same day.
+    // Calendar creation must still run; backend never resends accepted mail.
+    mocks.getMonthMarkers.mockResolvedValue([{
+      day:'2026-11-16',dayType:'Normal',isBr:true,isHo:false
+    }]);
+    mocks.readBrMailStatus.mockResolvedValue({status:'accepted'});
+    render(<DayMarkersPanel initialDay="2026-11-16"/>);
+    await clickLoadedMarker('HO – Homeoffice');
+    fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'Ja, beantragen'}));
+    await waitFor(()=>expect(mocks.preflightHomeofficeMail).toHaveBeenCalledWith(true));
+    await waitFor(()=>expect(mocks.sendBrRequest).toHaveBeenCalledWith('2026-11-16'));
+  });
+
+  it('does not create another Outlook calendar event for unchanged HO markers',async()=>{
+    mocks.getMonthMarkers.mockResolvedValue([{
+      day:'2026-11-16',dayType:'Normal',isBr:false,isHo:true
+    }]);
+    mocks.readBrMailStatus.mockResolvedValue({status:'accepted'});
+    render(<DayMarkersPanel initialDay="2026-11-16"/>);
+    await screen.findByRole('button',{name:'Marker speichern'});
+    await act(async()=>{await Promise.resolve();});
+    fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
+    await waitFor(()=>expect(mocks.saveDayMarker).toHaveBeenCalledTimes(1));
+    expect(mocks.sendBrRequest).not.toHaveBeenCalled();
+    expect(mocks.preflightHomeofficeMail).not.toHaveBeenCalled();
   });
 
   it('preflights recipients and Mail.Send before any HO marker is saved',async()=>{
