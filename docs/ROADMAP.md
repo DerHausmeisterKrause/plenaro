@@ -1,4 +1,4 @@
-## 19.11.2026 – Phase 7: ATOSS-DOM-Anmeldung und Favoriten-Banner
+## 19.11.2026 – Phase 7: ATOSS-DOM-Anmeldung und Favoriten-Banner (PR #49 gemergt)
 
 - [x] WPF-Vorlage
   `project_tool/Services/WebShortcutBrowserSessionManager.cs`
@@ -11,7 +11,8 @@
   nicht-relevante Buttons ergänzt.
 - [x] Einfache dedizierte DNS-/HTTPS-/Proxy-Health-Diagnose
   in `tools/check_favorite_autologin_host.sh` ergänzt.
-- [ ] CI, Merge und echter ATOSS-Test.
+- [x] [PR #49](https://github.com/DerHausmeisterKrause/plenaro/pull/49) gemergt; [CI #44524726181](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44524726181) grün inklusive ATOSS/ZK-Regressionsfällen, Web-Build und Docker-Smoke.
+- [ ] Echter ATOSS-Test nach DNS-/TLS-Setup.
 - [ ] Infrastruktur für dedizierten Fav-Host mit DNS/TLS/NGINX
   einrichten; erst danach explizites Opt-in aktivieren.
 - [ ] Erst dann echtes WPF-kompatibles DOM-Autofill unter ATOSS bestätigen.
