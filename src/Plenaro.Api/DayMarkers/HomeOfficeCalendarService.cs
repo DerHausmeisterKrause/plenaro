@@ -351,6 +351,20 @@ public sealed class HomeOfficeCalendarService(
     public async Task RemoveAsync(NpgsqlConnection db,Guid user,
         DateOnly day,string token,CancellationToken ct)
     {
+        // Unknown/processing state means an earlier POST might already have
+        // succeeded. If Graph has not indexed that event yet, allow neither
+        // cancellation nor re-creation under a new transaction ID.
+        await using(var inspect=new NpgsqlCommand("""
+            SELECT status FROM homeoffice_calendar_events
+            WHERE user_id=@user AND day=@day
+            """,db)){
+            inspect.Parameters.AddWithValue("user",user);
+            inspect.Parameters.Add("day",NpgsqlDbType.Date).Value=day;
+            var status=await inspect.ExecuteScalarAsync(ct) as string;
+            if(status is "processing" or "unknown")
+                throw new CalendarFailure(
+                    "Der Outlook-Terminantrag ist noch unklar. Bitte zuerst im Kalender prüfen; keine automatische Rücknahme oder Neuerstellung.",false);
+        }
         var matches=await FindExistingAsync(token,day,ct);
         if(matches.Count==1){
             var id=matches[0];
