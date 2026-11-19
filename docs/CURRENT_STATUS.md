@@ -1,3 +1,43 @@
+## 19.11.2026 – KRITISCH: maximale 24h Znuny-Zeitbuchungen pro Agent/Kalendertag
+
+**Sicherheits-/Geschäftsregel:** Plenaro darf pro admin-freigegebenem
+Znuny-Agenten, über **alle Tickets und alle diesem Agenten zugewiesenen
+Plenaro-Benutzer** gemeinsam, pro **Europe/Berlin-Kalendertag**
+maximal **1.440 Minuten** an Znuny übertragen. Geprüft werden die
+**tatsächlich an Znuny gesendeten, auf 15 Minuten aufgerundeten Minuten**
+statt der Sekunden des lokalen Timers.
+
+- [x] Backend-Sperre in `/api/v1/znuny/tickets/{ticketId}/time/book`
+  direkt vor dem Einfügen der ausgehenden `pending`-Buchung. Bei Überschreitung
+  HTTP 409 mit `code=znuny-agent-daily-limit`, Datum, Limit, reservierten
+  und verbleibenden Minuten – **kein** `TicketUpdate` an Znuny.
+- [x] PostgreSQL-Advisory-Transaktionslock je Agent+Kalendertag:
+  parallele Buchungen auf verschiedenen Tickets können das Tagesbudget
+  nicht doppelt nutzen.
+- [x] `pending` und `confirmed` reservieren Zeit, `rejected` nicht.
+  Unklare/Timeout-Buchungen bleiben bewusst blockierend, weil Znuny den
+  Auftrag möglicherweise angenommen hat. Keine automatische Wiederholung.
+- [x] Migration `0030_znuny_agent_daily_booking_limit.sql` ergänzt
+  unveränderliche Schnappschüsse von Agent-ID und Berliner Buchungsdatum
+  für neue Buchungen; bestehende Buchungen werden anhand aktiver
+  Admin-Zuordnungen nachgetragen, wenn möglich. Indizes für die Tagesabfrage.
+- [x] Lese-Endpunkt `/api/v1/znuny/tickets/time/daily-limit` plus
+  Anzeige des verbleibenden Tageskontingents und klarer Warnhinweis im Timer.
+- [x] Vertrags- und Browser-Tests für genau 24h, Überschreitung,
+  15-Minuten-Rundung, Sommer-/Winterzeit, unterschiedliche Agenten,
+  offene/abgelehnte Buchungen und Datenbank-/HTTP-Verhalten ergänzt.
+- [ ] PR-Merge/CI und echter Deployment-Test mit mehreren Tickets.
+
+**Reichweite:** Diese Sperre schützt alle **über Plenaro vorgenommenen**
+Zeitbuchungen. Buchungen, die ein Agent außerhalb von Plenaro direkt in
+Znuny/OTRS oder über das alte WPF-Tool tätigt, sind ohne durchgängige
+autoritative Prüfung auf dem Znuny-Server nicht zwingend in Plenaros
+Buchungsjournal vorhanden. Eine **systemweite** 24h-Grenze über alle
+externen Schreibkanäle benötigt eine zusätzliche Znuny-seitige
+Validierung/Regel. Dies nicht als bereits implementiert ausgeben.
+
+---
+
 ## 17.11.2026 – Dashboard-Znuny: sporadische HTTP 429 (Phase 6, PR #46 gemergt)
 
 **Ursache im Code nachgewiesen:** `UseRateLimiter()` stand vor
