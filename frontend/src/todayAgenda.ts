@@ -1,4 +1,5 @@
 import type { OutlookEvent } from './graphApi';
+import { localDate } from './tasksApi';
 import type { TicketAgendaSegment } from './znunySyncApi';
 
 export type TodayAgendaEntry = {
@@ -20,6 +21,28 @@ export function localDayBounds(day: string): { start: Date; end: Date } {
   const start = new Date(year, month - 1, date);
   const end = new Date(year, month - 1, date + 1);
   return { start, end };
+}
+
+/**
+ * Outlook all-day events use calendar DATEs rather than clock-time overlap:
+ * the end date is exclusive. A Graph UTC-midnight boundary appears as
+ * 01:00/02:00 on the following German day and must NOT make the event
+ * visible there. This matches the old WPF CalendarMarkerResolver.
+ */
+export function outlookAllDayOccursOnDay(
+  event: Pick<OutlookEvent, 'start' | 'end' | 'isAllDay'>,
+  day: string
+): boolean {
+  if (!event.isAllDay) return false;
+  const start = new Date(event.start);
+  const end = new Date(event.end);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()))
+    return false;
+  const startDay = localDate(start);
+  const endDay = localDate(end);
+  // WPF treats a missing/same-day end date as one whole day.
+  return day >= startDay &&
+    (endDay > startDay ? day < endDay : day === startDay);
 }
 
 export function buildTodayAgenda(day: string, segments: TicketAgendaSegment[],
@@ -49,7 +72,10 @@ export function buildTodayAgenda(day: string, segments: TicketAgendaSegment[],
   }
   const seenEvents = new Set<string>();
   for (const event of outlook) {
-    if (seenEvents.has(event.id) || !overlapsDay(event.start, event.end)) continue;
+    const occursToday = event.isAllDay
+      ? outlookAllDayOccursOnDay(event,day)
+      : overlapsDay(event.start,event.end);
+    if (seenEvents.has(event.id) || !occursToday) continue;
     seenEvents.add(event.id);
     let safeLink: string | null = null;
     if (event.webLink) {
