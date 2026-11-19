@@ -90,6 +90,42 @@ describe('Dedicated personal favorite DOM autofill (WPF parity)',()=>{
     p.window.close();
   });
 
+  it('fills and submits ATOSS/ZK dynamically rendered non-form login link once',()=>{
+    const p=page(
+      '<main><div class="z-window">' +
+      '<input class="z-focustextbox-real" type="text" placeholder="Benutzername">'+
+      '<input class="z-focustextbox-real" type="password" placeholder="Kennwort">'+
+      '<a class="z-button" role="button"><span>Anmelden</span></a></div></main>');
+    const button=p.window.document.querySelector('.z-button');
+    const click=vi.fn();
+    button.addEventListener('click',click);
+    p.run();
+    p.scheduled[0]();
+    expect(p.window.document.querySelector('[placeholder="Benutzername"]').value)
+      .toBe('test.user');
+    expect(p.window.document.querySelector('[placeholder="Kennwort"]').value)
+      .toBe('test-password');
+    expect(click).toHaveBeenCalledTimes(1);
+    for(const fn of p.scheduled)fn();
+    expect(click).toHaveBeenCalledTimes(1);
+    p.window.close();
+  });
+
+  it('does not click unrelated ZK controls if login text is missing',()=>{
+    const p=page(
+      '<main><input type="text" placeholder="Benutzername">'+
+      '<input type="password" placeholder="Kennwort">'+
+      '<a class="z-button" role="button">Passwort vergessen</a>'+
+      '<a class="z-button" role="button">Kennwort ändern</a></main>');
+    const clicks=vi.fn();
+    p.window.document.querySelectorAll('.z-button').forEach(b=>
+      b.addEventListener('click',clicks));
+    p.run();
+    p.scheduled[0]();
+    expect(clicks).not.toHaveBeenCalled();
+    p.window.close();
+  });
+
   it('also fills login fields in an accessible nested about:blank frame',()=>{
     const p=page('<iframe id="embedded"></iframe>');
     const iframe=p.window.document.querySelector('iframe');
