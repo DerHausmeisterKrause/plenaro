@@ -595,6 +595,8 @@ jobs:
   favorites-browser-login:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      POSTGRES_PASSWORD: ci-only-not-for-production
     steps:
       - uses: actions/checkout@v4
       - name: Validate JavaScript and Compose profile
