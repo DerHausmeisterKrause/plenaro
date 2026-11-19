@@ -69,6 +69,13 @@ internal static class FavoriteHeadlessLogin
                     stream,new JsonSerializerOptions{
                         PropertyNameCaseInsensitive=true
                     },ct);
+                // Browser has not submitted any credentials if the page
+                // has no rendered login fields or no recognizable action.
+                // In exactly those cases retain the old HTML form fallback,
+                // important for other personal favorites without ATOSS/ZK.
+                if(result?.Authenticated!=true &&
+                   result?.Reason is "no-login-fields" or "no-login-action")
+                    return false;
                 if(result?.Authenticated!=true || result.Cookies is null ||
                    result.Cookies.Length>64)return true;
                 foreach(var cookie in result.Cookies){
