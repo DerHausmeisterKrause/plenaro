@@ -14,30 +14,30 @@ die keine nativen Submit-Buttons sind, und schließt fremde Buttons aus.
 ### Schnellstmögliche Einrichtung für EINEN vorhandenen Favoriten
 
 1. Der gesuchte Host lautet nach aktueller Vorlage:
-   `site-0f496700e7e94e4c979464058a4d5810-plenaro.intern.test.org`.
+   `site-<UUID>-plenaro.example.org`.
    **Auf dem intern benutzten DNS-Server** einen A-Eintrag zu derselben
-   NGINX-IP wie `apps-plenaro.intern.test.org` einrichten, alternativ
+   NGINX-IP wie `apps-plenaro.example.org` einrichten, alternativ
    einen **CNAME für genau diesen Namen** auf
-   `apps-plenaro.intern.test.org`. Das muss auch vom Browser-PC aus
+   `apps-plenaro.example.org`. Das muss auch vom Browser-PC aus
    funktionieren; ein Eintrag in `/etc/hosts` des Docker-Hosts
    allein reicht nicht.
 2. Das von NGINX ausgelieferte TLS-Zertifikat muss den Namen abdecken.
-   Ein Zertifikat `*.intern.test.org` deckt die einstufige
+   Ein Zertifikat `*.example.org` deckt die einstufige
    `site-...-plenaro.intern.test.org`-Vorlage ab;
-   `*.plenaro.intern.test.org` **nicht**. Zusätzlich muss
+   `*.plenaro.example.org` **nicht**. Zusätzlich muss
    das äußere NGINX diesen Host an den Plenaro-Proxy weiterleiten.
    Ein einzelner CNAME ersetzt kein gültiges Zertifikat.
 3. Auf dem Docker-Host ohne Geheimnisse verifizieren:
    ```bash
    bash tools/check_favorite_autologin_host.sh \
-     site-0f496700e7e94e4c979464058a4d5810-plenaro.intern.test.org
+     site-<UUID>-plenaro.example.org
    ```
    Der HTTPS-Health-Pfad muss exakt
    `plenaro-favorite-proxy-ready` zurückgeben.
    Auch am Windows-/Browser-PC DNS und HTTPS verifizieren.
 4. Nach erfolgreicher Prüfung in `/opt/plenaro/.env` aktivieren:
    ```dotenv
-   PLENARO_FAVORITES_PATH_ORIGIN=https://apps-plenaro.intern.test.org
+   PLENARO_FAVORITES_PATH_ORIGIN=https://apps-plenaro.example.org
    PLENARO_FAVORITES_HOST_TEMPLATE={slug}-plenaro.intern.test.org
    PLENARO_FAVORITES_PERSONAL_DEDICATED=true
    ```
@@ -52,7 +52,7 @@ die keine nativen Submit-Buttons sind, und schließt fremde Buttons aus.
 
 Für viele Favoriten statt Einzel-CNAME ein gezieltes Wildcard-DNS,
 ein passendes Zertifikat und entsprechendes NGINX-Hostrouting
-bereitstellen. Ein globales `*.intern.test.org`-DNS-Rewrite kann
+bereitstellen. Ein globales `*.example.org`-DNS-Rewrite kann
 unbeteiligte interne Dienste beeinträchtigen und sollte ohne Prüfung
 des internen DNS-Konzepts nicht pauschal eingeführt werden.
 
