@@ -193,12 +193,14 @@ export function DayMarkersPanel({initialDay,onSaved}:{
     const existing=markers.find(m=>m.day===selected);
     // Classic WPF asks before applying HO. Keep the previously requested
     // BR-triggered mail route compatible as well. One request per user/day.
-    const newlyRequested=(isHo&&!existing?.isHo)||
-      (isBr&&!existing?.isBr);
-    const askToSend=newlyRequested &&
+    const newlyRequestedHo=isHo&&!existing?.isHo;
+    const newlyRequestedBr=isBr&&!existing?.isBr;
+    // HO always needs a calendar appointment even if an earlier BR mail
+    // already has status=accepted. The server avoids re-sending that mail.
+    const askToSend=newlyRequestedHo || (newlyRequestedBr &&
       brMailStatus?.status!=='accepted' &&
       brMailStatus?.status!=='unknown' &&
-      brMailStatus?.status!=='processing';
+      brMailStatus?.status!=='processing');
     if(askToSend&&!confirmed){
       setConfirmMode('save');
       return;
@@ -208,7 +210,7 @@ export function DayMarkersPanel({initialDay,onSaved}:{
       if(askToSend){
         // Fail before persisting a new HO/BR request when recipients or a
         // valid delegated Mail.Send connection are missing.
-        await preflightHomeofficeMail();
+        await preflightHomeofficeMail(isHo);
       }
       await saveDayMarker(selected, dayType, isBr, isHo);
       // Only explicit Yes for newly marked HO/BR starts a mail request.
@@ -218,7 +220,7 @@ export function DayMarkersPanel({initialDay,onSaved}:{
       if(askToSend){
         try{await sendMailForBr();}
         catch(e){
-          setError('Tagesmarker gespeichert, aber keine bestätigte E-Mail: '+
+          setError('Tagesmarker gespeichert, aber Homeoffice-Termin/E-Mail nicht vollständig bestätigt: '+
             (e instanceof Error?e.message:'Unbekannter Fehler.')+
             ' Unter Einstellungen → Aufgaben & Kalender kannst du die Empfänger und Outlook-Verbindung prüfen.');
         }
@@ -233,7 +235,7 @@ export function DayMarkersPanel({initialDay,onSaved}:{
   return <section className="content-card day-marker-panel" aria-labelledby="marker-heading">
     <div className="day-marker-head">
       <div><h2 id="marker-heading">Tagesmarker · UL / AM / BR</h2>
-        <p className="um-hint">Tage auswählen und markieren. Beim erstmaligen HO- oder BR-Marker fragt Plenaro nach dem Homeoffice-Antrag. Nur nach „Ja“ wird eine Mail versucht.</p></div>
+        <p className="um-hint">Tage auswählen und markieren. Nach bestätigtem HO-Antrag erstellt Plenaro zuerst einen ganztägigen Outlook-Termin „An anderem Ort tätig“ und versendet anschließend die E-Mail. BR ohne HO verschickt weiterhin nur eine E-Mail.</p></div>
       <div className="day-marker-navigation">
         <button type="button" className="button button-secondary" aria-label="Vorheriger Monat"
           onClick={() => goMonth(monthStep(viewMonth, -1))}><ChevronLeft size={16}/></button>
@@ -309,9 +311,9 @@ export function DayMarkersPanel({initialDay,onSaved}:{
           aria-modal="true" aria-labelledby="homeoffice-confirm-title">
           <h3 id="homeoffice-confirm-title">Homeoffice beantragen</h3>
           <p>Willst du wirklich am <strong>{GermanDay(selected)}</strong> Homeoffice beantragen?</p>
-          <p className="um-hint">Bei „Ja“ prüft Plenaro deine E-Mail-Empfänger
-            und die Microsoft-365-Verbindung. Anschließend wird die E-Mail
-            über dein persönliches Postfach gesendet.</p>
+          <p className="um-hint">Bei „Ja“ prüft Plenaro die Microsoft-365-Berechtigungen.
+            {isHo ? ' Ein ganztägiger Outlook-Homeoffice-Termin mit dem Status „An anderem Ort tätig“ wird angelegt oder wiederverwendet. Anschließend wird die E-Mail gesendet.' :
+              ' Anschließend wird die E-Mail über dein persönliches Postfach gesendet.'}</p>
           <div className="homeoffice-dialog-actions">
             <button type="button" className="button button-secondary"
               onClick={()=>{
