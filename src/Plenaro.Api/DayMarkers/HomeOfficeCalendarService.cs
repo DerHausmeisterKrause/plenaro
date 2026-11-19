@@ -273,10 +273,28 @@ public sealed class HomeOfficeCalendarService(
             await reader.CloseAsync();
             if(status=="created" && !string.IsNullOrEmpty(knownId))
                 return knownId;
-            if(status=="processing")
+            if(status=="removed"){
+                // The previous HO appointment was explicitly cancelled. A
+                // later separately confirmed HO request starts a NEW attempt
+                // with a NEW Graph transaction ID; prior mail is NOT resent.
+                requestId=Guid.NewGuid();
+                await using var reset=new NpgsqlCommand("""
+                    UPDATE homeoffice_calendar_events
+                    SET status='processing',event_id=NULL,transaction_id=@tx,
+                        updated_at=now()
+                    WHERE user_id=@user AND day=@day AND status='removed'
+                    """,db);
+                reset.Parameters.AddWithValue("user",user);
+                reset.Parameters.Add("day",NpgsqlDbType.Date).Value=day;
+                reset.Parameters.AddWithValue("tx",requestId);
+                if(await reset.ExecuteNonQueryAsync(ct)!=1)
+                    throw new CalendarFailure("Homeoffice-Status wurde parallel geändert.",false);
+                fresh=true;
+            }
+            if(!fresh && status=="processing")
                 throw new CalendarFailure(
                     "Ein Outlook-Homeoffice-Terminantrag läuft bereits. Kein doppelter Termin wird erstellt.",false);
-            if(status=="unknown"){
+            if(!fresh && status=="unknown"){
                 var recovered=await FindExistingAsync(token,day,ct);
                 if(recovered.Count==1){
                     await SaveStatusAsync(db,user,day,"created",recovered[0],
@@ -286,8 +304,9 @@ public sealed class HomeOfficeCalendarService(
                 throw new CalendarFailure(
                     "Der vorherige Outlook-Erstellungsversuch ist unklar. Bitte im Outlook-Kalender prüfen; kein zweiter POST.",false);
             }
-            throw new CalendarFailure(
-                "Homeoffice-Terminstatus nicht zur Erzeugung freigegeben.",false);
+            if(!fresh)
+                throw new CalendarFailure(
+                    "Homeoffice-Terminstatus nicht zur Erzeugung freigegeben.",false);
         }
         var attemptedPost=false;
         try{
@@ -320,6 +339,53 @@ public sealed class HomeOfficeCalendarService(
                 await DeleteReservationAsync(db,user,day,CancellationToken.None);
             throw;
         }
+    }
+
+    /// <summary>
+    /// WPF parity on HO removal: only delete an appointment which still
+    /// matches the exact Plenaro Homeoffice subject/day/location/status.
+    /// Never delete unrelated Outlook calendar appointments, even if an
+    /// earlier stored event ID now points to a changed personal event.
+    /// </summary>
+    public async Task RemoveAsync(NpgsqlConnection db,Guid user,
+        DateOnly day,string token,CancellationToken ct)
+    {
+        var matches=await FindExistingAsync(token,day,ct);
+        if(matches.Count==1){
+            var id=matches[0];
+            using var req=new HttpRequestMessage(HttpMethod.Delete,
+                GraphBase+"me/events/"+Uri.EscapeDataString(id));
+            req.Headers.Authorization=new AuthenticationHeaderValue("Bearer",token);
+            HttpResponseMessage response;
+            try{response=await clients.CreateClient("Plenaro.Graph").SendAsync(req,ct);}
+            catch(HttpRequestException){
+                throw new CalendarFailure(
+                    "Outlook-Terminlöschung ist unklar. HO-Marker wurde nicht entfernt; bitte Kalender prüfen.",false);
+            }catch(TaskCanceledException) when(!ct.IsCancellationRequested){
+                throw new CalendarFailure(
+                    "Outlook-Löschung hat nicht geantwortet. HO-Marker wurde nicht entfernt.",false);
+            }
+            using(response){
+                if(response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                    throw new CalendarFailure(
+                        "Calendars.ReadWrite fehlt. Outlook-Verbindung bitte aktualisieren.",true);
+                if(response.StatusCode is not (HttpStatusCode.NoContent or HttpStatusCode.NotFound))
+                    throw new CalendarFailure(
+                        "Outlook konnte den Plenaro-Homeoffice-Termin nicht eindeutig entfernen.",false);
+            }
+        }
+        // Also records a deliberate cancellation when the appointment was
+        // already missing in Outlook. A later HO submission gets a new
+        // per-user/day transaction ID and cannot reactivate an old request.
+        await using var cmd=new NpgsqlCommand("""
+            INSERT INTO homeoffice_calendar_events(user_id,day,status,event_id)
+            VALUES(@user,@day,'removed',NULL)
+            ON CONFLICT(user_id,day) DO UPDATE
+            SET status='removed',event_id=NULL,updated_at=now()
+            """,db);
+        cmd.Parameters.AddWithValue("user",user);
+        cmd.Parameters.Add("day",NpgsqlDbType.Date).Value=day;
+        await cmd.ExecuteNonQueryAsync(CancellationToken.None);
     }
 
     private static async Task SaveStatusAsync(
