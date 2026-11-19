@@ -1,3 +1,48 @@
+## 19.11.2026 – HO-Kalendertermin zusätzlich zum bestehenden Mailversand
+
+Auftrag: Beim **bestätigten Homeoffice-Antrag** nicht nur E-Mail
+versenden, sondern nach Desktop-Vorlage im persönlichen Outlook-Kalender
+einen **ganztägigen Termin mit Verfügbarkeit „An anderem Ort tätig“**
+anlegen. Beim bestätigten BR-only-Antrag bleibt es ausschließlich
+beim bisherigen Mailversand.
+
+**Exakte WPF-Felder** aus `project_tool/Services/OutlookInteropService.cs`:
+Betreff und Inhalt `Homeoffice am YYYY-MM-DD`, ganztägig ab 00:00
+am betroffenen Datum bis 00:00 des Folgetags (Ende exklusiv),
+`showAs=workingElsewhere`, `location.displayName="An anderem Ort tätig"`,
+Erinnerung aus, keine Teilnehmer/Kategorien. Graph benötigt
+`Calendars.ReadWrite` als delegierte Berechtigung (keine App-only-
+Berechtigung). Nur der explizite `/api/v1/graph/connect/start`-Fluss
+fordert dieses Recht an, nicht der gewöhnliche Plenaro-Entra-Login.
+
+**Reihenfolge:** Zustimmung → Vorabprüfung der E-Mail-Empfänger,
+Mail.Send und Calendars.ReadWrite → HO-Marker speichern →
+Outlook-Termin nach genau passender Signatur suchen und
+wiederverwenden oder neu anlegen → E-Mail maximal einmal aus
+dem persönlichen Postfach senden.
+
+**Doppeltermine verhindern:** Einzigartiges Datenbankjournal
+`homeoffice_calendar_events(user_id,day)` und ein stabiler,
+pro Erstellungsversuch erzeugter Graph-`transactionId`-Wert.
+Unklare Graph-POST-Antworten werden nicht blind wiederholt:
+stattdessen nur lesend nach identischer Signatur gesucht.
+Mehrere passende WPF-/Plenaro-Termine werden niemals automatisch
+umgeschrieben oder gelöscht. Beim HO-Abwählen entfernt Plenaro
+ausschließlich einen eindeutig passenden Outlook-Termin.
+Bereits akzeptierte Mail wird bei nachträglich aktiviertem HO
+nicht ein zweites Mal gesendet.
+
+**Aktivierung nach Update:** Bei bestehender Outlook-Verbindung
+unter Einstellungen → Aufgaben & Kalender →
+`Microsoft-365-Berechtigungen aktualisieren` wählen,
+`Calendars.ReadWrite` bestätigen; bei restriktiven Tenants ggf.
+Genehmigung des M365-Administrators einholen. Danach zum Test
+einen HO-Tag bestätigen und im Outlook-Kalender prüfen:
+Ganztägig, An anderem Ort tätig, richtige Datumsgrenzen,
+keine Erinnerung und E-Mail in Gesendete Elemente.
+
+---
+
 # BR-Beantragung mit bestätigter E-Mail (Phase 5/7)
 
 ## Desktop-Referenz und gewünschter Unterschied
