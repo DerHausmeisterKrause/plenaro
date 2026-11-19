@@ -122,15 +122,24 @@ public static class ZnunyTicketRemoteEndpoints
         // rechecks it rather than trusting this read or the browser.
         group.MapGet("/tickets/time/daily-limit",async(HttpContext http,
             UserManager<ApplicationUser> users,IConfiguration config,
-            SecretVault vault,CancellationToken ct)=>{
-            var context=await Context(http,users,config,vault,null,false,ct);
-            if(context.Error is { } denied)return denied;
-            if(context.AgentId is not >0)return Results.Forbid();
-            var day=ZnunyAgentDailyBookingLimit.BookingDay(DateTimeOffset.UtcNow);
+            CancellationToken ct)=>{
+            var account=await users.GetUserAsync(http.User);
+            if(account is null||account.IsDisabled)return Results.Unauthorized();
             await using var db=await Open(config,ct);
+            // Reading a LOCAL quota must not require a working remote Znuny
+            // connection or a secret-vault password. Only the admin-approved
+            // agent binding authorizes this read.
+            await using var approved=new NpgsqlCommand("""
+                SELECT agent_id FROM znuny_approved_agent_bindings
+                WHERE user_id=@user
+                """,db);
+            approved.Parameters.AddWithValue("user",account.Id);
+            var selected=await approved.ExecuteScalarAsync(ct);
+            if(selected is not int agent || agent<=0)return Results.Forbid();
+            var day=ZnunyAgentDailyBookingLimit.BookingDay(DateTimeOffset.UtcNow);
             await using var tx=await db.BeginTransactionAsync(ct);
             var used=await ZnunyAgentDailyBookingLimit.ReservedMinutesAsync(
-                db,tx,context.AgentId.Value,day,ct);
+                db,tx,agent,day,ct);
             return Results.Ok(new{
                 day=day.ToString("yyyy-MM-dd",
                     System.Globalization.CultureInfo.InvariantCulture),
