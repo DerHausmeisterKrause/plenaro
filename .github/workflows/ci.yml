@@ -632,5 +632,5 @@ jobs:
             docker logs plenaro-favorites-login-health
             exit 1
           fi
-          docker top plenaro-favorites-login-health -eo user,comm |
-            grep -Eq 'pwuser[[:space:]]+node'
+          docker top plenaro-favorites-login-health |
+            grep -Eq 'pwuser.*node'
