@@ -1,4 +1,4 @@
-## 19.11.2026 – Phase 5/7: Homeoffice-Antrag legt Outlook-Termin „An anderem Ort tätig“ an
+## 19.11.2026 – Phase 5/7: Homeoffice-Antrag legt Outlook-Termin „An anderem Ort tätig“ an (PR #52 gemergt)
 
 - [x] WPF-Vorlage `HomeOfficeService` und `OutlookInteropService`
   mit dem Web-HO-Ablauf verglichen (ganztägig, Arbeitsort, Verfügbarkeit,
@@ -20,7 +20,8 @@
 - [x] HO-Bestätigung im Schnellschalter `Heute` und im Tagesmarker-
   Dialog einheitlich; UI und Outlook-Berechtigungshinweise ergänzt.
 - [x] Frontend- und Backend-Kontrakte mit synthetischen Testdaten.
-- [ ] CI, PR-Merge, Produktiv-Deployment.
+- [x] [PR #52](https://github.com/DerHausmeisterKrause/plenaro/pull/52) gemergt, [CI #44553467789](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/44553467789) vollständig grün (inkl. Docker-Smoke und Migration 0031).
+- [ ] Produktiv-Deployment.
 - [ ] Delegierte `Calendars.ReadWrite`-Freigabe im Zieltenant,
   echter HO-Test (Mail und Outlook-Termin), erneutes Speichern,
   Entfernen und Nachprüfen des Termins im Outlook-Kalender.
