@@ -1,3 +1,32 @@
+## 19.11.2026 – Outlook-Ganztagstermine einen Tag zu lang in „Heute“ (Fix)
+
+**Gemeldeter Fehler:** Der Ganztagstermin „Buß- und Bettag (§)“ vom
+18.11.2026 wurde fälschlich auch am 19.11.2026 angezeigt. Der Outlook-Graph-
+Datensatz hat für `isAllDay=true` eine **exklusive End-Datumsgrenze**,
+z. B. `2026-11-19T00:00:00Z`. In Deutschland ist das bereits 01:00 Uhr
+am 19.11.; die bisherige Zeitintervall-Überschneidung `end > dayStart`
+zählte damit den Folgetag dazu. Das Datum des Ganztagstermins ist
+hingegen nur der 18.11.
+
+- [x] Die WPF-Referenz
+  `project_tool/ViewModels/Calendar/OutlookAllDayMarkerMapper.cs`
+  geprüft: `StartLocal.Date <= day.Date && EffectiveEndDateExclusive > day.Date`.
+- [x] Dieselbe **kalendertägliche, exklusive Enddatumsregel** als
+  `outlookAllDayOccursOnDay` in `frontend/src/todayAgenda.ts` übernommen.
+- [x] Reiter `Heute`: Outlook-Ganztagstermine nur an tatsächlich belegten
+  Tagen anzeigen; UTC-/DST-Stundenüberlappungen am Folgetag ignorieren.
+- [x] Wochenplanung: ganztägige Outlook-Termine einschließlich mehrtägiger
+  Termine konsistent auf den betreffenden Tagen anzeigen.
+- [x] **Normale** Termine weiterhin nach echten Uhrzeitüberschneidungen
+  filtern (Mitternachtstermine bleiben an beiden Tagen sichtbar).
+- [x] Regressionsfälle für 18./19.11.2026, Berliner Mitternacht,
+  Sommerzeitwechsel, mehrtägige Ganztagstermine, fehlerhafte Zeiten und
+  echte Terminüberschneidungen ergänzt.
+- [ ] CI, Merge und produktiver Blick in den Reiter „Heute“.
+  Keine neue Infrastruktur, kein Container, keine Graph-/Entra-Änderung.
+
+---
+
 ## 19.11.2026 – ATOSS-Autologin ohne zusätzliche DNS-Aliasse (PR #50 gemergt)
 
 **Explizite Nutzerentscheidung:** Der bereits funktionierende Favoriten-Host
