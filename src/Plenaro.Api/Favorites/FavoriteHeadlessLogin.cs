@@ -97,8 +97,15 @@ internal static class FavoriteHeadlessLogin
            cookie.Path.Any(char.IsControl))
             return false;
         // No third-party cookies, parent-domain escalation or HTTP sessions.
+        var domain=cookie.Domain.TrimStart('.');
+        if(domain.Length<3||domain.Count(ch=>ch=='.')<1)return false;
+        // An upstream site may use a parent-domain session cookie
+        // (e.g. atoss.example.org from app.atoss.example.org).
+        // The imported cookie is nevertheless host-only in this dedicated
+        // HttpClient jar, never forwarded to another upstream.
         return cookie.Secure &&
-            cookie.Domain.TrimStart('.').Equals(origin.Host,
-                StringComparison.OrdinalIgnoreCase);
+            (domain.Equals(origin.Host,StringComparison.OrdinalIgnoreCase) ||
+             origin.Host.EndsWith("."+domain,
+                 StringComparison.OrdinalIgnoreCase));
     }
 }
