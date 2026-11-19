@@ -71,6 +71,7 @@ public sealed class HomeOfficeCalendarService(
            !element.TryGetProperty("isAllDay",out var allDay) ||
            allDay.ValueKind!=JsonValueKind.True ||
            !string.Equals(Field(element,"subject"),Subject(day),StringComparison.Ordinal) ||
+           !string.Equals(Field(element,"bodyPreview"),Subject(day),StringComparison.Ordinal) ||
            !string.Equals(Field(element,"showAs"),"workingElsewhere",StringComparison.OrdinalIgnoreCase) ||
            !element.TryGetProperty("location",out var location) ||
            !string.Equals(Field(location,"displayName"),Location,StringComparison.OrdinalIgnoreCase) ||
