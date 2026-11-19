@@ -9,6 +9,7 @@ import {
   type ZnunyFieldOption,
 } from './znunySyncApi';
 import {secondsToClock} from './taskWorkApi';
+import {DailyBookingProgress} from './DailyBookingProgress';
 
 export function parseTimerDuration(value:string):number|null {
   const match=/^(\d{1,3}):([0-5]\d):([0-5]\d)$/.exec(value.trim());
@@ -275,13 +276,11 @@ export function ZnunyTicketTimerPanel({ticketId,defaultDescription='Zeitbuchung'
         </label>
         <p className="classic-wpf-help">Erfasst: {Math.ceil(unbooked/60)} Min. ·
           <strong> an Znuny: {preview} Min.</strong> (immer auf volle 15 Min. aufgerundet)</p>
-        <p className="classic-wpf-help">
-          Tagesgrenze: maximal 24 Stunden pro Znuny-Agent (alle Plenaro-Tickets
-          zusammen, Kalenderzeit Europe/Berlin).
-          {dailyLimit&&<> Heute {dailyLimit.day}: {dailyLimit.reservedMinutes} von
-            {' '}{dailyLimit.limitMinutes} Minuten gebucht oder noch ungeklärt;
-            {' '}{dailyLimit.remainingMinutes} Minuten verfügbar.</>}
-        </p>
+        {dailyLimit
+          ?<DailyBookingProgress quota={dailyLimit} compact/>
+          :<p className="classic-wpf-help">
+            Maximal 24 Stunden pro Znuny-Agent und Kalendertag.
+          </p>}
         {dailyLimit && preview>dailyLimit.remainingMinutes &&
           <p role="status" className="um-feedback failure">
             Diese Buchung übersteigt das verbleibende Tageskontingent des Agenten.

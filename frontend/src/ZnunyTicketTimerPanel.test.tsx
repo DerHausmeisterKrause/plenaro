@@ -39,8 +39,11 @@ it('shows exact per-agent daily reservation including pending bookings',async()=
     throw Error('Unexpected '+url);
   }));
   render(<ZnunyTicketTimerPanel ticketId="77"/>);
-  expect(await screen.findByText(/Heute 2026-11-19: 1425 von/)).toBeTruthy();
-  expect(screen.getByText(/15 Minuten verfügbar/)).toBeTruthy();
+  expect(await screen.findByText(/Heute · 2026-11-19 · Znuny-Agent/)).toBeTruthy();
+  expect(screen.getByText(/00:15 h noch frei/)).toBeTruthy();
+  expect(screen.getByRole('progressbar',{
+    name:'Heute in Znuny gebuchte oder reservierte Zeit'
+  }).getAttribute('aria-valuenow')).toBe('1425');
   expect(screen.getByText(/Diese Buchung übersteigt das verbleibende Tageskontingent/))
     .toBeTruthy();
 });

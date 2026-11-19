@@ -126,15 +126,20 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         var alias=FavoriteHostNames.PreferredOrigin(slug,
             configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
             configuration["PLENARO_FAVORITES_HOST_TEMPLATE"]);
-        // A wildcard/hostname template already in place gives each user
-        // favorite its own browser origin, without an individual allowlist.
-        // Never mix self-service JS apps on the shared /site-... origin
-        // when a dedicated hostname is available.
+        // The hostname template alone does NOT guarantee that wildcard DNS
+        // and TLS are actually deployed for every new personal favorite.
+        // Previously selecting dedicated hosts automatically broke ALL
+        // personal favorites when the generated site-... hostname was NXDOMAIN.
+        // Preserve the working shared path host by default. Operators must
+        // explicitly opt into personal dedicated origins after provisioning
+        // wildcard DNS, TLS and NGINX for that hostname pattern.
         var personal=slug.StartsWith("site-",StringComparison.Ordinal) &&
             Guid.TryParseExact(slug.AsSpan(5),"N",out _);
         var dedicated=FavoriteHostNames.PreferDedicated(
             configuration["PLENARO_FAVORITES_DEDICATED_SLUGS"],slug) ||
-            (personal && alias is not null);
+            (personal && alias is not null &&
+             configuration.GetValue<bool>(
+                "PLENARO_FAVORITES_PERSONAL_DEDICATED"));
         if(shared is not null&&!dedicated)
             return FavoritePathRouting.AppOrigin(shared,slug);
         // A selected dedicated app must not silently fall back to /<slug>/.

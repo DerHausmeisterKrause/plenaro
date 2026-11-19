@@ -1,3 +1,43 @@
+## 19.11.2026 – Favoriten-NXDOMAIN und täglicher 24h-Fortschrittsbalken (Fix)
+
+**Favoriten-Regression:** PR #45 wählte für jeden persönlichen `site-<UUID>`-
+Favoriten automatisch die aus `PLENARO_FAVORITES_HOST_TEMPLATE` abgeleitete
+dedizierte Origin. Eine Template-Angabe allein stellt aber **weder DNS**,
+**noch gültiges TLS oder NGINX-VHost-Routing** für jeden generierten
+Host bereit. Fehlermeldung aus der Praxis:
+`site-0f496700e7e94e4c979464058a4d5810-plenaro.intern.test.org`
+konnte nicht aufgelöst werden. Die vorher funktionierende
+`PLENARO_FAVORITES_PATH_ORIGIN` blieb ungenutzt.
+
+- [x] Sobald ein Shared-Favoriten-Host konfiguriert ist, bleiben persönliche
+  Favoriten unabhängig von der Hostvorlage **standardmäßig unter
+  `/<slug>/` auf der gemeinsamen Origin**.
+- [x] Expliziter Schalter
+  `PLENARO_FAVORITES_PERSONAL_DEDICATED=true` im Docker-Compose /
+  `.env.example`; erst aktivieren, **nachdem** Wildcard-DNS,
+  Zertifikat und Reverse-Proxy für das generierte Muster funktionieren.
+  Bestehende explizit dedizierte Wiki-/Plugin-Hosts bleiben dediziert.
+- [x] Keine Klartext-DOM-Zugangsdaten auf dem gemeinsamen Favoriten-Host.
+  ATOSS-JavaScript-DOM-Autofill benötigt weiterhin echte dedizierte
+  Origin und die DNS-/TLS-Konfiguration. Serverseitige klassische
+  Login-Methoden und manuelles Login bleiben als Fallback erhalten.
+- [x] Backend-Vertragstests: vorhandene Hostvorlage ohne Opt-in ergibt
+  den bekannten Shared-Pfadhost; mit Opt-in dedizierte Host-URL.
+- [x] Wiederverwendbare barrierearme 24h-Zeitbuchungsleiste im **Zeitreport
+  (immer heutiger Tag, unabhängig von gewähltem Monat)** und kompakt
+  neben der Zeitbuchung. Grün bis 90 %, gelb bis unter 100 %, rot voll.
+  Zeigt gebucht plus noch ungeklärt, sowie verfügbaren Rest. Backend bleibt
+  unverändert verbindliche Quelle (PostgreSQL-Guard).
+- [x] UI-Tests zu Minutenwerten, vollständiger Belegung,
+  Accessibility-Attributen und Warnung bei Überschreitung.
+- [ ] CI und PR-Merge, danach Zielhost-Docker-Neustart und echte
+  Favoriten-/ATOSS-Abnahme.
+- [ ] Für funktionsfähiges ATOSS-DOM-Autofill wildcardfähige DNS-/TLS-
+  Infrastruktur einrichten und dann ausschließlich mit Opt-in
+  dedizierte Hosts auswählen.
+
+---
+
 ## 19.11.2026 – KRITISCH: maximale 24h Znuny-Zeitbuchungen pro Agent/Kalendertag (PR #47 gemergt)
 
 **Sicherheits-/Geschäftsregel:** Plenaro darf pro admin-freigegebenem

@@ -1,3 +1,48 @@
+## 19.11.2026 – Sofort-Fix für nicht auflösbare persönliche Favoriten-Hosts
+
+Der Fehler `DNS_PROBE_FINISHED_NXDOMAIN` bei
+`site-<UUID>-plenaro.intern.test.org` wurde dadurch verursacht, dass
+ein früherer Stand persönliche Favoriten **ungefragt auf aus
+`PLENARO_FAVORITES_HOST_TEMPLATE` erzeugte Subdomains** umleitete.
+Ein Template kann einen Hostnamen konstruieren, erstellt aber weder
+DNS-Einträge noch TLS-Zertifikate.
+
+**Jetzt standardmäßig:** Wenn `PLENARO_FAVORITES_PATH_ORIGIN`
+(z. B. `https://apps-plenaro.intern.test.org`) gesetzt ist,
+bleiben persönliche Favoriten selbst bei konfigurierter Hostvorlage unter
+`https://apps-plenaro.intern.test.org/site-<UUID>/`. Die
+Backend-Session-/Cookie-Prüfungen und Sicherheitsregeln bleiben erhalten.
+
+**Nur für tatsächlich eingerichtete dedizierte Personal-Hosts:**
+```dotenv
+PLENARO_FAVORITES_PATH_ORIGIN=https://apps-plenaro.intern.test.org
+PLENARO_FAVORITES_HOST_TEMPLATE={slug}-plenaro.intern.test.org
+PLENARO_FAVORITES_PERSONAL_DEDICATED=true
+```
+
+Vor Aktivierung prüfen: Der Browser muss **jeden** neu erstellten
+`site-<UUID>-plenaro.intern.test.org`-Host via DNS auflösen können,
+das tatsächlich verwendete Zertifikat muss für diese Namen gültig sein,
+und NGINX muss die Hostheader an Plenaros Favoriten-Proxy weitergeben.
+Ein DNS-Eintrag `*.intern.test.org` kann einstellige Subdomains
+wie `site-<UUID>-plenaro.intern.test.org` abdecken;
+`*.plenaro.intern.test.org` dagegen **nicht**.
+Alternativ für ein engeres Wildcard-DNS
+`*.apps-plenaro.intern.test.org` samt passendem Zertifikat und
+`PLENARO_FAVORITES_BASE_DOMAIN=apps-plenaro.intern.test.org`
+verwenden – dann die Hostvorlage weglassen.
+
+Ein bloßer NGINX-`server_name` oder ein wildcardfähiges Zertifikat
+macht DNS-Einträge noch nicht verfügbar. Ohne korrekte DNS-
+Infrastruktur das neue Personal-Dedicated-Flag **nicht** setzen.
+Die Shared-Origin ist funktional, aber nicht für
+JavaScript-Passwort-DOM-Autofill geeignet: das bleibt aus Sicherheits-
+gründen deaktiviert. Klassische serverseitige HTTPS-Logins können
+weiterhin funktionieren. Explizit ausgewählte dedizierte Wiki-/Plugin-
+Hosts bleiben von diesem Personal-Fallback unberührt.
+
+---
+
 ## 17.11.2026 – WPF-DOM-Autofill für ATOSS und JavaScript-Favoriten (PR #45)
 
 Die klassische Desktop-Implementierung unter

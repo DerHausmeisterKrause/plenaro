@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Download, RefreshCw } from 'lucide-react';
 import { downloadMonthCsv, readMonthReport, type MonthReport } from './reportsApi';
+import {getZnunyDailyBookingLimit,type ZnunyDailyBookingLimit} from './znunySyncApi';
+import {DailyBookingProgress} from './DailyBookingProgress';
 
 function currentMonth(): string {
   const now = new Date();
@@ -17,6 +19,7 @@ function duration(seconds: number): string {
 export function ReportsPage() {
   const [month, setMonth] = useState(currentMonth);
   const [report, setReport] = useState<MonthReport | null>(null);
+  const [dailyQuota,setDailyQuota]=useState<ZnunyDailyBookingLimit|null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
@@ -33,6 +36,16 @@ export function ReportsPage() {
     });
     return () => controller.abort();
   }, [month]);
+
+  // Today's per-agent quota is independent of the selected report month.
+  // Failure (e.g. user has no Znuny binding) must not break monthly reports.
+  useEffect(()=>{
+    let active=true;
+    void getZnunyDailyBookingLimit().then(quota=>{
+      if(active)setDailyQuota(quota);
+    }).catch(()=>{if(active)setDailyQuota(null);});
+    return()=>{active=false;};
+  },[]);
 
   async function exportCsv() {
     setExporting(true); setError('');
@@ -61,6 +74,11 @@ export function ReportsPage() {
       </button>
     </section>
 
+    {dailyQuota&&<section className="content-card znuny-report-daily"
+      aria-label="Heutiges Zeitbuchungskontingent">
+      <h2>Heute gebucht – Tageskontingent</h2>
+      <DailyBookingProgress quota={dailyQuota}/>
+    </section>}
     {error && <p className="um-feedback failure" role="alert">{error}</p>}
     {loading && <div className="content-card reports-empty" role="status"><RefreshCw size={18}/> Monatsbericht wird geladen …</div>}
     {!loading && report && <>
