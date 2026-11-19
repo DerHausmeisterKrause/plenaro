@@ -610,3 +610,25 @@ jobs:
         run: |
           docker run --rm --shm-size=128m --entrypoint node \
             plenaro-favorites-login-ci /app/worker.test.mjs
+      - name: Worker startup smoke (nonroot user and internal health)
+        run: |
+          set -euo pipefail
+          docker run -d --name plenaro-favorites-login-health \
+            --shm-size=128m plenaro-favorites-login-ci
+          trap 'docker rm -f plenaro-favorites-login-health >/dev/null 2>&1 || true' EXIT
+          ready=0
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if docker exec plenaro-favorites-login-health node -e \
+              "require('node:http').get('http://127.0.0.1:3030/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))" \
+              >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            docker logs plenaro-favorites-login-health
+            exit 1
+          fi
+          docker top plenaro-favorites-login-health -eo user,comm |
+            grep -Eq 'pwuser[[:space:]]+node'
