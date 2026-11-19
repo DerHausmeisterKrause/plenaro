@@ -147,11 +147,28 @@ public static class DayMarkerEndpoints
                 oldMarker.Parameters.Add("day",NpgsqlDbType.Date).Value=parsed;
                 if (await oldMarker.ExecuteScalarAsync(ct) is true)
                 {
+                    // Older installations contain purely local HO markers:
+                    // these must remain removable even with no M365 consent.
+                    // When the new journal proves we created an event, a
+                    // failed calendar DELETE must block a misleading removal.
+                    await using var linked=new NpgsqlCommand("""
+                        SELECT EXISTS(
+                            SELECT 1 FROM homeoffice_calendar_events
+                            WHERE user_id=@owner AND day=@day
+                              AND status IN ('created','processing','unknown'))
+                        """,db);
+                    linked.Parameters.AddWithValue("owner",owner.Value);
+                    linked.Parameters.Add("day",NpgsqlDbType.Date).Value=parsed;
+                    var calendarManaged=await linked.ExecuteScalarAsync(ct) is true;
                     try{
                         var token=await calendar.PrepareTokenAsync(owner.Value,ct);
                         await calendar.RemoveAsync(db,owner.Value,parsed,token,ct);
                     }catch(HomeOfficeCalendarService.CalendarFailure failure){
-                        return Results.Conflict(new{
+                        if(!calendarManaged && failure.SafeToRetry){
+                            // No known Graph side effect, and the user has
+                            // no usable calendar connection. Do not lock a
+                            // locally marked HO day forever.
+                        }else return Results.Conflict(new{
                             error=failure.Message,
                             code=failure.SafeToRetry?"calendar-consent":"calendar-unknown"});
                     }
