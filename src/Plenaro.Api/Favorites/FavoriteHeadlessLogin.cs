@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 
@@ -55,9 +56,16 @@ internal static class FavoriteHeadlessLogin
         try{
             reply=await WorkerClient.SendAsync(request,
                 HttpCompletionOption.ResponseHeadersRead,ct);
-        }catch(HttpRequestException) {
-            // Browser-login profile not running: preserve standard HTML login.
+        }catch(HttpRequestException error)
+            when(error.InnerException is SocketException socket &&
+                socket.SocketErrorCode is SocketError.HostNotFound or
+                    SocketError.TryAgain or SocketError.ConnectionRefused){
+            // Worker is definitely unavailable: old HTML login can run.
             return false;
+        }catch(HttpRequestException){
+            // A worker may already have submitted a login before the
+            // transport broke. Do not risk a second password submission.
+            return true;
         }
         using(reply){
             // Worker replied: never do a second login attempt in this session.
@@ -87,6 +95,7 @@ internal static class FavoriteHeadlessLogin
                     }catch(CookieException){/* Invalid cookie cannot escape worker. */}
                 }
             }catch(JsonException){/* Untrusted worker response, no fallback. */}
+            catch(IOException){/* Uncertain partial worker response: no retry. */}
             return true;
         }
     }
