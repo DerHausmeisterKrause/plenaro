@@ -133,7 +133,8 @@ var isolatedConfig=new ConfigurationBuilder().AddInMemoryCollection(
         ["PLENARO_PUBLIC_ORIGIN"]="https://portal.example.org",
         ["PLENARO_ZNUNY_PROXY_ORIGIN"]="https://tickets.example.org",
         ["PLENARO_FAVORITES_PATH_ORIGIN"]="https://apps-plenaro.example.org",
-        ["PLENARO_FAVORITES_HOST_TEMPLATE"]="{slug}-plenaro.example.org"
+        ["PLENARO_FAVORITES_HOST_TEMPLATE"]="{slug}-plenaro.example.org",
+        ["PLENARO_FAVORITES_PERSONAL_DEDICATED"]="true"
     }).Build();
 var originResolver=typeof(FavoriteProxy).GetMethod(
     "ProxyOrigin",BindingFlags.Instance|BindingFlags.NonPublic)!;
@@ -145,7 +146,25 @@ var sharedWiki=(Uri?)originResolver.Invoke(isolatedProxy,
 Assert(isolatedPersonal?.Host==uniqueHost &&
     isolatedPersonal.AbsolutePath=="/" &&
     sharedWiki?.AbsoluteUri=="https://apps-plenaro.example.org/wiki/",
-    "configured wildcard isolates personal favorites by default, retains wiki shared routing");
+    "dedicated personal favorite origin requires explicit DNS-ready opt-in");
+// Regression: a hostname TEMPLATE does not provision wildcard DNS/TLS.
+// Without explicit opt-in, always return the working shared path origin.
+var templateWithoutDns=new ConfigurationBuilder().AddInMemoryCollection(
+    new Dictionary<string,string?>{
+        ["Security:RequireHttps"]="true",
+        ["PLENARO_PUBLIC_ORIGIN"]="https://portal.example.org",
+        ["PLENARO_ZNUNY_PROXY_ORIGIN"]="https://tickets.example.org",
+        ["PLENARO_FAVORITES_PATH_ORIGIN"]="https://apps-plenaro.example.org",
+        ["PLENARO_FAVORITES_HOST_TEMPLATE"]="{slug}-plenaro.example.org",
+        ["PLENARO_FAVORITES_BASE_DOMAIN"]="apps.example.org",
+        ["PLENARO_FAVORITES_PERSONAL_DEDICATED"]="false"
+    }).Build();
+var restoredPersonal=(Uri?)originResolver.Invoke(
+    new FavoriteProxy(templateWithoutDns),new object[]{personalSlug});
+Assert(restoredPersonal?.AbsoluteUri==
+       "https://apps-plenaro.example.org/"+personalSlug+"/",
+    "personal favorites must NOT redirect to NXDOMAIN generated aliases without DNS-ready opt-in");
+
 var sharedOnlyConfig=new ConfigurationBuilder().AddInMemoryCollection(
     new Dictionary<string,string?>{
         ["Security:RequireHttps"]="true",
