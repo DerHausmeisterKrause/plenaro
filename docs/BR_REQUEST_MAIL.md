@@ -1,3 +1,31 @@
+## 23.11.2026 – Ganztagstermine für bereits markierte HO-Tage nachtragen
+
+Die Web-Antragskette ist bereits wie in der alten WPF-Anwendung:
+Nach der Bestätigung **HO** wird mit delegiertem `Calendars.ReadWrite`
+ein Outlook-Ganztagstermin von 00:00 bis 00:00 des Folgetags
+angelegt oder wiederverwendet, `showAs=workingElsewhere`
+(„An anderem Ort tätig“), ohne Erinnerung oder Teilnehmer. **Danach**
+wird die Homeoffice-E-Mail aus dem eigenen Postfach höchstens einmal
+gesendet. BR-only bleibt ohne Outlook-Homeoffice-Termin.
+
+Für ältere oder bereits als HO markierte Tage, bei denen der Termin fehlt,
+gibt es nun ausdrücklich **„Outlook-Homeoffice-Termin prüfen /
+nachtragen“** im Reiter Heute und im Tagesmarker-Editor. Die
+neue Route `POST /api/v1/br-requests/{day}/calendar` prüft, ob der
+Tag tatsächlich als HO für den angemeldeten Benutzer gespeichert ist,
+und führt ausschließlich die bereits geschützte
+`HomeOfficeCalendarService.EnsureCreatedAsync`-Operation aus.
+Sie verschickt **keine E-Mail**, ändert nicht den Marker und
+verwendet den bestehenden Idempotenzschutz inklusive Prüfung auf
+identische WPF-/Plenaro-Termine.
+
+Outlook-Schreibrecht fehlt? Unter Einstellungen → Aufgaben & Kalender
+den Link **„Microsoft-365-Berechtigungen aktualisieren“** nutzen,
+anschließend erneut versuchen. Bei unklarem Graph-Status wird kein
+weiterer Create-POST erzwungen, um Doppeltermine zu vermeiden.
+
+---
+
 ## 19.11.2026 – HO-Kalendertermin zusätzlich zum bestehenden Mailversand
 
 Auftrag: Beim **bestätigten Homeoffice-Antrag** nicht nur E-Mail

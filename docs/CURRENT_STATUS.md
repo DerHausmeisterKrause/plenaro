@@ -1,3 +1,42 @@
+## 23.11.2026 – HO-Antrag mit Outlook-Ganztagstermin: vorhandene Marker nachtragen
+
+**Desktop-Referenz:** `project_tool/Services/HomeOfficeService.cs` und
+`OutlookInteropService.UpsertHomeOfficeAppointment`. Die Web-Version
+führt bereits bei **neu bestätigtem HO** zuerst eine Microsoft-365-
+Vorabprüfung, dann Tagesmarker, einen ganztägigen Outlook-Termin mit
+`showAs=workingElsewhere` („An anderem Ort tätig“) und danach genau
+einen Mailversand aus. Auch der „Heute“-Schnellbutton verwendet den
+Antragsablauf. Die Kalendereinrichtung wurde zuvor in
+`HomeOfficeCalendarService` und Migration 0031 umgesetzt.
+
+**Verbleibende Lücke:** Bereits als HO gespeicherte Tage (z. B. vor
+Migration 0031 oder nach fehlgeschlagenem Kalender-Consent) zeigen die
+HO-Markierung, lösen bei erneutem Speichern aber absichtlich keinen
+zweiten Antrag aus. Für solche Fälle gab es keine kalenderexklusive
+Nachtragungsfunktion ohne Mailversand.
+
+- [x] `POST /api/v1/br-requests/{day}/calendar` verlangt angemeldeten,
+  aktiven Benutzer, CSRF und vorhandenen **eigenen** HO-Tagesmarker.
+- [x] Vorhandenen `HomeOfficeCalendarService.EnsureCreatedAsync` verwenden:
+  dediziertes delegiertes `Calendars.ReadWrite`, Abgleich mit exakter
+  WPF-Signatur und `(user_id,day)`-Journal samt Transaktions-ID gegen
+  Duplikate und wiederholte unklare Graph-POSTs.
+- [x] **Kein** Mailversand beim Nachtragen, kein Ändern des Tagesmarkers.
+  BR-only-Tage können keinen HO-Termin über diese Route anlegen.
+- [x] UI-Aktion „Outlook-Homeoffice-Termin prüfen / nachtragen“ für
+  bestehende HO-Marker unter „Arbeitstag heute“ und im Tagesmarker-Editor.
+- [x] Frontend-Regressionstests für vorhandenen HO-Marker mit angenommener
+  Mail und BR-only ohne Kalenderaktion ergänzt.
+- [ ] CI/Merge sowie Live-Test mit persönlichem Microsoft-365-Konto.
+- [ ] Microsoft-365-Einwilligung: `Calendars.ReadWrite` muss
+  delegiert freigegeben sein. Bei fehlendem Recht
+  Einstellungen → Aufgaben & Kalender →
+  „Microsoft-365-Berechtigungen aktualisieren“.
+
+Keine zusätzliche Infrastruktur, Container oder DNS-Einträge.
+
+---
+
 ## 19.11.2026 – Bestätigter HO-Antrag erzeugt WPF-kompatiblen Outlook-Ganztagstermin (PR #52 gemergt)
 
 **Desktop-Vorlage geprüft:**

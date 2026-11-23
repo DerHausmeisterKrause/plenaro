@@ -12,7 +12,8 @@ import {
   type CachedTicket, type TicketAccess, type TicketAgendaSegment, type TicketListFilters,
 } from './znunySyncApi';
 import { agendaTimeLabel, buildTodayAgenda, localDayBounds } from './todayAgenda';
-import {GermanDay,preflightHomeofficeMail,sendBrRequest} from './brRequestsApi';
+import {GermanDay,preflightHomeofficeMail,sendBrRequest,
+  reconcileHomeOfficeCalendar} from './brRequestsApi';
 
 type Tab = 'today' | 'active' | 'new' | 'completed' | 'local';
 const labels: {key:Tab;label:string}[] = [
@@ -164,6 +165,18 @@ export function ClassicTodayPage() {
     }catch(e){setError(e instanceof Error?e.message:'Kandidatenfilter konnte nicht gespeichert werden.');}
     finally{setToggleBusy(false);}
   }
+  async function reconcileTodayHomeOffice(){
+    if(busy||!marker?.isHo)return;
+    setBusy(true);setError('');setNotice('');
+    try{
+      const result=await reconcileHomeOfficeCalendar(day);
+      setNotice(result.message);
+      setRefresh(x=>x+1);
+    }catch(e){
+      setError(e instanceof Error?e.message:
+        'Outlook-Homeoffice-Termin konnte nicht abgeglichen werden.');
+    }finally{setBusy(false);}
+  }
   async function setMarkerValue(type:DayType,isBr:boolean,isHo:boolean,
     confirmed=false) {
     if(busy)return;
@@ -230,6 +243,11 @@ export function ClassicTodayPage() {
               onClick={()=>void setMarkerValue(marker?.dayType??'Normal',
                 !marker?.isBr,marker?.isHo??false)}>BR</button>
           </div>
+          {marker?.isHo&&<button type="button"
+            className="classic-text-action" disabled={busy}
+            onClick={()=>void reconcileTodayHomeOffice()}>
+            <CalendarDays size={15}/>Outlook-Homeoffice-Termin prüfen / nachtragen
+          </button>}
         </div>
         {confirmHomeOffice&&<div className="homeoffice-dialog-backdrop">
           <section className="homeoffice-dialog content-card" role="dialog"

@@ -72,6 +72,46 @@ public static class BrRequestEndpoints
                 await cmd.ExecuteScalarAsync(ct) as string??"none"));
         });
 
+        // A previously selected HO day may have been saved by an older
+        // Plenaro version before Outlook calendar creation existed. Let the
+        // user explicitly reconcile that day without another e-mail or
+        // changing their existing marker. The calendar service searches the
+        // real Outlook calendar and applies its per-user/day idempotency key.
+        group.MapPost("/{day}/calendar",async(string day,HttpContext http,
+            IAntiforgery anti,UserManager<ApplicationUser> users,
+            IConfiguration config,HomeOfficeCalendarService calendar,
+            CancellationToken ct)=>{
+            if(!await ValidCsrf(http,anti))return CsrfError();
+            if(!TryDay(day,out var parsed))
+                return Results.BadRequest(new{error="Ungültiges Datum."});
+            var user=await Owner(http,users);
+            if(user is null)return Results.Unauthorized();
+            await using var db=await Open(config,ct);
+            await using(var marker=new NpgsqlCommand("""
+                SELECT EXISTS(SELECT 1 FROM day_markers
+                  WHERE user_id=@uid AND day=@day AND is_ho)
+                """,db)){
+                marker.Parameters.AddWithValue("uid",user.Id);
+                marker.Parameters.Add("day",NpgsqlDbType.Date).Value=parsed;
+                if(await marker.ExecuteScalarAsync(ct) is not true)
+                    return Results.Conflict(new{
+                        error="Für diesen Tag ist kein Homeoffice-Marker gespeichert.",
+                        code="ho-marker-required"});
+            }
+            try{
+                var token=await calendar.PrepareTokenAsync(user.Id,ct);
+                await calendar.EnsureCreatedAsync(db,user.Id,parsed,token,ct);
+                return Results.Ok(new{
+                    status="created",
+                    message="Ganztägigen Outlook-Homeoffice-Termin mit dem Status „An anderem Ort tätig“ geprüft und angelegt oder wiederverwendet. Es wurde keine E-Mail erneut versendet."
+                });
+            }catch(HomeOfficeCalendarService.CalendarFailure failure){
+                return Results.Conflict(new{
+                    error=failure.Message,
+                    code=failure.SafeToRetry?"calendar-consent":"calendar-unknown"});
+            }
+        }).RequireRateLimiting("znuny-native-start");
+
         // No mail is sent and no request is reserved here. Perform this
         // check AFTER user confirms but BEFORE saving the day marker, so
         // a missing mailbox, recipient or delegated Mail.Send token cannot
