@@ -5,7 +5,8 @@ import {
   type BudgetSummary, type DayMarker, type DayType,
 } from './dayMarkersApi';
 import { localDate } from './tasksApi';
-import {GermanDay,readBrMailStatus,sendBrRequest,preflightHomeofficeMail,type BrMailStatus} from './brRequestsApi';
+import {GermanDay,readBrMailStatus,sendBrRequest,preflightHomeofficeMail,
+  reconcileHomeOfficeCalendar,type BrMailStatus} from './brRequestsApi';
 
 function quotaLabel(limit: number | null, used: number, remaining: number | null) {
   return limit === null
@@ -159,6 +160,18 @@ export function DayMarkersPanel({initialDay,onSaved}:{
     return()=>{active=false;};
   },[selected,refresh]);
 
+  async function reconcileSelectedHomeOffice(){
+    if(busy||!markers.some(m=>m.day===selected&&m.isHo))return;
+    setBusy(true);setError('');setNotice('');
+    try{
+      const result=await reconcileHomeOfficeCalendar(selected);
+      setNotice(result.message);
+    }catch(e){
+      setError(e instanceof Error?e.message:
+        'Outlook-Homeoffice-Termin konnte nicht abgeglichen werden.');
+    }finally{setBusy(false);}
+  }
+
   async function sendMailForBr(){
     const result=await sendBrRequest(selected);
     setBrMailStatus({status:'accepted'});
@@ -297,6 +310,11 @@ export function DayMarkersPanel({initialDay,onSaved}:{
           <button type="button" className="button button-secondary" disabled={busy}
             onClick={()=>void requestExistingBr(false)}>
             <CalendarDays size={16}/>Homeoffice-Antrag per E-Mail senden
+          </button>}
+        {markers.some(m=>m.day===selected&&m.isHo)&&
+          <button type="button" className="button button-secondary"
+            disabled={busy} onClick={()=>void reconcileSelectedHomeOffice()}>
+            <CalendarDays size={16}/>Outlook-Homeoffice-Termin prüfen / nachtragen
           </button>}
         {brMailStatus?.status==='accepted'&&
           <p role="status" className="um-hint">Homeoffice-Mail wurde für diesen Tag bereits von Microsoft Graph angenommen.</p>}
