@@ -7,6 +7,7 @@ const mocks=vi.hoisted(()=>({
   getMonthMarkers:vi.fn(),getMarkerSummary:vi.fn(),saveDayMarker:vi.fn(),
   getMarkerBudget:vi.fn(),saveMarkerBudget:vi.fn(),
   readBrMailStatus:vi.fn(),sendBrRequest:vi.fn(),preflightHomeofficeMail:vi.fn(),
+  reconcileHomeOfficeCalendar:vi.fn(),
   readBrRecipients:vi.fn(),saveBrRecipients:vi.fn(),
   graphStatus:vi.fn()
 }));
@@ -25,6 +26,7 @@ vi.mock('./brRequestsApi',()=>({
   },
   readBrMailStatus:mocks.readBrMailStatus,sendBrRequest:mocks.sendBrRequest,
   preflightHomeofficeMail:mocks.preflightHomeofficeMail,
+  reconcileHomeOfficeCalendar:mocks.reconcileHomeOfficeCalendar,
   readBrRecipients:mocks.readBrRecipients,saveBrRecipients:mocks.saveBrRecipients
 }));
 
@@ -42,6 +44,9 @@ beforeEach(()=>{
   mocks.preflightHomeofficeMail.mockResolvedValue({ready:true});
   mocks.sendBrRequest.mockResolvedValue({status:'accepted',
     message:'Microsoft Graph hat den Versand angenommen.'});
+  mocks.reconcileHomeOfficeCalendar.mockResolvedValue({
+    status:'created',message:'Outlook-Homeoffice-Termin angelegt.'
+  });
   mocks.readBrRecipients.mockResolvedValue({
     recipient1:'team@example.org',recipient2:'leitung@example.org'
   });
@@ -130,6 +135,36 @@ describe('BR marker confirmation and mail delivery',()=>{
     await waitFor(()=>expect(mocks.saveDayMarker).toHaveBeenCalledTimes(1));
     expect(mocks.sendBrRequest).not.toHaveBeenCalled();
     expect(mocks.preflightHomeofficeMail).not.toHaveBeenCalled();
+  });
+
+  it('reconciles an existing HO calendar entry without another email or marker change',async()=>{
+    mocks.getMonthMarkers.mockResolvedValue([{
+      day:'2026-11-16',dayType:'Normal',isBr:false,isHo:true
+    }]);
+    mocks.readBrMailStatus.mockResolvedValue({status:'accepted'});
+    render(<DayMarkersPanel initialDay="2026-11-16"/>);
+    const button=await screen.findByRole('button',{
+      name:/Outlook-Homeoffice-Termin prüfen \/ nachtragen/
+    });
+    fireEvent.click(button);
+    await waitFor(()=>expect(mocks.reconcileHomeOfficeCalendar)
+      .toHaveBeenCalledExactlyOnceWith('2026-11-16'));
+    expect(await screen.findByText('Outlook-Homeoffice-Termin angelegt.'))
+      .toBeTruthy();
+    expect(mocks.sendBrRequest).not.toHaveBeenCalled();
+    expect(mocks.saveDayMarker).not.toHaveBeenCalled();
+    expect(mocks.preflightHomeofficeMail).not.toHaveBeenCalled();
+  });
+
+  it('does not show the reconciliation action on a BR-only day',async()=>{
+    mocks.getMonthMarkers.mockResolvedValue([{
+      day:'2026-11-16',dayType:'Normal',isBr:true,isHo:false
+    }]);
+    render(<DayMarkersPanel initialDay="2026-11-16"/>);
+    await screen.findByRole('button',{name:'Marker speichern'});
+    expect(screen.queryByRole('button',{
+      name:/Outlook-Homeoffice-Termin prüfen \/ nachtragen/
+    })).toBeNull();
   });
 
   it('preflights recipients and Mail.Send before any HO marker is saved',async()=>{
