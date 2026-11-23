@@ -5,7 +5,8 @@
 - [x] Neue Kennzahl „Homeoffice-Tage“ in der Monatsübersicht inklusive Singular/Plural.
 - [x] CSV-Export enthält Monat und die Anzahl der Homeoffice-Tage.
 - [x] Frontend-Test für die neue Kennzahl sowie CI-Smoke-Assertions für zwei HO-Tage, Monatsabgrenzung, Benutzertrennung und CSV ergänzt.
-- [ ] CI und Deployment auf dem Zielhost prüfen.
+- [x] [PR #54](https://github.com/DerHausmeisterKrause/plenaro/pull/54) nach `main` gemergt; [CI #45150899295](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45150899295) erfolgreich (Frontend, Backend, Docker-Smoke und Browserprofil).
+- [ ] Produktiv-Deployment auf dem Zielhost prüfen.
 - [ ] Browser-Abnahme mit tatsächlichen Homeoffice-Markern; Outlook-only-HO ohne Plenaro-Marker wird derzeit nicht automatisch in die Statistik übernommen (die Desktopversion berücksichtigt zusätzlich synchronisierte Outlook-Marker).
 
 Keine DB-Migration, kein zusätzlicher Container und keine Outlook-Abfrage für den Report.
