@@ -27,7 +27,8 @@ Nachtragungsfunktion ohne Mailversand.
   bestehende HO-Marker unter „Arbeitstag heute“ und im Tagesmarker-Editor.
 - [x] Frontend-Regressionstests für vorhandenen HO-Marker mit angenommener
   Mail und BR-only ohne Kalenderaktion ergänzt.
-- [ ] CI/Merge sowie Live-Test mit persönlichem Microsoft-365-Konto.
+- [x] [PR #53](https://github.com/DerHausmeisterKrause/plenaro/pull/53) nach `main` gemergt; [CI #45149184028](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45149184028) vollständig grün (Frontend, Backend, Verträge, Docker-Smoke und Browserprofil).
+- [ ] Live-Test mit persönlichem Microsoft-365-Konto.
 - [ ] Microsoft-365-Einwilligung: `Calendars.ReadWrite` muss
   delegiert freigegeben sein. Bei fehlendem Recht
   Einstellungen → Aufgaben & Kalender →
