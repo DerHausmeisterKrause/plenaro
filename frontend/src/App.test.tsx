@@ -255,7 +255,7 @@ beforeEach(() => {
       ok: true, status: 200, json: async () => ({
         month: '2026-10', timeZone: 'Europe/Berlin', generatedAt: '2026-10-30T21:00:00Z',
         timerSeconds: 3600, adjustmentMinutes: 15, totalSeconds: 4500,
-        sessionCount: 1, taskCount: 1,
+        sessionCount: 1, taskCount: 1, homeOfficeDays: 3,
         accountedSeconds:2700,remoteSeconds:1800,localFallbackSeconds:900,
         remoteEntries:2,localFallbackEntries:1,accountingStatus:'ok',
         accountingMessage:'Alle OTRS-Zeitbuchungen geladen.',
@@ -1053,6 +1053,8 @@ describe('Plenaro web shell', () => {
     expect(await screen.findByText('Zeittest')).toBeTruthy();
     expect(await screen.findByText('Direkt in OTRS gebucht')).toBeTruthy();
     expect(screen.getByText('Gebuchte Ticketzeit')).toBeTruthy();
+    expect(screen.getByText('Homeoffice-Tage')).toBeTruthy();
+    expect(screen.getByText('3 Tage')).toBeTruthy();
     expect(screen.getByRole('button', { name: /CSV exportieren/ })).toBeTruthy();
     expect(screen.getByLabelText('Monat auswählen')).toBeTruthy();
   });
