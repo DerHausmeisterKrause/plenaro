@@ -10,7 +10,7 @@
 - [x] Auslösung in „Heute“ und Tagesmarker-Editor; BR-only kein Nachtrag.
 - [x] Vorhandenen Journal-/Doppelerstellungsschutz wiederverwendet.
 - [x] Frontend-Regression für Nachtragung ohne E-Mail ergänzt.
-- [ ] CI und PR-Merge.
+- [x] [PR #53](https://github.com/DerHausmeisterKrause/plenaro/pull/53) gemergt und [CI #45149184028](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45149184028) erfolgreich.
 - [ ] Live-M365-Test, ggf. delegiertes `Calendars.ReadWrite` erneut freigeben.
 - [ ] Keine neue Infrastruktur, kein zusätzlicher Container.
 
