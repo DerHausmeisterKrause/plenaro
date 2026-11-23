@@ -37,6 +37,8 @@ export const preflightHomeofficeMail=(homeOffice=false)=>
   request<{ready:boolean}>('/api/v1/br-requests/preflight','POST',{homeOffice});
 export const sendBrRequest=(day:string)=>
   request<BrSendResult>('/api/v1/br-requests/'+encodeURIComponent(day)+'/send','POST',{});
+export const reconcileHomeOfficeCalendar=(day:string)=>
+  request<BrSendResult>('/api/v1/br-requests/'+encodeURIComponent(day)+'/calendar','POST',{});
 export function GermanDay(day:string):string{
   const parts=day.split('-');
   if(parts.length!==3)return day;
