@@ -27,6 +27,7 @@ export type MonthReport = {
   totalSeconds: number;
   sessionCount: number;
   taskCount: number;
+  homeOfficeDays: number;
   tasks: ReportRow[];
   accountedSeconds: number;
   remoteSeconds: number;
