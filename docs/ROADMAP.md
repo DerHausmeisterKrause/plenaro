@@ -1,3 +1,21 @@
+## 23.11.2026 – Phase 5/7: HO-Outlook-Termin aus Desktop auch für vorhandene HO-Marker
+
+- [x] Altversion `HomeOfficeService.SubmitAsync` und
+  `OutlookInteropService.UpsertHomeOfficeAppointment` geprüft.
+- [x] Bestehende Web-Implementierung bestätigt: Neuer bestätigter HO-
+  Antrag erstellt bereits Ganztagstermin (Status `workingElsewhere`,
+  Ort „An anderem Ort tätig“) und sendet danach die Mail.
+- [x] Lücke für **bereits** gespeicherte HO-Marker geschlossen:
+  kalenderexklusive, CSRF-geschützte Nachtragungsroute, ohne nochmalige Mail.
+- [x] Auslösung in „Heute“ und Tagesmarker-Editor; BR-only kein Nachtrag.
+- [x] Vorhandenen Journal-/Doppelerstellungsschutz wiederverwendet.
+- [x] Frontend-Regression für Nachtragung ohne E-Mail ergänzt.
+- [ ] CI und PR-Merge.
+- [ ] Live-M365-Test, ggf. delegiertes `Calendars.ReadWrite` erneut freigeben.
+- [ ] Keine neue Infrastruktur, kein zusätzlicher Container.
+
+---
+
 ## 19.11.2026 – Phase 5/7: Homeoffice-Antrag legt Outlook-Termin „An anderem Ort tätig“ an (PR #52 gemergt)
 
 - [x] WPF-Vorlage `HomeOfficeService` und `OutlookInteropService`
