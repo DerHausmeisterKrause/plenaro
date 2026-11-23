@@ -89,6 +89,7 @@ export function ReportsPage() {
         }</strong></div>
         <div className="content-card"><span>Nur lokal bestätigte Buchungen</span><strong>{duration(report.localFallbackSeconds)}</strong></div>
         <div className="content-card"><span>Lokale Aufgabenzeit (separat)</span><strong>{duration(report.totalSeconds)}</strong></div>
+        <div className="content-card"><span>Homeoffice-Tage</span><strong>{report.homeOfficeDays} {report.homeOfficeDays===1?'Tag':'Tage'}</strong></div>
       </div>
       <section className="content-card reports-table-card" aria-label="Gebuchte Ticketzeiten">
         <h2>{report.accountingStatus==='disabled'
@@ -151,7 +152,7 @@ export function ReportsPage() {
             </table>
           </div>}
       </section>
-      <p className="um-hint reports-note">Die lokalen Aufgaben-Timer sind von gebuchten
+      <p className="um-hint reports-note">Homeoffice-Tage zählen einmal pro Kalendertag, wenn für diesen Benutzer im ausgewählten Monat die HO-Markierung gesetzt ist. Reine Outlook-Termine ohne gespeicherte HO-Markierung werden nicht automatisch mitgezählt. Die lokalen Aufgaben-Timer sind von gebuchten
         OTRS-Ticketzeiten getrennt: Sie dürfen nicht ungeprüft addiert werden,
         weil dieselbe Arbeit in beiden Quellen erfasst sein kann.
         Bei aktiviertem OTRS-Abgleich entspricht die gebuchte Gesamtzeit

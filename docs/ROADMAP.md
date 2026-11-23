@@ -1,3 +1,17 @@
+## 23.11.2026 – Phase 5/7: Homeoffice-Tage im Monatsreport
+
+- [x] Desktop-Referenz geprüft: `ReportsViewModel` verwendet `WorkDayService.GetMonthlyMarkerStatistics()` und zählt Tage mit effektivem HO-Marker genau einmal.
+- [x] Web-Report `GET /api/v1/reports/month` zählt pro angemeldetem Benutzer und ausgewähltem Kalendermonat die gespeicherten `day_markers.is_ho=true`-Tage; Monatsgrenzen sind datumsbasiert und unabhängig von der Uhrzeit.
+- [x] Neue Kennzahl „Homeoffice-Tage“ in der Monatsübersicht inklusive Singular/Plural.
+- [x] CSV-Export enthält Monat und die Anzahl der Homeoffice-Tage.
+- [x] Frontend-Test für die neue Kennzahl sowie CI-Smoke-Assertions für zwei HO-Tage, Monatsabgrenzung, Benutzertrennung und CSV ergänzt.
+- [ ] CI und Deployment auf dem Zielhost prüfen.
+- [ ] Browser-Abnahme mit tatsächlichen Homeoffice-Markern; Outlook-only-HO ohne Plenaro-Marker wird derzeit nicht automatisch in die Statistik übernommen (die Desktopversion berücksichtigt zusätzlich synchronisierte Outlook-Marker).
+
+Keine DB-Migration, kein zusätzlicher Container und keine Outlook-Abfrage für den Report.
+
+---
+
 ## 23.11.2026 – Phase 5/7: HO-Outlook-Termin aus Desktop auch für vorhandene HO-Marker
 
 - [x] Altversion `HomeOfficeService.SubmitAsync` und

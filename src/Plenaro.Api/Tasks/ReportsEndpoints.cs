@@ -25,7 +25,7 @@ public static class ReportsEndpoints
 
     public sealed record MonthReport(string Month, string TimeZone,
         DateTimeOffset GeneratedAt, long TimerSeconds, long AdjustmentMinutes,
-        long TotalSeconds, int SessionCount, int TaskCount,
+        long TotalSeconds, int SessionCount, int TaskCount, int HomeOfficeDays,
         IReadOnlyList<TaskReportRow> Tasks,
         long AccountedSeconds,long RemoteSeconds,long LocalFallbackSeconds,
         int RemoteEntries,int LocalFallbackEntries,
@@ -147,11 +147,24 @@ public static class ReportsEndpoints
             }
         }
 
+        // The WPF report counts each calendar date marked HO once. Use the
+        // authenticated user's saved day markers, not Outlook events or mail
+        // delivery attempts. Dates are local calendar dates (no UTC shift).
+        await using var hoCmd = new NpgsqlCommand("""
+            SELECT COUNT(*)::integer FROM day_markers
+            WHERE user_id=@owner AND is_ho=true
+              AND day>=@first_day AND day<@next_month
+            """, db);
+        hoCmd.Parameters.AddWithValue("owner", owner);
+        hoCmd.Parameters.Add("first_day", NpgsqlDbType.Date).Value = DateOnly.FromDateTime(monthStart);
+        hoCmd.Parameters.Add("next_month", NpgsqlDbType.Date).Value = DateOnly.FromDateTime(endLocal);
+        var homeOfficeDays = (int)(await hoCmd.ExecuteScalarAsync(ct) ?? 0);
+
         var accounted=await ReadAccountingAsync(db,owner,start,end,vault,znuny,ct);
         return new MonthReport(monthStart.ToString("yyyy-MM", CultureInfo.InvariantCulture),
             ZoneId, asOf, rows.Sum(r => r.TimerSeconds),
             rows.Sum(r => r.AdjustmentMinutes), rows.Sum(r => r.TotalSeconds),
-            rows.Sum(r => r.SessionCount), rows.Count, rows,
+            rows.Sum(r => r.SessionCount), rows.Count, homeOfficeDays, rows,
             accounted.Data.TotalSeconds,accounted.Data.RemoteSeconds,
             accounted.Data.LocalOnlySeconds,accounted.Data.RemoteEntries,
             accounted.Data.LocalOnlyEntries,
@@ -261,6 +274,9 @@ public static class ReportsEndpoints
     private static byte[] ToCsv(MonthReport report)
     {
         var csv = new StringBuilder();
+        csv.Append("Monat;").Append(report.Month).AppendLine();
+        csv.Append("Homeoffice-Tage;").Append(report.HomeOfficeDays).AppendLine();
+        csv.AppendLine();
         csv.AppendLine("Aufgabe;Status;Timer-Sekunden;Korrektur-Minuten;Gesamt-Sekunden;Sitzungen");
         foreach (var task in report.Tasks)
         {
