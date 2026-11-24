@@ -9,7 +9,7 @@
 - [x] Ereignisse bleiben nur im RAM dieses Webprozesses (max. 250 pro Admin/Favorit, max. 30 Minuten), kein dauerhaftes Zugriffsprotokoll; beim Abschalten sofort löschen.
 - [x] Keine neuen Container, DNS-Aliasse, Upstream-Änderungen oder Browser-Login-Profile.
 - [x] Frontend- und Integrationstests für Sichtbarkeit, Umschalter, Adminrolle, CSRF, Favoritenbesitz, Redaction und Pufferlimit.
-- [ ] CI-Ergebnis und PR-Merge prüfen.
+- [x] [PR #56](https://github.com/DerHausmeisterKrause/plenaro/pull/56) nach `main` gemergt; [CI #45364499104](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45364499104) vollständig grün (Frontend, Backend, Vertragstests, Docker-Smoke und Browser-Login).
 - [ ] Produktivtest am Zielhost mit betroffenen Favoriten (ATOSS/Wiki): HTTP-Fehler, CSS/JS-Ressourcen, Login-Ablauf. Die fremde JavaScript-Konsole und Browser-CSP/CORS-Fehler vor dem Proxy können **nicht** vollständig serverseitig erfasst werden.
 
 ### Live-Deployment nach CI/PR-Merge
