@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
 import {Link,useParams} from 'react-router-dom';
+import {FavoriteDebugConsole} from './FavoriteDebugPanel';
 import {ArrowDown,ArrowUp,ExternalLink,Plus,RefreshCw,Save,ShieldCheck,
   Star,Trash2} from 'lucide-react';
 import {
@@ -176,7 +177,7 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
   </section>;
 }
 
-export function FavoritePage(){
+export function FavoritePage({admin=false}:{admin?:boolean}){
   const {id}=useParams();
   const [favorite,setFavorite]=useState<Favorite|null>(null);
   const [url,setUrl]=useState('');
@@ -243,6 +244,7 @@ export function FavoritePage(){
         <Link className="button button-secondary" to="/settings?section=favorites">Favoriten verwalten</Link>
       </div>
     </div>
+    {admin&&id&&<FavoriteDebugConsole favoriteId={id}/>}
     {error&&<div className="content-card znuny-portal-error" role="alert">
       <strong>Favorit konnte nicht geöffnet werden</strong><p>{error}</p></div>}
     {loading&&!error&&<div role="status" className="znuny-native-loading">
