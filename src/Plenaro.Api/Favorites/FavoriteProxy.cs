@@ -231,12 +231,27 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                     // If the optional worker is absent, retain the original
                     // conventional server-side HTML login behavior.
                     var browserAttempted=false;
+                    var entry=new Uri(root,favorite.Path);
                     if(favorite.Slug.StartsWith("site-",StringComparison.Ordinal)
+                       && AtossEntry(entry)){
+                        // ATOSS is ZK, not an HTML form. Reuse the existing
+                        // server-side cookie jar and its same-origin HTTPS
+                        // route. No headless worker, new container or host.
+                        Debug(user,favorite.Id,"info","atoss-zk-login-attempt");
+                        var atoss=await TryAtossZkLoginAsync(
+                            client,root,entry,favorite.Username,password,ct);
+                        // Never fall back to another credential submission
+                        // after entering the ATOSS ZK login flow.
+                        browserAttempted=true;
+                        Debug(user,favorite.Id,
+                            atoss.Authenticated?"info":"warning",atoss.Code);
+                    }
+                    if(!browserAttempted &&
+                        favorite.Slug.StartsWith("site-",StringComparison.Ordinal)
                         && IsPathHost(external.Host)){
                         Debug(user,favorite.Id,"info","headless-login-attempt");
                         var browser=await FavoriteHeadlessLogin.TryDetailedAsync(
-                            handler.CookieContainer,root,
-                            new Uri(root,favorite.Path),
+                            handler.CookieContainer,root,entry,
                             favorite.Username,password,ct);
                         browserAttempted=browser.Attempted;
                         Debug(user,favorite.Id,

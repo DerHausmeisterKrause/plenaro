@@ -1,3 +1,30 @@
+## 24.11.2026 – Phase 7/7: ATOSS ZK-Autologin direkt im bestehenden Backend
+
+- [x] Den vom Nutzer bereitgestellten ATOSS-HAR mit 55 Requests analysiert: `/SES/html` liefert dynamische `uuid.../html`-Iframe-Adresse; die Loginmaske ist ein `zkmx`-ZK-Widgetbaum, kein HTML-Formular. Testdaten und Referenzen sind synthetisch; keine privaten URLs, Sessions, Passwörter oder Cookies übernommen.
+- [x] WPF-WebView2-Referenz und bestehende Confluence-Serverlogin-Implementierung geprüft: serverseitiger HTTPS-Request mit privater Cookiejar-Sitzung, niemals Passwortinjektion in den gemeinsamen Favoriten-Host.
+- [x] ATOSS-ZK-Login für persönliche Favoriten mit `/SES/html` ergänzt: originalen HTML-Wrapper abrufen, exakt eine aktuelle UUID-Iframe-Adresse entdecken, `dt`/`uu` und eindeutige dynamische Widgets für Benutzername/Kennwort/Anmelden bestimmen.
+- [x] Gebundene ZK-AU-Nachrichten zum vom Server gelieferten, validierten `/SES/uuid.../zkauA10[;jsessionid]` über dieselbe HTTPS-Sitzung versenden: `onChange` Benutzername, `onChange` Kennwort, `onClick` Anmelden; kein hartkodierter Mandant, Passwort, Session, Widget- oder Zielwert.
+- [x] Fehler- und Authentisierungsprüfung: genau ein Anmeldeversuch, niemals Doppel-POST bei unklarer Antwort; nur eine nachfolgend abrufbare ATOSS-ZK-Seite ohne dieselbe Loginmaske gilt als bestätigt. Andere Zielwebseiten behalten den bisherigen Login.
+- [x] Private Admin-Diagnose für ZK-Loginversuch, erkannten Login, nicht bestätigte Anmeldung, fehlende ZK-Seite oder eindeutige Loginwidgets; keine Geheimnisse im Log.
+- [x] Mock-Vertragstest für den vollständigen loginartigen ZK-Ablauf, dynamische IDs, HTTPS-Origin und abgelehnte fremde ZK-Endpunkte. Kein echter ATOSS-Login im Test.
+- [ ] PR und CI vollständig abschließen; danach in `main` mergen.
+- [ ] Produktiv-Abnahme am echten ATOSS: Favorit neu verbinden, neues ZK-Login-Diagnoseereignis und tatsächliche Sitzung testen. Der Nutzer-Mitschnitt enthält keinen echten `onClick`-Login, weshalb das exakte ATOSS-Loginereignis bis zur Abnahme nicht verifiziert ist.
+- [x] Keine neuen Container oder Compose-Profile, DNS-Einträge, Zertifikate, Ports, Browserworker, Datenbankmigrationen oder zusätzlichen API-Endpunkte.
+
+### Live-Update nach CI und Merge
+
+```bash
+cd /opt/plenaro
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build --no-deps web
+docker compose restart nginx
+docker compose ps
+docker compose logs --tail=80 web
+```
+
+---
+
 ## 24.11.2026 – Phase 7/7: OrgManager-API HTTP 400 aus HAR gezielt behoben
 
 - [x] Nutzer-HAR untersucht: **45 Anfragen**, dreimal HTTP 400 (GET /orgmgmt/api/simulation, POST /orgmgmt/api/data/views/objectList, POST /orgmgmt/api/data/views/2305/root/withDynamicLists/1), alle mit `CSRF` und `CurrentLanguage`; erfolgreiche API-Anfragen ohne diese Header. Keine HAR-Daten oder Geheimnisse ins Repository übernommen.

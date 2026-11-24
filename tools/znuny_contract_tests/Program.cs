@@ -2175,6 +2175,125 @@ Assert(WorkerHint("no-login-fields")=="browser-no-login-fields" &&
     WorkerHint("password=secret-value")=="browser-login-not-confirmed",
     "browser worker classification never exposes arbitrary reasons");
 
+// ATOSS Staff Efficiency Suite uses ZK desktop/widget IDs, not HTML forms.
+// The fixture mirrors the login zkmx hierarchy and /SES/html -> UUID iframe
+// from the provided HAR, with purely synthetic IDs and no customer values.
+const string fakeAtossUuid="uuid11111111-1111-1111-1111-111111111111";
+const string fakeAtossOuter="""
+<html><head><title>ATOSS Staff Efficiency Suite</title></head>
+<body><script>var iframeUrl = 'uuid11111111-1111-1111-1111-111111111111/html';</script></body></html>
+""";
+const string fakeAtossLogin="""
+<html><head><title>ATOSS Staff Efficiency Suite</title></head><body><script>
+zkmx([0,'synthetic',{dt:'z_demo',
+cu:'\x2FSES\x2Fuuid11111111-1111-1111-1111-111111111111',
+uu:'\x2FSES\x2Fuuid11111111-1111-1111-1111-111111111111\x2FzkauA10\x3Bjsessionid\x3DTEST_SESSION'}, {}, [
+['widgets.input.FocusTextbox','user1',{placeholder:'Benutzername',type:'text'},[]],
+['widgets.input.FocusTextbox','pass1',{placeholder:'Kennwort',type:'password'},[]],
+['widgets.wgt.AtossDialogButton','login1',{label:'Anmelden',$onClick:true},[]]
+]]);
+</script></body></html>
+""";
+const string fakeAtossAuthenticated="""
+<html><head><title>ATOSS Staff Efficiency Suite</title></head>
+<body><script>zkmx([0,'workspace',{dt:'z_new'}, {}, []]);</script></body></html>
+""";
+var parseAtoss=typeof(FavoriteProxy).GetMethod("ParseAtossZkForm",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+var atossFrame=typeof(FavoriteProxy).GetMethod("FindAtossFrame",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+var zkTestOrigin=new Uri("https://atoss.example.org/");
+var zkTestOuter=new Uri(zkTestOrigin,"SES/html");
+var zkTestChild=new Uri(zkTestOrigin,"SES/"+fakeAtossUuid+"/html");
+Assert((Uri?)atossFrame.Invoke(null,new object[]{
+    fakeAtossOuter,zkTestOuter,zkTestOrigin})==zkTestChild,
+    "ATOSS outer login resolves only the current same-origin UUID iframe");
+var parsedAtoss=parseAtoss.Invoke(null,new object[]{
+    fakeAtossLogin,zkTestChild,zkTestOrigin});
+Assert(parsedAtoss is not null &&
+    parsedAtoss.GetType().GetProperty("UsernameId")!.GetValue(parsedAtoss)?.ToString()=="user1" &&
+    parsedAtoss.GetType().GetProperty("PasswordId")!.GetValue(parsedAtoss)?.ToString()=="pass1" &&
+    parsedAtoss.GetType().GetProperty("LoginId")!.GetValue(parsedAtoss)?.ToString()=="login1",
+    "ATOSS ZK login derives current user/password/button widget IDs");
+
+string FromZkForm(string body,string key) =>
+    body.Split('&').Select(part=>part.Split('=',2))
+        .Where(parts=>parts.Length==2 &&
+            WebUtility.UrlDecode(parts[0])==key)
+        .Select(parts=>WebUtility.UrlDecode(parts[1])).Single();
+var zkCommands=new List<string>();
+var clickSent=false;
+using(var atossClient=new HttpClient(new MockHandler(req=>{
+    var path=req.RequestUri!.AbsolutePath;
+    Assert(req.RequestUri.Scheme=="https" &&
+        req.RequestUri.Host=="atoss.example.org",
+        "ATOSS login is pinned to the approved HTTPS upstream");
+    if(req.Method==HttpMethod.Get && path=="/SES/html")
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent(fakeAtossOuter,Encoding.UTF8,"text/html")
+        };
+    if(req.Method==HttpMethod.Get &&
+       path=="/SES/"+fakeAtossUuid+"/html")
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent(clickSent?fakeAtossAuthenticated:
+                fakeAtossLogin,Encoding.UTF8,"text/html")
+        };
+    if(req.Method==HttpMethod.Post &&
+       path.StartsWith("/SES/"+fakeAtossUuid+"/zkauA10;jsessionid=",StringComparison.Ordinal)){
+        Assert(req.Headers.Contains("ZK-SID") &&
+            req.Headers.Referrer==zkTestChild &&
+            req.Headers.GetValues("Origin").Single()=="https://atoss.example.org",
+            "ATOSS AU posts include valid ZK-SID and same-origin referer");
+        var posted=req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+        Assert(FromZkForm(posted,"dtid")=="z_demo",
+            "ATOSS AU desktop ID is the current server-issued ID");
+        var cmd=FromZkForm(posted,"cmd_0");
+        zkCommands.Add(cmd);
+        if(cmd=="onChange"){
+            var id=FromZkForm(posted,"uuid_0");
+            var value=JsonDocument.Parse(FromZkForm(posted,"data_0")).RootElement
+                .GetProperty("value").GetString();
+            Assert((id=="user1"&&value=="test.user") ||
+                (id=="pass1"&&value=="FAKE_PASSWORD"),
+                "ATOSS AU updates only the two exact login fields");
+        }else{
+            Assert(cmd=="onClick" &&
+                FromZkForm(posted,"uuid_0")=="login1",
+                "ATOSS AU submits only the login button");
+            clickSent=true;
+        }
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent("{\"rs\":[],\"rid\":2}",
+                Encoding.UTF8,"text/plain")
+        };
+    }
+    throw new InvalidOperationException("Unexpected ATOSS ZK test HTTP request");
+}))){
+    var loginMethod=typeof(FavoriteProxy).GetMethod("TryAtossZkLoginAsync",
+        BindingFlags.Static|BindingFlags.NonPublic)!;
+    var task=(Task)loginMethod.Invoke(null,new object[]{
+        atossClient,zkTestOrigin,zkTestOuter,"test.user","FAKE_PASSWORD",
+        CancellationToken.None})!;
+    await task;
+    var outcome=task.GetType().GetProperty("Result")!.GetValue(task)!;
+    Assert((bool)outcome.GetType().GetProperty("Authenticated")!.GetValue(outcome)! &&
+        (bool)outcome.GetType().GetProperty("Submitted")!.GetValue(outcome)! &&
+        zkCommands.SequenceEqual(new[]{"onChange","onChange","onClick"}),
+        "ATOSS login uses two field changes, one login click and verified post-login HTML");
+}
+var maliciousZkForm=fakeAtossLogin.Replace(
+    @"\x2FSES\x2Fuuid11111111-1111-1111-1111-111111111111\x2FzkauA10\x3Bjsessionid\x3DTEST_SESSION",
+    @"\x2F\x2Fevil.example.org\x2Fsteal",
+    StringComparison.Ordinal);
+Assert(parseAtoss.Invoke(null,new object[]{
+    maliciousZkForm,zkTestChild,zkTestOrigin}) is null,
+    "ATOSS ZK login rejects any cross-origin or forged update URL");
+var missingButtonZkForm=fakeAtossLogin.Replace(
+    "label:'Anmelden'","label:'Kennwort ändern'",StringComparison.Ordinal);
+Assert(parseAtoss.Invoke(null,new object[]{
+    missingButtonZkForm,zkTestChild,zkTestOrigin}) is null,
+    "ATOSS ZK login never sends credentials without an unambiguous login action");
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory
