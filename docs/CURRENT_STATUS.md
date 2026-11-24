@@ -7,7 +7,8 @@
 - [x] Die ausgewählte sichtbare Nachricht wird einzeln gelesen; bei mehreren neuen Nachrichten bleibt der Stern bis zur letzten ungelesenen Nachricht stehen.
 - [x] Benutzergebundener CSRF-geschützter Lesestatus-Endpunkt, persönliche Ticketberechtigung weiterhin über bestehende Endpoint-Filter erzwungen.
 - [x] Unit-/Frontend- und Docker-Smoke-Regressionen für Vergleich, Lesestatus, CSRF und Mehrbenutzer-Isolation ergänzt.
-- [ ] GitHub-CI, PR-Merge und Produktiv-Deployment prüfen.
+- [x] [PR #55](https://github.com/DerHausmeisterKrause/plenaro/pull/55) nach `main` gemergt; [CI #45358932870](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45358932870) vollständig grün (Frontend, Backend, Znuny-Verträge, Docker und Login).
+- [ ] Produktiv-Deployment auf dem Zielhost prüfen.
 - [ ] Live-Znuny-Abnahme: neue Kundenartikel bei zwei verschiedenen Benutzern erzeugen, Stern nach zentraler Synchronisation und nach Lesen prüfen.
 
 **Deployment nach erfolgreichem Merge** (bestehende Installation):
