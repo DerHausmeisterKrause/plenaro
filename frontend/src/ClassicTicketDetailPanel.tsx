@@ -98,7 +98,7 @@ export function ClassicTicketDetailPanel({ticket,onChanged}:{
         Der Originalinhalt des Znuny-Tickets bleibt unverändert.</p>
 
       <ZnunyTicketConversationPanel ticketId={ticket.ticketId} closed={closed}
-        closeRequest={closeRequest} onClosed={()=>{
+        closeRequest={closeRequest} onReadChange={onChanged} onClosed={()=>{
           setNotice('Antwort versendet und Ticket in Znuny geschlossen.');
           onChanged?.();
         }}/>
