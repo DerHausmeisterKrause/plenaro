@@ -218,54 +218,69 @@ public sealed partial class FavoriteProxy
     // Bounded classic HTML auto-login: one landing GET, optionally one
     // discovered login-page GET, exactly ONE POST and optional same-origin
     // redirect follow. Cookies are retained by the private HttpClient.
-    private static async Task TryLoginAsync(HttpClient client,Uri origin,Uri entry,
+    private sealed record HtmlLoginAttempt(string Code,int? Status=null);
+
+    // A completed HTML login attempt is NOT proof of an authenticated session.
+    // Return a fixed, safe diagnostic reason instead of false-positive success.
+    private static async Task<HtmlLoginAttempt> TryLoginAsync(
+        HttpClient client,Uri origin,Uri entry,
         string username,string password,CancellationToken ct)
     {
         var current=entry;
         var followedLoginLink=false;
         var visited=new HashSet<string>(StringComparer.Ordinal);
-        // At most four safe GETs: sites often redirect "/" to "/login"
-        // before serving the form. Do not follow a cross-host SSO redirect.
         for(var pageIndex=0;pageIndex<4;pageIndex++){
             if(!SameUpstream(origin,current)||
-               !visited.Add(current.AbsoluteUri))return;
+               !visited.Add(current.AbsoluteUri))
+                return new("html-login-navigation-blocked");
             using var initial=new HttpRequestMessage(HttpMethod.Get,current);
             using var response=await client.SendAsync(initial,
                 HttpCompletionOption.ResponseHeadersRead,ct);
             if(response.StatusCode is HttpStatusCode.MovedPermanently or
                 HttpStatusCode.Redirect or HttpStatusCode.SeeOther or
                 HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect){
-                if(response.Headers.Location is not { } next)return;
+                if(response.Headers.Location is not { } next)
+                    return new("html-login-redirect-missing");
                 var redirect=new Uri(current,next);
-                if(!SameUpstream(origin,redirect))return;
+                if(!SameUpstream(origin,redirect))
+                    return new("html-login-redirect-cross-origin");
                 current=redirect;
                 continue;
             }
-            if(!response.IsSuccessStatusCode ||
-               response.Content.Headers.ContentLength>262144)return;
+            if(!response.IsSuccessStatusCode)
+                return new("html-login-page-rejected",(int)response.StatusCode);
+            if(response.Content.Headers.ContentLength>262144)
+                return new("html-login-page-too-large");
             var bytes=await ReadLimitedAsync(response.Content,262144,ct);
             var html=Encoding.UTF8.GetString(bytes);
-            if(!LooksLikeHtml(html))return;
+            if(!LooksLikeHtml(html))return new("html-login-page-not-html");
             using var request=BuildHtmlLoginRequest(html,current,origin,
                 username,password);
             if(request is not null){
                 using var result=await client.SendAsync(request,
                     HttpCompletionOption.ResponseHeadersRead,ct);
+                if(!result.IsSuccessStatusCode && (int)result.StatusCode>=400)
+                    return new("html-login-post-rejected",(int)result.StatusCode);
                 if(result.Headers.Location is { } next){
                     var redirect=new Uri(request.RequestUri!,next);
-                    if(!SameUpstream(origin,redirect))return;
+                    if(!SameUpstream(origin,redirect))
+                        return new("html-login-redirect-cross-origin");
                     using var follow=new HttpRequestMessage(HttpMethod.Get,redirect);
                     using var confirmed=await client.SendAsync(follow,
                         HttpCompletionOption.ResponseHeadersRead,ct);
+                    if(!confirmed.IsSuccessStatusCode)
+                        return new("html-login-followup-rejected",
+                            (int)confirmed.StatusCode);
                 }
-                return;
+                return new("html-login-post-sent-unconfirmed",(int)result.StatusCode);
             }
             if(!followedLoginLink &&
                FindHtmlLoginLink(html,current,origin) is { } found){
                 followedLoginLink=true;
                 current=found;
-            }else return;
+            }else return new("html-login-form-not-found");
         }
+        return new("html-login-navigation-limit");
     }
 
     private static bool LooksLikeHtml(string html)
@@ -883,6 +898,26 @@ public sealed partial class FavoriteProxy
         await ctx.Response.WriteAsync(html,ct);
     }
 
+    // Only return a fixed diagnostic category. Never return upstream error
+    // bodies, which might contain credentials, URLs, query strings or PII.
+    private static string? ClassifyHttp400(string content)
+    {
+        var sample=content.Length>16384?content[..16384]:content;
+        const RegexOptions flags=RegexOptions.IgnoreCase|
+            RegexOptions.CultureInvariant;
+        if(Regex.IsMatch(sample,@"\b(?:csrf|xsrf|anti.?forgery|requestverificationtoken)\b",
+            flags,TimeSpan.FromMilliseconds(50)))return "upstream-400-csrf-hint";
+        if(Regex.IsMatch(sample,@"\b(?:invalid.origin|origin.mismatch|invalid.referer|referer.mismatch)\b",
+            flags,TimeSpan.FromMilliseconds(50)))return "upstream-400-origin-hint";
+        if(Regex.IsMatch(sample,@"\b(?:session.expired|invalid.session|not.authenticated|unauthenticated)\b",
+            flags,TimeSpan.FromMilliseconds(50)))return "upstream-400-session-hint";
+        if(Regex.IsMatch(sample,@"\b(?:validation.failed|required.field|one.or.more.validation.errors|invalid.payload)\b",
+            flags,TimeSpan.FromMilliseconds(50)))return "upstream-400-validation-hint";
+        if(Regex.IsMatch(sample,@"\b(?:invalid.content.type|unsupported.media.type)\b",
+            flags,TimeSpan.FromMilliseconds(50)))return "upstream-400-content-type-hint";
+        return null;
+    }
+
     private async Task ForwardAsync(HttpContext ctx,ProxySession session,
         Uri external,string appPath,string pathPrefix,CancellationToken ct)
     {
@@ -890,17 +925,22 @@ public sealed partial class FavoriteProxy
         var resource=DebugResource(appPath,Navigation(ctx.Request));
         if(method is not ("GET" or "HEAD" or "POST" or "PUT" or "PATCH" or "DELETE")||
             !AllowedMutation(ctx.Request,external,pathPrefix)){
-            Debug(session.User,session.Favorite,"warning","request-blocked",method,resource,403);
+            DebugHttp(session.User,session.Favorite,"warning","request-blocked",method,resource,403,appPath);
             ctx.Response.StatusCode=403;return;
         }
         var target=new Uri(session.Upstream,appPath+
             ctx.Request.QueryString.ToUriComponent());
         if(!SameUpstream(session.Upstream,target)){
-            Debug(session.User,session.Favorite,"warning","target-blocked",method,resource,403);
+            DebugHttp(session.User,session.Favorite,"warning","target-blocked",method,resource,403,appPath);
             ctx.Response.StatusCode=403;return;
         }
         using var req=new HttpRequestMessage(new HttpMethod(method),target);
-        if(ctx.Request.ContentLength>0||ctx.Request.Headers.ContainsKey("Transfer-Encoding")){
+        // Some SPAs send zero-length JSON/FORM POSTs with a Content-Type.
+        // Creating no HttpContent dropped that header and caused HTTP 400.
+        if(ctx.Request.ContentLength>0||
+           ctx.Request.Headers.ContainsKey("Transfer-Encoding")||
+           (!HttpMethods.IsGet(method)&&!HttpMethods.IsHead(method)&&
+            !string.IsNullOrEmpty(ctx.Request.ContentType))){
             req.Content=new StreamContent(ctx.Request.Body);
             if(!string.IsNullOrEmpty(ctx.Request.ContentType))
                 req.Content.Headers.TryAddWithoutValidation(
@@ -932,14 +972,14 @@ public sealed partial class FavoriteProxy
             using var res=await session.Client.SendAsync(req,
                 HttpCompletionOption.ResponseHeadersRead,ct);
             ctx.Response.StatusCode=(int)res.StatusCode;
-            Debug(session.User,session.Favorite,
+            DebugHttp(session.User,session.Favorite,
                 (int)res.StatusCode>=500?"error":
                 (int)res.StatusCode>=400?"warning":"info",
-                "http-response",method,resource,(int)res.StatusCode);
+                "http-response",method,resource,(int)res.StatusCode,appPath);
             if(res.Headers.Location is { } location){
                 var redirect=new Uri(target,location);
                 if(!SameUpstream(session.Upstream,redirect)){
-                    Debug(session.User,session.Favorite,"error","redirect-cross-origin",method,resource,502);
+                    DebugHttp(session.User,session.Favorite,"error","redirect-cross-origin",method,resource,502,appPath);
                     await ProxyNavigationErrorAsync(ctx,502,"upstream-redirect",
                         "Die Webseite leitet auf einen anderen Server weiter. "+
                         "Hinterlege die endgültige HTTPS-Adresse als Favorit.",ct);
@@ -999,6 +1039,10 @@ public sealed partial class FavoriteProxy
                     Encoding.GetEncoding(charset);}
                 catch(ArgumentException){encoding=Encoding.UTF8;}
                 var html=encoding.GetString(bytes);
+                if(res.StatusCode==HttpStatusCode.BadRequest &&
+                   ClassifyHttp400(html) is { } hint)
+                    DebugHttp(session.User,session.Favorite,"warning",hint,
+                        method,resource,400,appPath);
                 if(sniff&&LooksLikeHtml(html))
                     ctx.Response.ContentType="text/html; charset="+encoding.WebName;
                 else if(binarySniff){
@@ -1037,7 +1081,8 @@ public sealed partial class FavoriteProxy
                         session.Slug,session.AutoLogin,pathPrefix.Length>0,
                         session.Username,external.Host,dedicated?.Host)){
                         ctx.Response.Headers["X-Plenaro-Autofill"]="isolated-origin-required";
-                        Debug(session.User,session.Favorite,"warning","autofill-origin-required",method,resource);
+                        // The shared host is intentional; don't warn on
+                        // every HTML navigation or recommend more DNS aliases.
                     }else{
                         var vault=ctx.RequestServices.GetService<SecretVault>();
                         if(vault?.IsConfigured==true){
@@ -1067,8 +1112,8 @@ public sealed partial class FavoriteProxy
         }catch(HttpRequestException error) when(!ct.IsCancellationRequested){
             var blocked=error.Message.Contains("Host address is blocked",
                 StringComparison.Ordinal);
-            Debug(session.User,session.Favorite,"error",
-                blocked?"private-address-blocked":"upstream-unavailable",method,resource,502);
+            DebugHttp(session.User,session.Favorite,"error",
+                blocked?"private-address-blocked":"upstream-unavailable",method,resource,502,appPath);
             await ProxyNavigationErrorAsync(ctx,502,
                 blocked?"private-upstream-blocked":"upstream-unavailable",
                 blocked
@@ -1079,11 +1124,11 @@ public sealed partial class FavoriteProxy
                     :"Der Zielserver ist über den Plenaro-Proxy nicht erreichbar.",
                 ct);
         }catch(OperationCanceledException) when(!ct.IsCancellationRequested){
-            Debug(session.User,session.Favorite,"error","upstream-timeout",method,resource,504);
+            DebugHttp(session.User,session.Favorite,"error","upstream-timeout",method,resource,504,appPath);
             await ProxyNavigationErrorAsync(ctx,504,"upstream-timeout",
                 "Der Zielserver hat nicht rechtzeitig geantwortet.",ct);
         }catch(InvalidOperationException){
-            Debug(session.User,session.Favorite,"error","upstream-resource-limit",method,resource,413);
+            DebugHttp(session.User,session.Favorite,"error","upstream-resource-limit",method,resource,413,appPath);
             await ProxyNavigationErrorAsync(ctx,413,"upstream-resource-limit",
                 "Die Antwort des Zielservers ist für den Proxy zu groß.",ct);
         }

@@ -75,6 +75,35 @@ describe('Favorite iframe bootstrap',()=>{
     expect(debugMocks.readFavoriteDebugEvents).toHaveBeenCalledWith(favorite.id,0);
   });
 
+  it('groups repeated upstream HTTP 400s by an opaque route tag',async()=>{
+    debugMocks.readFavoriteDebugEvents.mockResolvedValue({enabled:true,events:[
+      {id:7,at:'2026-11-24T12:20:30Z',level:'warning',
+        code:'http-response',method:'POST',resource:'api',status:400,route:'A1B2C3D4E5'},
+      {id:8,at:'2026-11-24T12:20:30Z',level:'warning',
+        code:'upstream-400-csrf-hint',method:'POST',resource:'api',status:400,
+        route:'A1B2C3D4E5'}
+    ]});
+    renderStrictFavorite(true);
+    expect(await screen.findByText(/CSRF-\/XSRF-Prüfung könnte HTTP 400/)).toBeTruthy();
+    expect(screen.getAllByText(/#A1B2C3D4E5/)).toHaveLength(2);
+    fireEvent.click(screen.getByRole('checkbox',{name:'Nur Warnungen und Fehler anzeigen'}));
+    expect(screen.getAllByText('400')).toHaveLength(2);
+    expect(screen.queryByText(/top-secret|password=|token=/i)).toBeNull();
+  });
+
+  it('explains that a missing JS-only login needs a manual login on shared host',async()=>{
+    debugMocks.readFavoriteDebugEvents.mockResolvedValue({enabled:true,events:[
+      {id:9,at:'2026-11-24T12:21:30Z',level:'warning',
+        code:'browser-worker-unreachable',method:'',resource:'other',status:null},
+      {id:10,at:'2026-11-24T12:21:30Z',level:'warning',
+        code:'html-login-form-not-found',method:'',resource:'other',status:null}
+    ]});
+    renderStrictFavorite(true);
+    expect(await screen.findByText(/Browserdienst nicht erreichbar/)).toBeTruthy();
+    expect(screen.getByText(/kein geeignetes klassisches HTML-Anmeldeformular/i)).toBeTruthy();
+    expect(screen.queryByText(/Wildcard-DNS/)).toBeNull();
+  });
+
   it('starts one proxy session despite StrictMode double effect',async()=>{
     renderStrictFavorite();
     const frame=await screen.findByTitle('Wiki');

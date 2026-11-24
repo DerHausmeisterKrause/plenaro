@@ -1,3 +1,31 @@
+## 24.11.2026 – Phase 7/7: Favoriten-HTTP-400 und Browser-/HTML-Login präzise diagnostizieren
+
+- [x] Live-Logs analysiert: Favorit A liefert HTML/Skripte/Stile mit HTTP 200, aber einzelne API-GET/POSTs mit HTTP 400; Favorit B erreicht den Browser-/HTML-Fallback, aber nicht eindeutig einen erfolgreichen Login.
+- [x] Keine neuen Container, Docker-Profile, DNS-/TLS-Aliasse, Proxy-Namen, Zusatzzertifikate oder Umgebungsvariablen.
+- [x] Leere POST-Anfragen behalten den vorhandenen Content-Type beim Upstream-Forwarding; behebt die bisherige Verluststelle.
+- [x] HTTP-400-Antworten nach festen technischen Hinweis-Kategorien (CSRF/XSRF, Origin/Referer, Sitzung, Validierung, Content-Type) klassifizieren, ohne Antwortkörper zu speichern.
+- [x] HMAC-Fingerprint des Ressourcenpfads (ohne Query) zum Vergleich wiederholter Fehler: keine vollständigen URLs, Formdaten, Passwörter, Cookies, Tokens oder Header in Logs.
+- [x] Klassischer HTML-Login unterscheidet kein Formular, kein HTML, abgelehnten Login-POST, blockierte Cross-Origin-Weiterleitung und gesendeten, aber nicht bestätigten POST.
+- [x] Privater Browserlogin unterscheidet Worker nicht erreichbar, Formular/Aktion fehlen, Login nicht bestätigt und tatsächlich importierte Session-Cookies.
+- [x] Irreführende, bei jedem Seitenabruf wiederholte Autofill-DNS-Warnung entfernt; einmalige INFO erklärt die Sicherheitsgrenze des gemeinsamen Hostnamens. Keine Passwortinjektion auf Shared-Origin.
+- [x] Neue Frontend-/Vertragstests für Ursachenhinweise, sichere HMAC-Kennung und Worker-Ergebnisse ergänzt.
+- [ ] CI abschließen und PR mergen.
+- [ ] Live-Abnahme: favoritenweise Neu verbinden, Fehlermeldungen nach Kennung (#...) und Ursachenhinweisen prüfen. Ohne eindeutigen Ursachehinweis lässt sich HTTP 400 nicht allein aus Statuscodes reparieren. JavaScript-only-Login kann ohne verfügbaren Browserworker im Shared-Host nicht automatisch ausgefüllt werden; manuelle Anmeldung bleibt möglich.
+
+### Deployment nach CI/PR-Merge
+
+```bash
+cd /opt/plenaro
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build --no-deps web
+docker compose restart nginx
+docker compose ps
+docker compose logs --tail=80 web
+```
+
+---
+
 ## 24.11.2026 – Phase 7/7: Admin-Debugmodus für Favoriten/Proxy
 
 - [x] WPF-Referenz `WebShortcutBrowserSessionManager` geprüft (Navigation, WebResource-Statuscodes, Netzwerkfehler); web-spezifische Diagnose läuft direkt im vorhandenen FavoriteProxy.
