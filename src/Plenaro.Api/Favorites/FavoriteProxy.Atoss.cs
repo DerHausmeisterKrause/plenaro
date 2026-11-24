@@ -13,7 +13,7 @@ public sealed partial class FavoriteProxy
     // desktop ID, AJAX URL and component IDs; never guess static IDs or URLs.
     // Credentials stay in the server vault and this private HttpClient.
     internal sealed record AtossLoginResult(bool Recognized,bool Submitted,
-        bool Authenticated,string Code);
+        bool Authenticated,string Code,int? Status=null);
 
     internal sealed record AtossZkForm(
         string Desktop,string UpdatePath,string UsernameId,
@@ -106,19 +106,72 @@ public sealed partial class FavoriteProxy
             username,password,login);
     }
 
-    private static async Task<string?> ReadAtossPageAsync(
-        HttpClient client,Uri uri,Uri? referer,CancellationToken ct)
+    internal sealed record AtossPageResult(string? Html,string Code,int? Status);
+
+    // The embedded iframe is opened by Chromium with a normal HTML
+    // navigation request. The old server-side attempt sent neither Accept
+    // nor User-Agent, although the working browser trace includes both.
+    // Some ATOSS installations return a non-HTML response or redirect when
+    // the request does not look like a navigation. Mirror only these
+    // non-secret headers; the per-user CookieContainer remains authoritative.
+    private static void ConfigureAtossNavigationHeaders(
+        HttpRequestMessage request,Uri? referer)
     {
-        using var request=new HttpRequestMessage(HttpMethod.Get,uri);
+        request.Headers.TryAddWithoutValidation("Accept",
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+        request.Headers.TryAddWithoutValidation("Accept-Language",
+            "de-DE,de;q=0.9,en;q=0.8");
+        request.Headers.TryAddWithoutValidation("User-Agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "+
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36");
         if(referer is not null)request.Headers.Referrer=referer;
-        using var reply=await client.SendAsync(request,
-            HttpCompletionOption.ResponseHeadersRead,ct);
-        if(!reply.IsSuccessStatusCode ||
-           reply.Content.Headers.ContentLength>262144)return null;
-        var body=await ReadLimitedAsync(reply.Content,262144,ct);
-        var html=Encoding.UTF8.GetString(body);
-        return LooksLikeHtml(html)?html:null;
     }
+
+    // Use the real HTTP response status in the admin debug view, never the
+    // body, Set-Cookie, URL or session identifier. SecureHandler deliberately
+    // disables redirects: follow at most two explicit HTTPS same-origin
+    // redirects within the ATOSS SES application.
+    internal static async Task<AtossPageResult> ReadAtossPageDetailedAsync(
+        HttpClient client,Uri origin,Uri uri,Uri? referer,CancellationToken ct)
+    {
+        if(!SameUpstream(origin,uri) ||
+           !uri.AbsolutePath.StartsWith("/SES/",StringComparison.Ordinal))
+            return new(null,"atoss-zk-frame-navigation-blocked",null);
+        for(var redirectCount=0;redirectCount<=2;redirectCount++){
+            using var request=new HttpRequestMessage(HttpMethod.Get,uri);
+            ConfigureAtossNavigationHeaders(request,referer);
+            using var reply=await client.SendAsync(request,
+                HttpCompletionOption.ResponseHeadersRead,ct);
+            var status=(int)reply.StatusCode;
+            if(reply.StatusCode is HttpStatusCode.MovedPermanently or
+                HttpStatusCode.Redirect or HttpStatusCode.SeeOther or
+                HttpStatusCode.TemporaryRedirect or HttpStatusCode.PermanentRedirect){
+                if(reply.Headers.Location is not { } location ||
+                   !Uri.TryCreate(uri,location,out var next) ||
+                   !SameUpstream(origin,next) ||
+                   !next.AbsolutePath.StartsWith("/SES/",StringComparison.Ordinal))
+                    return new(null,"atoss-zk-frame-redirect-blocked",status);
+                referer=uri;
+                uri=next;
+                continue;
+            }
+            if(!reply.IsSuccessStatusCode)
+                return new(null,"atoss-zk-frame-http-error",status);
+            if(reply.Content.Headers.ContentLength>262144)
+                return new(null,"atoss-zk-frame-too-large",status);
+            var bytes=await ReadLimitedAsync(reply.Content,262144,ct);
+            var html=Encoding.UTF8.GetString(bytes);
+            return LooksLikeHtml(html)
+                ?new(html,"atoss-zk-frame-ok",status)
+                :new(null,"atoss-zk-frame-not-html",status);
+        }
+        return new(null,"atoss-zk-frame-redirect-limit",null);
+    }
+
+    private static async Task<string?> ReadAtossPageAsync(
+        HttpClient client,Uri origin,Uri uri,Uri? referer,CancellationToken ct)
+        => (await ReadAtossPageDetailedAsync(
+            client,origin,uri,referer,ct)).Html;
 
     // An AU packet uses the desktop and widget IDs from the SAME HTML
     // session. A single user/password change each precedes ONE button click.
@@ -163,13 +216,15 @@ public sealed partial class FavoriteProxy
         if(!AtossEntry(entry)||!SameUpstream(origin,entry))
             return new(false,false,false,"atoss-zk-not-applicable");
         try{
-            var outer=await ReadAtossPageAsync(client,entry,null,ct);
+            var outer=await ReadAtossPageAsync(client,origin,entry,null,ct);
             if(outer is null)return new(false,false,false,"atoss-zk-not-applicable");
             var child=FindAtossFrame(outer,entry,origin);
             if(child is null)return new(false,false,false,"atoss-zk-not-applicable");
-            var html=await ReadAtossPageAsync(client,child,entry,ct);
-            if(html is null)return new(true,false,false,"atoss-zk-login-page-unavailable");
-            var form=ParseAtossZkForm(html,child,origin);
+            var page=await ReadAtossPageDetailedAsync(
+                client,origin,child,entry,ct);
+            if(page.Html is null)
+                return new(true,false,false,page.Code,page.Status);
+            var form=ParseAtossZkForm(page.Html,child,origin);
             if(form is null)return new(true,false,false,"atoss-zk-login-form-unavailable");
             if(!Uri.TryCreate(origin,form.UpdatePath,out var update)||
                !SameUpstream(origin,update))
@@ -195,14 +250,14 @@ public sealed partial class FavoriteProxy
             // A 200 ZK response (or session cookie) is NOT proof of login:
             // re-enter the server session and require the login form to be
             // absent from an authentic ATOSS widget page.
-            var checkOuter=await ReadAtossPageAsync(client,entry,null,ct);
+            var checkOuter=await ReadAtossPageAsync(client,origin,entry,null,ct);
             if(checkOuter is null)
                 return new(true,true,false,"atoss-zk-login-unconfirmed");
             var nextFrame=FindAtossFrame(checkOuter,entry,origin);
             if(nextFrame is null)
                 return new(true,true,false,"atoss-zk-login-unconfirmed");
             var checkHtml=await ReadAtossPageAsync(
-                client,nextFrame,entry,ct);
+                client,origin,nextFrame,entry,ct);
             if(checkHtml is null||
                !checkHtml.Contains("ATOSS Staff Efficiency Suite",
                    StringComparison.OrdinalIgnoreCase) ||

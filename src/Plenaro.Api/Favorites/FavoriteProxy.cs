@@ -244,7 +244,8 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                         // after entering the ATOSS ZK login flow.
                         browserAttempted=true;
                         Debug(user,favorite.Id,
-                            atoss.Authenticated?"info":"warning",atoss.Code);
+                            atoss.Authenticated?"info":"warning",
+                            atoss.Code,status:atoss.Status);
                     }
                     if(!browserAttempted &&
                         favorite.Slug.StartsWith("site-",StringComparison.Ordinal)

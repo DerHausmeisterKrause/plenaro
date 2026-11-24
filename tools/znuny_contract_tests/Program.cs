@@ -2228,6 +2228,12 @@ using(var atossClient=new HttpClient(new MockHandler(req=>{
     Assert(req.RequestUri.Scheme=="https" &&
         req.RequestUri.Host=="atoss.example.org",
         "ATOSS login is pinned to the approved HTTPS upstream");
+    if(req.Method==HttpMethod.Get){
+        Assert(req.Headers.Accept.Any(x=>x.MediaType=="text/html") &&
+            req.Headers.UserAgent.ToString().Contains("Chrome",StringComparison.Ordinal) &&
+            req.Headers.AcceptLanguage.Any(x=>x.Value=="de-DE"),
+            "ATOSS login must negotiate the same HTML/browser request format as the functioning iframe");
+    }
     if(req.Method==HttpMethod.Get && path=="/SES/html")
         return new HttpResponseMessage(HttpStatusCode.OK){
             Content=new StringContent(fakeAtossOuter,Encoding.UTF8,"text/html")
@@ -2280,6 +2286,58 @@ using(var atossClient=new HttpClient(new MockHandler(req=>{
         (bool)outcome.GetType().GetProperty("Submitted")!.GetValue(outcome)! &&
         zkCommands.SequenceEqual(new[]{"onChange","onChange","onClick"}),
         "ATOSS login uses two field changes, one login click and verified post-login HTML");
+}
+// Distinguish real upstream iframe errors from a missing login widget.
+var frameReader=typeof(FavoriteProxy).GetMethod("ReadAtossPageDetailedAsync",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+async Task<(string Code,int? Status)> CheckFrameResponseAsync(
+    HttpClient testClient,Uri target){
+    var task=(Task)frameReader.Invoke(null,new object?[]{
+        testClient,zkTestOrigin,target,zkTestOuter,CancellationToken.None})!;
+    await task;
+    var result=task.GetType().GetProperty("Result")!.GetValue(task)!;
+    return ((string)result.GetType().GetProperty("Code")!.GetValue(result)!,
+        (int?)result.GetType().GetProperty("Status")!.GetValue(result));
+}
+using(var rejectedFrame=new HttpClient(new MockHandler(_=>
+    new HttpResponseMessage(HttpStatusCode.NotFound)))){
+    var result=await CheckFrameResponseAsync(rejectedFrame,zkTestChild);
+    Assert(result.Code=="atoss-zk-frame-http-error" && result.Status==404,
+        "iframe 404 is reported accurately without disclosing target or response body");
+}
+using(var nonHtmlFrame=new HttpClient(new MockHandler(_=>
+    new HttpResponseMessage(HttpStatusCode.OK){
+        Content=new StringContent("please log in",Encoding.UTF8,"text/plain")
+    }))){
+    var result=await CheckFrameResponseAsync(nonHtmlFrame,zkTestChild);
+    Assert(result.Code=="atoss-zk-frame-not-html" && result.Status==200,
+        "upstream non-HTML response is differentiated from HTTP rejection");
+}
+using(var foreignRedirectFrame=new HttpClient(new MockHandler(_=>
+    new HttpResponseMessage(HttpStatusCode.Redirect){
+        Headers={Location=new Uri("https://evil.example.org/steal")}
+    }))){
+    var result=await CheckFrameResponseAsync(foreignRedirectFrame,zkTestChild);
+    Assert(result.Code=="atoss-zk-frame-redirect-blocked" && result.Status==302,
+        "iframe redirect to another origin is blocked without following it");
+}
+var redirectsSeen=0;
+using(var redirectFrame=new HttpClient(new MockHandler(req=>{
+    redirectsSeen++;
+    if(redirectsSeen==1)return new HttpResponseMessage(
+        HttpStatusCode.TemporaryRedirect){
+            Headers={Location=new Uri("html",UriKind.Relative)}
+        };
+    Assert(req.RequestUri!.AbsoluteUri==zkTestChild.AbsoluteUri,
+        "ATOSS redirect stays inside the existing HTTPS iframe URL");
+    return new HttpResponseMessage(HttpStatusCode.OK){
+        Content=new StringContent(fakeAtossLogin,Encoding.UTF8,"text/html")
+    };
+}))){
+    var result=await CheckFrameResponseAsync(redirectFrame,zkTestChild);
+    Assert(result.Code=="atoss-zk-frame-ok" && result.Status==200 &&
+        redirectsSeen==2,
+        "ATOSS follows at most bounded validated same-origin redirect");
 }
 var maliciousZkForm=fakeAtossLogin.Replace(
     @"\x2FSES\x2Fuuid11111111-1111-1111-1111-111111111111\x2FzkauA10\x3Bjsessionid\x3DTEST_SESSION",
