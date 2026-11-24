@@ -2065,6 +2065,37 @@ Assert(ZnunyArticleReadTracker.IsReliablyAfter(null,"105",null,"104") &&
     !ZnunyArticleReadTracker.IsReliablyAfter(null,"old-article",null,"104"),
     "numeric fallback is used only for reliably ordered article IDs");
 
+// Favorite diagnostics are opt-in, bounded and strictly scoped to the
+// administrator's own favorite. No URLs, cookies or credentials in events.
+var debugProxy=new Plenaro.Api.Favorites.FavoriteProxy(
+    new ConfigurationBuilder().Build());
+var debugOwner=Guid.NewGuid();
+var debugOther=Guid.NewGuid();
+var debugFavorite=Guid.NewGuid();
+var debugRecord=typeof(Plenaro.Api.Favorites.FavoriteProxy)
+    .GetMethod("Debug",BindingFlags.Instance|BindingFlags.NonPublic)!;
+void EmitFavoriteDebug(Guid owner,string code,string method="GET",string resource="script"){
+    debugRecord.Invoke(debugProxy,new object?[]{
+        owner,debugFavorite,"error",code,method,resource,502
+    });
+}
+EmitFavoriteDebug(debugOwner,"upstream-unavailable");
+Assert(debugProxy.DebugEvents(debugOwner,debugFavorite,0).Count==0,
+    "favorite debug disabled by default");
+debugProxy.ConfigureDebug(debugOwner,true);
+EmitFavoriteDebug(debugOwner,"upstream-unavailable","GET?token=private","secret/resource");
+Assert(debugProxy.DebugEvents(debugOwner,debugFavorite,0).Single() is
+    {Code:"upstream-unavailable",Method:"",Resource:"other",Status:502},
+    "favorite diagnostics redact unsafe methods and resource names");
+Assert(debugProxy.DebugEvents(debugOther,debugFavorite,0).Count==0,
+    "other users cannot retrieve an administrator's diagnostic events");
+for(var n=0;n<270;n++)EmitFavoriteDebug(debugOwner,"http-response");
+Assert(debugProxy.DebugEvents(debugOwner,debugFavorite,0).Count==250,
+    "favorite diagnostic ring buffer has a strict event cap");
+debugProxy.ConfigureDebug(debugOwner,false);
+Assert(debugProxy.DebugEvents(debugOwner,debugFavorite,0).Count==0,
+    "disabling debug immediately clears buffered events");
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory
