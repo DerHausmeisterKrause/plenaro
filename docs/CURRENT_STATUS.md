@@ -5,7 +5,7 @@
 - [x] Same-Origin-HTTP-Redirects für die SES-Anmeldeseite auf höchstens zwei Hops begrenzt; fremde Hosts, andere Pfadbereiche, unsichere URLs weiterhin abgewiesen.
 - [x] Admin-Fehlerdiagnose unterscheidet nun echte Upstream-HTTP-Fehler (mit Statuscode), Non-HTML, übergroße Antwort und unerlaubte Weiterleitung; nie vollständige URLs, Cookies, Anmeldedaten oder Antwortbodies protokollieren.
 - [x] Synthetische Integrationstests prüfen Browser-Navigationsheader, HTTP 404, HTTP 200 mit unerwartetem Inhalt, fremde Redirects und gültigen Same-Origin-Redirect; vorhandene ZK-Login-Vertragstests bleiben erhalten.
-- [ ] CI erfolgreich durchlaufen und PR mergen.
+- [x] [PR #60](https://github.com/DerHausmeisterKrause/plenaro/pull/60) in `main` gemergt; [CI #45413826256](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45413826256) erfolgreich (Build, ZK-/Znuny-Vertragstests, TLS, Docker-Smoke, Favoritenbrowser).
 - [ ] Live-Abnahme am produktiven ATOSS: `Neu verbinden`, ZK-Login-Diagnose und tatsächliche Anmeldung prüfen. Ob fehlende Browser-Navigationsheader die alleinige Ursache waren, kann nur der Live-Test bestätigen.
 - [x] Kein neuer Dockercontainer, keine Änderungen an DNS, TLS, Compose, Datenbank, Hostnamen oder Passwortsicherheit.
 
