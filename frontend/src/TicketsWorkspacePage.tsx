@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Inbox, RefreshCw, Search, Ticket, Pin, SlidersHorizontal } from 'lucide-react';
+import { Inbox, RefreshCw, Search, Ticket, Pin, SlidersHorizontal, Star } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ClassicTicketDetailPanel } from './ClassicTicketDetailPanel';
 import {
@@ -161,7 +161,10 @@ export function TicketsWorkspacePage() {
                 className={`classic-list-item${selectedId===ticket.ticketId?' active':''}`}
                 aria-current={selectedId===ticket.ticketId?'true':undefined}
                 onClick={()=>setSelectedId(ticket.ticketId)}>
-                <strong>{ticket.title||'Ticket '+ticket.ticketNumber}</strong>
+                <strong>{ticket.unreadArticleCount? <Star role="img"
+                  aria-label="Neue ungelesene Ticket-Nachricht"
+                  className="ticket-unread-star" size={17}/>:null}
+                  {ticket.title||'Ticket '+ticket.ticketNumber}</strong>
                 <small>#{ticket.ticketNumber||ticket.ticketId} · {ticket.queue}</small>
                 <span className="tasks-state">{ticket.state}</span>
               </button>
