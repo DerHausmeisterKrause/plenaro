@@ -32,7 +32,31 @@ internal static class FavoriteHeadlessLogin
     /// classic form, even on failure); false = worker not running, so retain
     /// the pre-existing classic HTML fallback.
     /// </returns>
+    // A browser response is not synonymous with a successful login. Report
+    // only predefined reason codes, never an upstream error or worker payload.
+    internal sealed record BrowserAttempt(bool Attempted,bool Authenticated,string Code);
+
+    internal static string ClassifyReason(string? reason)=>reason switch
+    {
+        "no-login-fields" => "browser-no-login-fields",
+        "no-login-action" => "browser-no-login-action",
+        "not-confirmed" => "browser-login-not-confirmed",
+        "foreign-origin" => "browser-foreign-login",
+        "no-session-cookies" => "browser-no-session-cookies",
+        "blocked-target" => "browser-target-blocked",
+        "browser-unavailable" => "browser-worker-error",
+        "busy" => "browser-worker-busy",
+        _ => "browser-login-not-confirmed"
+    };
+
+    // Keep the original boolean contract for old callers: true means the
+    // worker MIGHT have posted credentials, not that it authenticated.
     internal static async Task<bool> TryAsync(
+        CookieContainer jar,Uri origin,Uri entry,
+        string username,string password,CancellationToken ct)
+        => (await TryDetailedAsync(jar,origin,entry,username,password,ct)).Attempted;
+
+    internal static async Task<BrowserAttempt> TryDetailedAsync(
         CookieContainer jar,Uri origin,Uri entry,
         string username,string password,CancellationToken ct)
     {
@@ -40,7 +64,7 @@ internal static class FavoriteHeadlessLogin
            !entry.Host.Equals(origin.Host,StringComparison.OrdinalIgnoreCase) ||
            entry.Port!=origin.Port || !string.IsNullOrEmpty(entry.UserInfo) ||
            !string.IsNullOrEmpty(origin.UserInfo))
-            return false;
+            return new(false,false,"browser-target-blocked");
         var cookies=jar.GetCookies(origin).Cast<Cookie>()
             .Where(c=>ValidCookie(origin,new(c.Name,c.Value,c.Domain,
                 c.Path,c.Secure,c.HttpOnly)))
@@ -60,43 +84,43 @@ internal static class FavoriteHeadlessLogin
             when(error.InnerException is SocketException socket &&
                 socket.SocketErrorCode is SocketError.HostNotFound or
                     SocketError.TryAgain or SocketError.ConnectionRefused){
-            // Worker is definitely unavailable: old HTML login can run.
-            return false;
+            return new(false,false,"browser-worker-unreachable");
         }catch(HttpRequestException){
-            // A worker may already have submitted a login before the
-            // transport broke. Do not risk a second password submission.
-            return true;
+            // Worker may have already submitted a login: no double POST.
+            return new(true,false,"browser-transport-uncertain");
         }
         using(reply){
-            // Worker replied: never do a second login attempt in this session.
-            if(!reply.IsSuccessStatusCode)return true;
-            if(reply.Content.Headers.ContentLength>64*1024)return true;
+            if(!reply.IsSuccessStatusCode)
+                return new(true,false,"browser-worker-error");
+            if(reply.Content.Headers.ContentLength>64*1024)
+                return new(true,false,"browser-worker-error");
             try{
                 using var stream=await reply.Content.ReadAsStreamAsync(ct);
                 var result=await JsonSerializer.DeserializeAsync<BrowserResponse>(
                     stream,new JsonSerializerOptions{
                         PropertyNameCaseInsensitive=true
                     },ct);
-                // Browser has not submitted any credentials if the page
-                // has no rendered login fields or no recognizable action.
-                // In exactly those cases retain the old HTML form fallback,
-                // important for other personal favorites without ATOSS/ZK.
                 if(result?.Authenticated!=true &&
                    result?.Reason is "no-login-fields" or "no-login-action")
-                    return false;
+                    return new(false,false,ClassifyReason(result.Reason));
                 if(result?.Authenticated!=true || result.Cookies is null ||
-                   result.Cookies.Length>64)return true;
+                   result.Cookies.Length>64)
+                    return new(true,false,ClassifyReason(result?.Reason));
+                var imported=0;
                 foreach(var cookie in result.Cookies){
                     if(!ValidCookie(origin,cookie))continue;
                     try{
                         jar.Add(origin,new Cookie(cookie.Name,cookie.Value,
                             cookie.Path){Secure=true,
                             HttpOnly=cookie.HttpOnly});
-                    }catch(CookieException){/* Invalid cookie cannot escape worker. */}
+                        imported++;
+                    }catch(CookieException){/* Invalid cookie never escapes worker. */}
                 }
-            }catch(JsonException){/* Untrusted worker response, no fallback. */}
-            catch(IOException){/* Uncertain partial worker response: no retry. */}
-            return true;
+                return imported>0
+                    ?new(true,true,"browser-login-confirmed")
+                    :new(true,false,"browser-no-valid-session-cookies");
+            }catch(JsonException){return new(true,false,"browser-worker-error");}
+            catch(IOException){return new(true,false,"browser-transport-uncertain");}
         }
     }
 
