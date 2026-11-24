@@ -6,7 +6,7 @@
 - [x] Anmeldefehler in Dialoginitialisierung, Benutzername, Kennwort, Anmeldeklick und anschließende Sitzungsbestätigung getrennt; keine Geheimnisse im Debuglog.
 - [x] Sitzungsprüfung nach dem Anmeldeklick zuerst gegen den bereits aktiven dynamischen ATOSS-Iframe statt des `/SES/html`-Einstiegs, da dessen erneutes Laden eine neue UUID-Sitzung anlegen kann.
 - [x] Synthetische Vertragstests simulieren `onClientInfo` + `onDialogRendered`, `onDialogFocus`, zwei `onChange` und einen `onClick`; Initialisierungsfehler darf keine Zugangsdaten versenden. Kein produktives ATOSS-Konto wird getestet.
-- [ ] GitHub-PR, CI und Merge abschließen.
+- [x] [PR #61](https://github.com/DerHausmeisterKrause/plenaro/pull/61) nach `main` gemergt; [CI #45415987832](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45415987832) nach Wiederholung eines unabhängigen flüchtigen Znuny-Frontendtests erfolgreich (Build, ATOSS-ZK-Vertragstest, TLS, Docker-Smoke und Browser-Login).
 - [ ] Live-Abnahme: ATOSS neu verbinden und tatsächliche Anmeldung prüfen; falls weiterhin Fehler, neuen eindeutigen ZK-Schritt aus Admin-Diagnose auswerten. Kein behaupteter erfolgreicher Login ohne Bestätigung.
 - [x] Keine neuen Dockercontainer, DNS-/TLS-Aliasse, Compose-Profile, Migrationen, Ports oder Browserworker.
 
