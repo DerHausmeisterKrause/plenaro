@@ -17,6 +17,35 @@ const descriptions:Record<string,string>={
   'login-dedicated-dom':'Automatische Browser-Anmeldung über eigenen HTTPS-Host vorgesehen',
   'login-credentials-missing':'Benutzername oder Passwort fehlen',
   'headless-login-attempt':'Privater Login-Browser wird aufgerufen',
+  'browser-worker-unreachable':'Privater Browserdienst nicht erreichbar. Kein zusätzlicher Container erforderlich: klassischer Login wird versucht; JavaScript-Login bleibt manuell.',
+  'browser-target-blocked':'Browser-Login: Zieladresse nicht zugelassen',
+  'browser-no-login-fields':'Im Browser keine passenden Loginfelder gefunden',
+  'browser-no-login-action':'Im Browser keine eindeutige Anmeldeaktion gefunden',
+  'browser-login-not-confirmed':'Browseranmeldung wurde nicht bestätigt',
+  'browser-foreign-login':'Browseranmeldung würde einen fremden Login-Host benötigen',
+  'browser-no-session-cookies':'Browser: Anmeldung erkannt, aber keine Sitzungscookies vorhanden',
+  'browser-no-valid-session-cookies':'Browser hat keine gültigen Sitzungscookies zurückgegeben',
+  'browser-login-confirmed':'Browser hat eine gültige Sitzung übernommen',
+  'browser-transport-uncertain':'Browserantwort unklar; doppelte Anmeldung wird vermieden',
+  'browser-worker-error':'Browserdienst antwortet mit einem Fehler',
+  'browser-worker-busy':'Browserdienst ausgelastet',
+  'shared-origin-autofill-disabled':'Gemeinsamer Favoriten-Host: Passwortübergabe an JavaScript absichtlich gesperrt (kein DNS-Fehler)',
+  'html-login-page-rejected':'HTML-Loginseite antwortet mit Fehlerstatus',
+  'html-login-redirect-missing':'HTML-Loginseite leitet ohne Ziel weiter',
+  'html-login-redirect-cross-origin':'HTML-Login würde zu fremdem Server weiterleiten',
+  'html-login-navigation-blocked':'HTML-Login-Navigation nicht zulässig',
+  'html-login-navigation-limit':'HTML-Login-Routing-Limit erreicht',
+  'html-login-page-not-html':'Loginziel liefert kein HTML-Formular',
+  'html-login-page-too-large':'HTML-Loginseite über dem Größenlimit',
+  'html-login-form-not-found':'Kein geeignetes klassisches HTML-Anmeldeformular gefunden; JavaScript-Login muss manuell erfolgen',
+  'html-login-post-rejected':'Server hat den HTML-Login-POST abgelehnt',
+  'html-login-followup-rejected':'Weiterleitung nach HTML-Login fehlgeschlagen',
+  'html-login-post-sent-unconfirmed':'HTML-Anmeldedaten gesendet; gültige Sitzung noch nicht bestätigt',
+  'upstream-400-csrf-hint':'Hinweis aus Serverantwort: CSRF-/XSRF-Prüfung könnte HTTP 400 verursachen',
+  'upstream-400-origin-hint':'Hinweis aus Serverantwort: Origin-/Referer-Prüfung könnte HTTP 400 verursachen',
+  'upstream-400-session-hint':'Hinweis aus Serverantwort: Sitzung/Anmeldung könnte HTTP 400 verursachen',
+  'upstream-400-validation-hint':'Hinweis aus Serverantwort: Pflichtfelder/Validierung könnten HTTP 400 verursachen',
+  'upstream-400-content-type-hint':'Hinweis aus Serverantwort: Content-Type könnte HTTP 400 verursachen',
   'headless-login-cookies':'Privater Browser hat eine Sitzung übergeben',
   'headless-login-fallback':'Privater Browser nicht erfolgreich, HTML-Fallback wird versucht',
   'html-login-attempt':'Klassischen HTML-Loginversuch gestartet',
@@ -149,14 +178,17 @@ export function FavoriteDebugConsole({favoriteId}:{favoriteId:string}){
             <time>{new Date(entry.at).toLocaleTimeString('de-DE')}</time>
             <span className="favorites-debug-level">{entry.level.toUpperCase()}</span>
             <span>{entry.status??'–'}</span>
-            <span>{entry.method||'–'} · {entry.resource}</span>
+            <span title="Die Kennung identifiziert denselben Ressourcenpfad ohne dessen URL offenzulegen">{entry.method||'–'} · {entry.resource}{entry.route?' · #'+entry.route:''}</span>
             <span title={entry.code}>{descriptions[entry.code]??entry.code}</span>
           </div>):
           <p className="um-hint">Noch keine passenden Ereignisse. Öffne oder
             aktualisiere den Favoriten, um neue Proxy-Anfragen zu sehen.</p>}
         </div>
         <p className="um-hint">Automatische Aktualisierung alle 3 Sekunden.
-          Die Diagnose sieht serverseitige Proxy-Anfragen, aber nicht die
+          Gleiche Kennung (#) bedeutet gleicher Ressourcenpfad; die URL
+          selbst bleibt verborgen. Ein Hinweis auf eine HTTP-400-Ursache ist
+          keine sichere Diagnose. Die Konsole sieht serverseitige Proxy-Anfragen,
+          aber nicht die
           JavaScript-Konsole einer fremden Webseite oder durch den Browser
           vor dem Proxy blockierte externe Anfragen.</p>
       </>}
