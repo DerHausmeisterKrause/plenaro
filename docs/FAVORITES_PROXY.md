@@ -1,3 +1,32 @@
+## 24.11.2026 – Phase 7/7: Admin-Debugmodus für Favoriten/Proxy
+
+- [x] WPF-Referenz `WebShortcutBrowserSessionManager` geprüft (Navigation, WebResource-Statuscodes, Netzwerkfehler); web-spezifische Diagnose läuft direkt im vorhandenen FavoriteProxy.
+- [x] Eigenständiger **pro Admin-Konto** gespeicherter Opt-in-Schalter unter **Einstellungen → Webseiten / Favoriten** (Migration `0033_favorite_debug_settings.sql`, initial `false`).
+- [x] Server prüft Adminrolle und aktiven Benutzer; Toggle und Log-Löschen sind CSRF-geschützt; Log-Lesen prüft Favoritenbesitz. Normale Nutzer bekommen niemals Adminlogs.
+- [x] Sichere kategorisierte Proxy-Ereignisse: Verbindungsaufbau/Bootstrap, Auto-Login-Modus, HTML-/Headless-Fallback, HTTP-Status nach Ressourcentyp, Navigation/Redirect, blockierte Anfragen, Timeouts und Autofill-Zustand.
+- [x] Nur fest definierte Codes und HTTP-Metadaten; **keine** URLs/Pfade/Queryparameter, Benutzernamen, Passwörter, Cookies, Tokens, Inhalte, Header, Post-Bodies oder HARs.
+- [x] Browserseite zeigt Administratoren eine Diagnosekonsole beim **ausgewählten Favoriten** (3-Sekunden-Aktualisierung, Fehlerfilter, Log löschen); einfache Benutzer sehen keine Konsole und senden keine Diagnoseanfragen.
+- [x] Ereignisse bleiben nur im RAM dieses Webprozesses (max. 250 pro Admin/Favorit, max. 30 Minuten), kein dauerhaftes Zugriffsprotokoll; beim Abschalten sofort löschen.
+- [x] Keine neuen Container, DNS-Aliasse, Upstream-Änderungen oder Browser-Login-Profile.
+- [x] Frontend- und Integrationstests für Sichtbarkeit, Umschalter, Adminrolle, CSRF, Favoritenbesitz, Redaction und Pufferlimit.
+- [ ] CI-Ergebnis und PR-Merge prüfen.
+- [ ] Produktivtest am Zielhost mit betroffenen Favoriten (ATOSS/Wiki): HTTP-Fehler, CSS/JS-Ressourcen, Login-Ablauf. Die fremde JavaScript-Konsole und Browser-CSP/CORS-Fehler vor dem Proxy können **nicht** vollständig serverseitig erfasst werden.
+
+### Live-Deployment nach CI/PR-Merge
+
+```bash
+cd /opt/plenaro
+git pull --ff-only origin main
+docker compose up -d --build --no-deps web
+docker compose restart nginx
+docker compose ps
+docker compose logs --tail=80 web
+```
+
+Migration 0033 erfolgt automatisch beim Webstart; bestehende Daten und Favoritensitzungen anderer Nutzer werden nicht über die Diagnose-API freigegeben.
+
+---
+
 ## 19.11.2026 – ATOSS-Autologin ohne zusätzliche Favoriten-Aliasse
 
 Der Benutzer möchte den vorhandenen, funktionierenden
