@@ -887,13 +887,16 @@ public sealed partial class FavoriteProxy
         Uri external,string appPath,string pathPrefix,CancellationToken ct)
     {
         var method=ctx.Request.Method;
+        var resource=DebugResource(appPath,Navigation(ctx.Request));
         if(method is not ("GET" or "HEAD" or "POST" or "PUT" or "PATCH" or "DELETE")||
             !AllowedMutation(ctx.Request,external,pathPrefix)){
+            Debug(session.User,session.Favorite,"warning","request-blocked",method,resource,403);
             ctx.Response.StatusCode=403;return;
         }
         var target=new Uri(session.Upstream,appPath+
             ctx.Request.QueryString.ToUriComponent());
         if(!SameUpstream(session.Upstream,target)){
+            Debug(session.User,session.Favorite,"warning","target-blocked",method,resource,403);
             ctx.Response.StatusCode=403;return;
         }
         using var req=new HttpRequestMessage(new HttpMethod(method),target);
@@ -929,9 +932,14 @@ public sealed partial class FavoriteProxy
             using var res=await session.Client.SendAsync(req,
                 HttpCompletionOption.ResponseHeadersRead,ct);
             ctx.Response.StatusCode=(int)res.StatusCode;
+            Debug(session.User,session.Favorite,
+                (int)res.StatusCode>=500?"error":
+                (int)res.StatusCode>=400?"warning":"info",
+                "http-response",method,resource,(int)res.StatusCode);
             if(res.Headers.Location is { } location){
                 var redirect=new Uri(target,location);
                 if(!SameUpstream(session.Upstream,redirect)){
+                    Debug(session.User,session.Favorite,"error","redirect-cross-origin",method,resource,502);
                     await ProxyNavigationErrorAsync(ctx,502,"upstream-redirect",
                         "Die Webseite leitet auf einen anderen Server weiter. "+
                         "Hinterlege die endgültige HTTPS-Adresse als Favorit.",ct);
@@ -968,6 +976,8 @@ public sealed partial class FavoriteProxy
                 // prove this code path ran, without logging login contents.
                 ctx.Response.Headers["X-Plenaro-Login-Next"]=
                     rewritten==content?"unchanged":"prefixed";
+                Debug(session.User,session.Favorite,"info",
+                    rewritten==content?"login-next-unchanged":"login-next-rewritten",method,resource);
                 ctx.Response.ContentType="application/json; charset=utf-8";
                 await ctx.Response.WriteAsync(rewritten,ct);
                 return;
@@ -1027,6 +1037,7 @@ public sealed partial class FavoriteProxy
                         session.Slug,session.AutoLogin,pathPrefix.Length>0,
                         session.Username,external.Host,dedicated?.Host)){
                         ctx.Response.Headers["X-Plenaro-Autofill"]="isolated-origin-required";
+                        Debug(session.User,session.Favorite,"warning","autofill-origin-required",method,resource);
                     }else{
                         var vault=ctx.RequestServices.GetService<SecretVault>();
                         if(vault?.IsConfigured==true){
@@ -1038,10 +1049,15 @@ public sealed partial class FavoriteProxy
                                     transformed,session.Username,secret,
                                     external.Host,session.AutoFillNonce);
                                 ctx.Response.Headers["X-Plenaro-Autofill"]="dedicated-dom";
-                            }else
+                                Debug(session.User,session.Favorite,"info","autofill-injected",method,resource);
+                            }else{
                                 ctx.Response.Headers["X-Plenaro-Autofill"]="missing-password";
-                        }else
+                                Debug(session.User,session.Favorite,"warning","autofill-password-missing",method,resource);
+                            }
+                        }else{
                             ctx.Response.Headers["X-Plenaro-Autofill"]="vault-unconfigured";
+                            Debug(session.User,session.Favorite,"warning","autofill-vault-unconfigured",method,resource);
+                        }
                     }
                 }
                 await ctx.Response.Body.WriteAsync(encoding.GetBytes(transformed),ct);
@@ -1051,6 +1067,8 @@ public sealed partial class FavoriteProxy
         }catch(HttpRequestException error) when(!ct.IsCancellationRequested){
             var blocked=error.Message.Contains("Host address is blocked",
                 StringComparison.Ordinal);
+            Debug(session.User,session.Favorite,"error",
+                blocked?"private-address-blocked":"upstream-unavailable",method,resource,502);
             await ProxyNavigationErrorAsync(ctx,502,
                 blocked?"private-upstream-blocked":"upstream-unavailable",
                 blocked
@@ -1061,9 +1079,11 @@ public sealed partial class FavoriteProxy
                     :"Der Zielserver ist über den Plenaro-Proxy nicht erreichbar.",
                 ct);
         }catch(OperationCanceledException) when(!ct.IsCancellationRequested){
+            Debug(session.User,session.Favorite,"error","upstream-timeout",method,resource,504);
             await ProxyNavigationErrorAsync(ctx,504,"upstream-timeout",
                 "Der Zielserver hat nicht rechtzeitig geantwortet.",ct);
         }catch(InvalidOperationException){
+            Debug(session.User,session.Favorite,"error","upstream-resource-limit",method,resource,413);
             await ProxyNavigationErrorAsync(ctx,413,"upstream-resource-limit",
                 "Die Antwort des Zielservers ist für den Proxy zu groß.",ct);
         }
