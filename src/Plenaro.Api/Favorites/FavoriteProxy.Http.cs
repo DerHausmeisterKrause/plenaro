@@ -905,15 +905,15 @@ public sealed partial class FavoriteProxy
         var sample=content.Length>16384?content[..16384]:content;
         const RegexOptions flags=RegexOptions.IgnoreCase|
             RegexOptions.CultureInvariant;
-        if(Regex.IsMatch(sample,@"\\b(?:csrf|xsrf|anti.?forgery|requestverificationtoken)\\b",
+        if(Regex.IsMatch(sample,@"\b(?:csrf|xsrf|anti.?forgery|requestverificationtoken)\b",
             flags,TimeSpan.FromMilliseconds(50)))return "upstream-400-csrf-hint";
-        if(Regex.IsMatch(sample,@"\\b(?:invalid.origin|origin.mismatch|invalid.referer|referer.mismatch)\\b",
+        if(Regex.IsMatch(sample,@"\b(?:invalid.origin|origin.mismatch|invalid.referer|referer.mismatch)\b",
             flags,TimeSpan.FromMilliseconds(50)))return "upstream-400-origin-hint";
-        if(Regex.IsMatch(sample,@"\\b(?:session.expired|invalid.session|not.authenticated|unauthenticated)\\b",
+        if(Regex.IsMatch(sample,@"\b(?:session.expired|invalid.session|not.authenticated|unauthenticated)\b",
             flags,TimeSpan.FromMilliseconds(50)))return "upstream-400-session-hint";
-        if(Regex.IsMatch(sample,@"\\b(?:validation.failed|required.field|one.or.more.validation.errors|invalid.payload)\\b",
+        if(Regex.IsMatch(sample,@"\b(?:validation.failed|required.field|one.or.more.validation.errors|invalid.payload)\b",
             flags,TimeSpan.FromMilliseconds(50)))return "upstream-400-validation-hint";
-        if(Regex.IsMatch(sample,@"\\b(?:invalid.content.type|unsupported.media.type)\\b",
+        if(Regex.IsMatch(sample,@"\b(?:invalid.content.type|unsupported.media.type)\b",
             flags,TimeSpan.FromMilliseconds(50)))return "upstream-400-content-type-hint";
         return null;
     }
