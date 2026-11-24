@@ -1,3 +1,28 @@
+## 24.11.2026 – Phase 7/7: ATOSS-ZK-Login, dynamischen Iframe-Abruf korrigieren
+
+- [x] HAR `atoss1` nach gescheitertem Liveversuch untersucht: Browser-Proxy lädt `/SES/html` und anschließend die dynamische `/SES/uuid.../html`-Seite mit HTTP 200, inklusive ZK-Widget-Baum und Loginmaske. Separater serverseitiger Anmeldeversuch meldete `atoss-zk-login-page-unavailable`; Passwort wurde dabei noch nicht eingereicht.
+- [x] Konkrete Protokolldifferenz gefunden: Backend-GET auf den dynamischen Iframe übertrug weder `Accept: text/html` noch `User-Agent` oder `Accept-Language`, obwohl der Browser diese Navigationsheader setzt. Anpassung im bestehenden Webprozess, weiter mit isoliertem HTTPS-Upstream und Cookiejar.
+- [x] Same-Origin-HTTP-Redirects für die SES-Anmeldeseite auf höchstens zwei Hops begrenzt; fremde Hosts, andere Pfadbereiche, unsichere URLs weiterhin abgewiesen.
+- [x] Admin-Fehlerdiagnose unterscheidet nun echte Upstream-HTTP-Fehler (mit Statuscode), Non-HTML, übergroße Antwort und unerlaubte Weiterleitung; nie vollständige URLs, Cookies, Anmeldedaten oder Antwortbodies protokollieren.
+- [x] Synthetische Integrationstests prüfen Browser-Navigationsheader, HTTP 404, HTTP 200 mit unerwartetem Inhalt, fremde Redirects und gültigen Same-Origin-Redirect; vorhandene ZK-Login-Vertragstests bleiben erhalten.
+- [ ] CI erfolgreich durchlaufen und PR mergen.
+- [ ] Live-Abnahme am produktiven ATOSS: `Neu verbinden`, ZK-Login-Diagnose und tatsächliche Anmeldung prüfen. Ob fehlende Browser-Navigationsheader die alleinige Ursache waren, kann nur der Live-Test bestätigen.
+- [x] Kein neuer Dockercontainer, keine Änderungen an DNS, TLS, Compose, Datenbank, Hostnamen oder Passwortsicherheit.
+
+### Deployment nach Merge
+
+```bash
+cd /opt/plenaro
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build --no-deps web
+docker compose restart nginx
+docker compose ps
+docker compose logs --tail=80 web
+```
+
+---
+
 ## 24.11.2026 – Phase 7/7: ATOSS ZK-Autologin direkt im bestehenden Backend
 
 - [x] Den vom Nutzer bereitgestellten ATOSS-HAR mit 55 Requests analysiert: `/SES/html` liefert dynamische `uuid.../html`-Iframe-Adresse; die Loginmaske ist ein `zkmx`-ZK-Widgetbaum, kein HTML-Formular. Testdaten und Referenzen sind synthetisch; keine privaten URLs, Sessions, Passwörter oder Cookies übernommen.
