@@ -7,7 +7,7 @@
 - [x] Fehler- und Authentisierungsprüfung: genau ein Anmeldeversuch, niemals Doppel-POST bei unklarer Antwort; nur eine nachfolgend abrufbare ATOSS-ZK-Seite ohne dieselbe Loginmaske gilt als bestätigt. Andere Zielwebseiten behalten den bisherigen Login.
 - [x] Private Admin-Diagnose für ZK-Loginversuch, erkannten Login, nicht bestätigte Anmeldung, fehlende ZK-Seite oder eindeutige Loginwidgets; keine Geheimnisse im Log.
 - [x] Mock-Vertragstest für den vollständigen loginartigen ZK-Ablauf, dynamische IDs, HTTPS-Origin und abgelehnte fremde ZK-Endpunkte. Kein echter ATOSS-Login im Test.
-- [ ] PR und CI vollständig abschließen; danach in `main` mergen.
+- [x] [PR #59](https://github.com/DerHausmeisterKrause/plenaro/pull/59) in `main` gemergt; [CI #45411725497](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45411725497) vollständig grün (Backend, Frontend, ATOSS-ZK-Vertragstest, TLS, Docker-Smoke und Favoritenbrowser).
 - [ ] Produktiv-Abnahme am echten ATOSS: Favorit neu verbinden, neues ZK-Login-Diagnoseereignis und tatsächliche Sitzung testen. Der Nutzer-Mitschnitt enthält keinen echten `onClick`-Login, weshalb das exakte ATOSS-Loginereignis bis zur Abnahme nicht verifiziert ist.
 - [x] Keine neuen Container oder Compose-Profile, DNS-Einträge, Zertifikate, Ports, Browserworker, Datenbankmigrationen oder zusätzlichen API-Endpunkte.
 
