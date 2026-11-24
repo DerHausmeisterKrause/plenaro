@@ -18,6 +18,7 @@ export type CachedTicket = {
   ticketId: string; ticketNumber: string; title: string; queue: string;
   state: string; stateType: string; ownerId: number|null; responsibleId: number|null;
   createdAt: string|null; changedAt: string|null; isPinned?:boolean;
+  unreadArticleCount?:number;
 };
 export type TicketAccess = {
   approved:boolean;agentId:number|null;candidateUserId:number|null;syncEnabled:boolean;
@@ -198,11 +199,15 @@ export type ZnunyArticle = {
 };
 export type ZnunyConversation = {
   ticketId:string;ticketNumber:string;title:string;articles:ZnunyArticle[];
+  unreadArticleIds:string[];
 };
 export type ZnunyAgent = { id:number;name:string };
 export type ZnunyUpdateConfirmation = { confirmed:boolean;cacheUpdated?:boolean };
 export const readZnunyArticles=(ticketId:string)=>
   request<ZnunyConversation>(workspaceBase(ticketId)+'/articles');
+export const markZnunyArticleRead=async(ticketId:string,articleId:string):Promise<void>=>{
+  await mutate(workspaceBase(ticketId)+'/articles/'+encodeURIComponent(articleId)+'/read','POST');
+};
 export const checkZnunyWriteReadiness=(ticketId:string)=>
   request<{personalLogin:boolean;ticketGet:boolean;writeMethod:string;
     writeRoute:string;writeVerified:boolean;message:string}>(
