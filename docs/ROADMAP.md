@@ -5,7 +5,7 @@
 - [x] Diese beiden Header unverändert an den freigegebenen HTTPS-Upstream der jeweiligen Favoritensitzung weiterleiten; weiterhin keine Browser-Cookies, Host, Proxy-Authorization oder unbekannten Header.
 - [x] WPF-Referenz `DerHausmeisterKrause/project_tool/Services/WebShortcutBrowserSessionManager.cs` verglichen: native WebView2-Anfragen übernehmen Webseiten-Header; Web-Proxy braucht gezielte Header-Parität.
 - [x] Vertragstests für GET und POST mit OrgManager-Headern und negative Kontrollen für Cookie-/Host-/unbekannte Header.
-- [ ] CI erfolgreich abschließen und PR in `main` mergen.
+- [x] [PR #58](https://github.com/DerHausmeisterKrause/plenaro/pull/58) nach `main` gemergt; [CI #45399813797](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45399813797) vollständig erfolgreich (Builds, Vertragstests, TLS, Docker-Smoke und Browser-Login).
 - [ ] Live-Abnahme: OrgManager-Favorit neu verbinden und alle drei API-Anfragen überprüfen. Ein anderer JavaScript-only-Autologin ohne Browserworker bleibt unverändert.
 - [x] Keine neuen Container, DNS-Einträge, Aliasnamen, Zertifikate, Datenbankmigrationen oder Compose-Profile.
 
