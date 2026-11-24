@@ -81,7 +81,7 @@ public static class FavoritesEndpoints
             proxy.ConfigureDebug(user.Id,enabled);
             return Results.Ok(new{enabled,
                 events=enabled?proxy.DebugEvents(user.Id,favoriteId,
-                    Math.Max(0,after??0)):[]});
+                    Math.Max(0,after??0)):Array.Empty<FavoriteProxy.FavoriteDebugEntry>()});
         });
 
         adminDebug.MapPost("/clear",async(FavoriteDebugClear input,
