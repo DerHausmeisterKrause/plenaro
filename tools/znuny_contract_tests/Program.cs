@@ -2402,6 +2402,11 @@ var maliciousZkForm=fakeAtossLogin.Replace(
 Assert(parseAtoss.Invoke(null,new object[]{
     maliciousZkForm,zkTestChild,zkTestOrigin}) is null,
     "ATOSS ZK login rejects any cross-origin or forged update URL");
+var uninitializedZkForm=fakeAtossLogin.Replace(
+    "$onDialogRendered:true","$onDialogRendered:false",StringComparison.Ordinal);
+Assert(parseAtoss.Invoke(null,new object[]{
+    uninitializedZkForm,zkTestChild,zkTestOrigin}) is null,
+    "ATOSS refuses to submit credentials when login dialog lacks its rendered handler");
 var missingButtonZkForm=fakeAtossLogin.Replace(
     "label:'Anmelden'","label:'Kennwort ändern'",StringComparison.Ordinal);
 Assert(parseAtoss.Invoke(null,new object[]{
