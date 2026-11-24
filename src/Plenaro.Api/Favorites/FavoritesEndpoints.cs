@@ -16,6 +16,8 @@ public static class FavoritesEndpoints
         bool AutoLogin,bool Enabled,int SortOrder,string? Password,
         bool ClearPassword=false);
     public sealed record FavoriteOrderInput(Guid[] Ids);
+    public sealed record FavoriteDebugToggle(bool Enabled);
+    public sealed record FavoriteDebugClear(Guid FavoriteId);
     public sealed record FavoriteInput(Guid AppId,string Name,string Path,
         string Username,bool AutoLogin,bool Enabled,int SortOrder,string? Password,bool ClearPassword=false);
     public sealed record AppInfo(Guid Id,string Name,string Slug,bool Enabled,
@@ -30,6 +32,71 @@ public static class FavoritesEndpoints
         var group=app.MapGroup("/api/v1/favorites").RequireAuthorization();
         var admin=app.MapGroup("/api/v1/admin/favorite-apps")
             .RequireAuthorization("AdminOnly");
+        var adminDebug=app.MapGroup("/api/v1/admin/favorites-debug")
+            .RequireAuthorization("AdminOnly");
+
+        // Debug is opt-in per administrator and off by default. No normal
+        // user's favorites or HTTP traffic can be read by another account.
+        adminDebug.MapGet("/settings",async(HttpContext ctx,
+            UserManager<ApplicationUser> users,IConfiguration config,
+            FavoriteProxy proxy,CancellationToken ct)=>{
+            var user=await CurrentUser(ctx,users);
+            if(user is null)return Results.Unauthorized();
+            await using var db=await Open(config,ct);
+            var enabled=await FavoriteDebugEnabledAsync(db,user.Id,ct);
+            proxy.ConfigureDebug(user.Id,enabled);
+            return Results.Ok(new{enabled});
+        });
+
+        adminDebug.MapPut("/settings",async(FavoriteDebugToggle input,
+            HttpContext ctx,IAntiforgery antiforgery,
+            UserManager<ApplicationUser> users,IConfiguration config,
+            FavoriteProxy proxy,CancellationToken ct)=>{
+            if(!await ValidCsrf(ctx,antiforgery))return CsrfError();
+            var user=await CurrentUser(ctx,users);
+            if(user is null)return Results.Unauthorized();
+            await using var db=await Open(config,ct);
+            await using var cmd=new NpgsqlCommand("""
+                INSERT INTO favorite_debug_settings(user_id,enabled,updated_at)
+                VALUES(@user,@enabled,now())
+                ON CONFLICT(user_id) DO UPDATE SET
+                    enabled=EXCLUDED.enabled,updated_at=now()
+                """,db);
+            cmd.Parameters.AddWithValue("user",user.Id);
+            cmd.Parameters.AddWithValue("enabled",input.Enabled);
+            await cmd.ExecuteNonQueryAsync(ct);
+            proxy.ConfigureDebug(user.Id,input.Enabled);
+            return Results.NoContent();
+        });
+
+        adminDebug.MapGet("/events",async(Guid favoriteId,long? after,
+            HttpContext ctx,UserManager<ApplicationUser> users,
+            IConfiguration config,FavoriteProxy proxy,CancellationToken ct)=>{
+            var user=await CurrentUser(ctx,users);
+            if(user is null)return Results.Unauthorized();
+            await using var db=await Open(config,ct);
+            if(!(await LoadFavorites(db,user.Id,ct)).Any(f=>f.Id==favoriteId))
+                return Results.NotFound();
+            var enabled=await FavoriteDebugEnabledAsync(db,user.Id,ct);
+            proxy.ConfigureDebug(user.Id,enabled);
+            return Results.Ok(new{enabled,
+                events=enabled?proxy.DebugEvents(user.Id,favoriteId,
+                    Math.Max(0,after??0)):Array.Empty<FavoriteProxy.FavoriteDebugEntry>()});
+        });
+
+        adminDebug.MapPost("/clear",async(FavoriteDebugClear input,
+            HttpContext ctx,IAntiforgery antiforgery,
+            UserManager<ApplicationUser> users,IConfiguration config,
+            FavoriteProxy proxy,CancellationToken ct)=>{
+            if(!await ValidCsrf(ctx,antiforgery))return CsrfError();
+            var user=await CurrentUser(ctx,users);
+            if(user is null)return Results.Unauthorized();
+            await using var db=await Open(config,ct);
+            if(!(await LoadFavorites(db,user.Id,ct)).Any(f=>f.Id==input.FavoriteId))
+                return Results.NotFound();
+            proxy.ClearDebugEvents(user.Id,input.FavoriteId);
+            return Results.NoContent();
+        });
 
         // Personal website favorites are first-class and do NOT require a
         // pre-approved admin application. Each site gets its own isolated
@@ -353,6 +420,8 @@ public static class FavoritesEndpoints
             if(favorite is null)return Results.NotFound();
             var upstream=await Upstream(db,user.Id,favorite.AppId,ct);
             if(upstream is null)return Results.Forbid();
+            proxy.ConfigureDebug(user.Id,ctx.User.IsInRole("Admin") &&
+                await FavoriteDebugEnabledAsync(db,user.Id,ct));
             try{
                 var url=await proxy.StartAsync(user.Id,favorite,upstream,vault,ct);
                 return Results.Ok(new{url});
@@ -454,6 +523,16 @@ public static class FavoritesEndpoints
             proxy.RevokeApp(id);
             return Results.NoContent();
         });
+    }
+
+    private static async Task<bool> FavoriteDebugEnabledAsync(
+        NpgsqlConnection db,Guid user,CancellationToken ct)
+    {
+        await using var cmd=new NpgsqlCommand("""
+            SELECT enabled FROM favorite_debug_settings WHERE user_id=@user
+            """,db);
+        cmd.Parameters.AddWithValue("user",user);
+        return await cmd.ExecuteScalarAsync(ct) is true;
     }
 
     internal static string PasswordName(Guid id)=>"fav."+id.ToString("N")+".password";

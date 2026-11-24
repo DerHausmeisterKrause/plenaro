@@ -9,6 +9,7 @@ import { BrRecipientsSettingsPanel } from './BrRecipientsSettingsPanel';
 import { ReminderSettingsPanel } from './ReminderSettingsPanel';
 import { ZnunySettingsPanel } from './ZnunySettingsPanel';
 import {FavoriteSettingsPanel} from './FavoritesPage';
+import {FavoriteDebugSettingsPanel} from './FavoriteDebugPanel';
 import {WikiSettingsPanel} from './WikiSettingsPanel';
 import {useSearchParams} from 'react-router-dom';
 import { ZnunyCentralAdminPanel } from './ZnunyCentralAdminPanel';
@@ -358,10 +359,12 @@ export function SettingsPage({ user, onPersonalSaved, onWorkspaceSaved, onFavori
       </section>
     </>}
     {section === 'ticket' && <><ZnunySettingsPanel admin={admin}/>{admin && <ZnunyCentralAdminPanel/>}</>}
-    {section === 'favorites'&&<FavoriteSettingsPanel
-      key={appsRevision} onChanged={()=>{
+    {section === 'favorites'&&<>
+      {admin&&<FavoriteDebugSettingsPanel/>}
+      <FavoriteSettingsPanel key={appsRevision} onChanged={()=>{
         setAppsRevision(v=>v+1);onFavoritesChanged();
-      }}/>}
+      }}/>
+    </>}
     {section === 'wiki' && <WikiSettingsPanel admin={admin}/>}
     {section === 'security' && <>
       <section className="content-card um-account">

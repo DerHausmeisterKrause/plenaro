@@ -1196,3 +1196,20 @@ h1,h2,h3,p { margin-top: 0; }
 /* WPF-equivalent unread Znuny article indicator. Distinct from the manual pin. */
 .ticket-unread-star { color: #d8a000; fill: #f4c43b; stroke-width: 1.8;
   vertical-align: -3px; margin-right: 5px; flex-shrink: 0; }
+
+/* Admin-only favorite proxy diagnostics: isolated from third-party iframe DOM. */
+.favorites-debug-console { margin: 12px 0; }
+.favorites-debug-heading { display:flex; align-items:center; justify-content:space-between;
+  gap:12px; flex-wrap:wrap; }
+.favorites-debug-heading h2 { display:flex; align-items:center; gap:8px; margin:0; }
+.favorites-debug-filter { display:flex; align-items:center; gap:8px; margin:12px 0; }
+.favorites-debug-output { background:#0b1220; color:#dae5f1; border-radius:9px;
+  max-height:300px; overflow:auto; padding:12px; font:12px/1.55 ui-monospace,monospace; }
+.favorites-debug-output .um-hint { color:#c1cbdc; }
+.favorites-debug-entry { display:grid; grid-template-columns:65px 60px 32px minmax(75px,135px) minmax(190px,1fr);
+  gap:8px; padding:4px 0; border-bottom:1px solid #273244; }
+.favorites-debug-entry.warning { color:#fdd77e; }
+.favorites-debug-entry.error { color:#fca5a5; }
+.favorites-debug-level { font-weight:700; }
+@media(max-width:700px){.favorites-debug-entry{grid-template-columns:65px 60px 32px 1fr;}
+  .favorites-debug-entry span:last-child{grid-column:1 / -1;}}

@@ -382,7 +382,7 @@ export function AppContent() {
             <Route path="/wiki" element={<PrivateArea user={user}><WikiPage/></PrivateArea>} />
             <Route path="/week" element={<PrivateArea user={user}><WeekCalendarPage/></PrivateArea>} />
             <Route path="/ticket-system" element={<PrivateArea user={user}><ZnunyWebPortalPage/></PrivateArea>} />
-            <Route path="/favorites/:id" element={<PrivateArea user={user}><FavoritePage/></PrivateArea>} />
+            <Route path="/favorites/:id" element={<PrivateArea user={user}><FavoritePage admin={!!user?.roles.includes('Admin')}/></PrivateArea>} />
             <Route path="/tasks" element={<Navigate to={'/workspace'+location.search} replace />} />
             <Route path="/tickets" element={<Navigate to="/workspace" replace />} />
             <Route path="/reports" element={<PrivateArea user={user}><ReportsPage/></PrivateArea>} />
