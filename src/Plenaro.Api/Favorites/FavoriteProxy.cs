@@ -169,6 +169,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             upstream.AbsolutePath!="/"||upstream.Query.Length>0)
             throw new InvalidOperationException("Invalid upstream.");
 
+        Debug(user,favorite.Id,"info","session-start");
         foreach(var pair in _sessions)
             if(pair.Value.Expired)Remove(pair.Key,pair.Value);
         foreach(var pair in _pending)
@@ -185,6 +186,9 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         var domAutoLogin=FavoriteDomAutoLogin.Eligible(
             favorite.Slug,favorite.AutoLogin,IsPathHost(external.Host),
             favorite.Username,external.Host,preferred?.Host);
+        Debug(user,favorite.Id,"info",
+            !favorite.AutoLogin?"login-disabled":
+            domAutoLogin?"login-dedicated-dom":"login-server-or-browser");
         // Personal favorites also support internal HTTPS services without
         // an operator-managed origin list, as in the Desktop application.
         // The shared secure connector still blocks loopback, link-local,
@@ -200,6 +204,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         };
         try{
             if(requireWikiAutoLogin){
+                Debug(user,favorite.Id,"info","wiki-login-check");
                 // Central wiki must establish the private upstream login
                 // BEFORE exposing the iframe. No silent manual fallback.
                 if(favorite.Slug!="wiki"||!favorite.AutoLogin||!vault.IsConfigured)
@@ -225,21 +230,30 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                     // conventional server-side HTML login behavior.
                     var browserAttempted=false;
                     if(favorite.Slug.StartsWith("site-",StringComparison.Ordinal)
-                        && IsPathHost(external.Host))
+                        && IsPathHost(external.Host)){
+                        Debug(user,favorite.Id,"info","headless-login-attempt");
                         browserAttempted=await FavoriteHeadlessLogin.TryAsync(
                             handler.CookieContainer,root,
                             new Uri(root,favorite.Path),
                             favorite.Username,password,ct);
-                    if(!browserAttempted)
+                        Debug(user,favorite.Id,browserAttempted?"info":"warning",
+                            browserAttempted?"headless-login-cookies":"headless-login-fallback");
+                    }
+                    if(!browserAttempted){
+                        Debug(user,favorite.Id,"info","html-login-attempt");
                         await TryLoginAsync(client,root,
                             new Uri(root,favorite.Path),
                             favorite.Username,password,ct);
-                }
+                        Debug(user,favorite.Id,"info","html-login-attempt-finished");
+                    }
+                }else Debug(user,favorite.Id,"warning","login-credentials-missing");
             }
         }catch(Exception e) when(!requireWikiAutoLogin&&!ct.IsCancellationRequested &&
             e is HttpRequestException or InvalidOperationException or TaskCanceledException){
             // Legacy favorites retain their existing interactive fallback.
+            Debug(user,favorite.Id,"warning","login-fallback-error");
         }catch{
+            Debug(user,favorite.Id,"error","login-start-failed");
             client.Dispose();
             throw;
         }
@@ -262,6 +276,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         var bootstrap=shared
             ? new Uri(external,"_plenaro/favorite-bootstrap")
             : new Uri(external,BootstrapPath);
+        Debug(user,favorite.Id,"info","session-ready");
         return bootstrap.AbsoluteUri+"?token="+Uri.EscapeDataString(token);
     }
 
@@ -373,6 +388,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         // Reject when the account, favorite or organizational approval
         // was revoked, even when the existing proxy cookie is still valid.
         if(!await StillApprovedAsync(ctx,session,ct)){
+            Debug(session.User,session.Favorite,"warning","session-revoked");
             Remove(key,session);
             await ProxyNavigationErrorAsync(ctx,403,"proxy-session-revoked",
                 "Die Favoriten-Verbindung wurde geändert oder deaktiviert. "+
@@ -456,6 +472,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             !await StillApprovedAsync(ctx,session,ct)){
             ctx.Response.StatusCode=401;return;
         }
+        Debug(session.User,session.Favorite,"info","bootstrap-success");
         ctx.Response.Cookies.Append(CookieName,pending.SessionId,new CookieOptions{
             HttpOnly=true,Secure=true,SameSite=SameSiteMode.Strict,
             IsEssential=true,
