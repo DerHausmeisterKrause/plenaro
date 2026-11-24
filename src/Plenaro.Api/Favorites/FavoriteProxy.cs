@@ -189,6 +189,8 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         Debug(user,favorite.Id,"info",
             !favorite.AutoLogin?"login-disabled":
             domAutoLogin?"login-dedicated-dom":"login-server-or-browser");
+        if(favorite.AutoLogin && IsPathHost(external.Host) && !domAutoLogin)
+            Debug(user,favorite.Id,"info","shared-origin-autofill-disabled");
         // Personal favorites also support internal HTTPS services without
         // an operator-managed origin list, as in the Desktop application.
         // The shared secure connector still blocks loopback, link-local,
@@ -232,19 +234,23 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                     if(favorite.Slug.StartsWith("site-",StringComparison.Ordinal)
                         && IsPathHost(external.Host)){
                         Debug(user,favorite.Id,"info","headless-login-attempt");
-                        browserAttempted=await FavoriteHeadlessLogin.TryAsync(
+                        var browser=await FavoriteHeadlessLogin.TryDetailedAsync(
                             handler.CookieContainer,root,
                             new Uri(root,favorite.Path),
                             favorite.Username,password,ct);
-                        Debug(user,favorite.Id,browserAttempted?"info":"warning",
-                            browserAttempted?"headless-login-cookies":"headless-login-fallback");
+                        browserAttempted=browser.Attempted;
+                        Debug(user,favorite.Id,
+                            browser.Authenticated?"info":"warning",browser.Code);
                     }
                     if(!browserAttempted){
                         Debug(user,favorite.Id,"info","html-login-attempt");
-                        await TryLoginAsync(client,root,
+                        var htmlLogin=await TryLoginAsync(client,root,
                             new Uri(root,favorite.Path),
                             favorite.Username,password,ct);
-                        Debug(user,favorite.Id,"info","html-login-attempt-finished");
+                        Debug(user,favorite.Id,
+                            htmlLogin.Code is "html-login-post-sent-unconfirmed"?
+                                "info":"warning",
+                            htmlLogin.Code,status:htmlLogin.Status);
                     }
                 }else Debug(user,favorite.Id,"warning","login-credentials-missing");
             }
