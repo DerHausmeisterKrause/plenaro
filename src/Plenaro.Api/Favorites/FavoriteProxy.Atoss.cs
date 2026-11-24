@@ -17,7 +17,7 @@ public sealed partial class FavoriteProxy
 
     internal sealed record AtossZkForm(
         string Desktop,string UpdatePath,string UsernameId,
-        string PasswordId,string LoginId);
+        string PasswordId,string LoginId,string DialogId);
 
     private const RegexOptions ZkRegex=RegexOptions.CultureInvariant|
         RegexOptions.Singleline;
@@ -68,6 +68,22 @@ public sealed partial class FavoriteProxy
         return ids.Length==1?ids[0]:null;
     }
 
+    // The real ATOSS HAR sends onClientInfo + onDialogRendered before any
+    // login events. The dialog ID is generated anew for each ZK session.
+    private static string? FindAtossLoginDialog(string html)
+    {
+        var declarations=Regex.Matches(html,
+            @"\['widgets\.layout\.DialogPanel','(?<id>[a-zA-Z0-9_-]{2,64})',\{(?<attrs>.{0,8192}?)\},\{\},\[",
+            ZkRegex,ZkRegexTimeout);
+        var ids=declarations.Cast<Match>()
+            .Where(m=>m.Groups["attrs"].Value.Contains("modalDialog:true",
+                StringComparison.Ordinal) &&
+                m.Groups["attrs"].Value.Contains("$onDialogRendered:true",
+                    StringComparison.Ordinal))
+            .Select(m=>m.Groups["id"].Value).Distinct().ToArray();
+        return ids.Length==1?ids[0]:null;
+    }
+
     internal static AtossZkForm? ParseAtossZkForm(
         string html,Uri page,Uri origin)
     {
@@ -100,10 +116,13 @@ public sealed partial class FavoriteProxy
             "placeholder","Kennwort");
         var login=UniqueZkWidget(html,"widgets.wgt.AtossDialogButton",
             "label","Anmelden");
+        var dialog=FindAtossLoginDialog(html);
         if(username is null||password is null||login is null||
-           username==password||username==login||password==login)return null;
+           dialog is null || username==password||username==login||
+           password==login||dialog==username||dialog==password||
+           dialog==login)return null;
         return new(desktop.Groups["id"].Value,ajax.PathAndQuery,
-            username,password,login);
+            username,password,login,dialog);
     }
 
     internal sealed record AtossPageResult(string? Html,string Code,int? Status);
@@ -173,22 +192,49 @@ public sealed partial class FavoriteProxy
         => (await ReadAtossPageDetailedAsync(
             client,origin,uri,referer,ct)).Html;
 
-    // An AU packet uses the desktop and widget IDs from the SAME HTML
-    // session. A single user/password change each precedes ONE button click.
-    private static async Task<bool> SendAtossZkEventAsync(
-        HttpClient client,Uri origin,Uri page,Uri update,string desktop,
-        string widget,string action,string json,int sid,CancellationToken ct)
+    // ZK's actual browser protocol: first onClientInfo and
+    // onDialogRendered, then onDialogFocus. Only then send credentials.
+    private static async Task<bool> InitializeAtossZkDialogAsync(
+        HttpClient client,Uri origin,Uri page,Uri update,
+        AtossZkForm form,int sid,CancellationToken ct)
+    {
+        var clientInfo=JsonSerializer.Serialize(new Dictionary<string,object>{
+            [""]=new object[]{0,1280,800,24,1280,720,0,0,"1.0","landscape"}
+        });
+        var initialized=await SendAtossZkPacketAsync(
+            client,origin,page,update,new[]{
+                new KeyValuePair<string,string>("dtid",form.Desktop),
+                new KeyValuePair<string,string>("cmd_0","onClientInfo"),
+                new KeyValuePair<string,string>("opt_0","i"),
+                new KeyValuePair<string,string>("data_0",clientInfo),
+                new KeyValuePair<string,string>("cmd_1","onDialogRendered"),
+                new KeyValuePair<string,string>("uuid_1",form.DialogId),
+                new KeyValuePair<string,string>("data_1","{}")
+            },sid,ct);
+        if(!initialized)return false;
+        return await SendAtossZkPacketAsync(
+            client,origin,page,update,new[]{
+                new KeyValuePair<string,string>("dtid",form.Desktop),
+                new KeyValuePair<string,string>("cmd_0","onDialogFocus"),
+                new KeyValuePair<string,string>("opt_0","i"),
+                new KeyValuePair<string,string>("uuid_0",form.DialogId),
+                new KeyValuePair<string,string>("data_0",
+                    JsonSerializer.Serialize(new{
+                        activeComponent=form.UsernameId
+                    }))
+            },sid,ct);
+    }
+
+    // Same ZK-SID across the ordered events of one desktop (per browser HAR).
+    // ZK's response arrays may contain JS objects, not standard JSON.
+    private static async Task<bool> SendAtossZkPacketAsync(
+        HttpClient client,Uri origin,Uri page,Uri update,
+        IEnumerable<KeyValuePair<string,string>> fields,
+        int sid,CancellationToken ct)
     {
         if(!SameUpstream(origin,update))return false;
         using var message=new HttpRequestMessage(HttpMethod.Post,update){
-            Content=new FormUrlEncodedContent(new[]{
-                new KeyValuePair<string,string>("dtid",desktop),
-                new KeyValuePair<string,string>("cmd_0",action),
-                // The ATOSS HAR marks interactive AU events important.
-                new KeyValuePair<string,string>("opt_0","i"),
-                new KeyValuePair<string,string>("uuid_0",widget),
-                new KeyValuePair<string,string>("data_0",json)
-            })
+            Content=new FormUrlEncodedContent(fields)
         };
         message.Headers.Referrer=page;
         message.Headers.TryAddWithoutValidation("Origin",
@@ -202,12 +248,22 @@ public sealed partial class FavoriteProxy
            reply.Content.Headers.ContentLength>65536)return false;
         var body=await ReadLimitedAsync(reply.Content,65536,ct);
         var response=Encoding.UTF8.GetString(body);
-        // ZK replies are normally {"rs":[...],"rid":N}, with an empty
-        // response for focus/field changes. Any server error is not accepted.
-        return response.StartsWith("{\"rs\":",StringComparison.Ordinal) &&
+        return response.StartsWith("{\"rs\":[",StringComparison.Ordinal) &&
+            response.Contains("\"rid\":",StringComparison.Ordinal) &&
             !response.Contains("\"error\"",StringComparison.OrdinalIgnoreCase) &&
             !response.Contains("wrongValue",StringComparison.OrdinalIgnoreCase);
     }
+
+    private static Task<bool> SendAtossZkEventAsync(
+        HttpClient client,Uri origin,Uri page,Uri update,string desktop,
+        string widget,string action,string json,int sid,CancellationToken ct)
+        => SendAtossZkPacketAsync(client,origin,page,update,new[]{
+            new KeyValuePair<string,string>("dtid",desktop),
+            new KeyValuePair<string,string>("cmd_0",action),
+            new KeyValuePair<string,string>("opt_0","i"),
+            new KeyValuePair<string,string>("uuid_0",widget),
+            new KeyValuePair<string,string>("data_0",json)
+        },sid,ct);
 
     internal static async Task<AtossLoginResult> TryAtossZkLoginAsync(
         HttpClient client,Uri origin,Uri entry,
@@ -230,40 +286,37 @@ public sealed partial class FavoriteProxy
                !SameUpstream(origin,update))
                 return new(true,false,false,"atoss-zk-login-form-unavailable");
             var sid=RandomNumberGenerator.GetInt32(100,30000);
+            if(!await InitializeAtossZkDialogAsync(
+                   client,origin,child,update,form,sid,ct))
+                return new(true,false,false,"atoss-zk-dialog-initialization-failed");
             var changedUser=await SendAtossZkEventAsync(client,origin,child,
                 update,form.Desktop,form.UsernameId,"onChange",
                 JsonSerializer.Serialize(new {value=username}),sid,ct);
             if(!changedUser)
-                return new(true,false,false,"atoss-zk-field-rejected");
+                return new(true,false,false,"atoss-zk-username-rejected");
             // A password is not sent if the username update failed.
             var changedPassword=await SendAtossZkEventAsync(client,origin,child,
                 update,form.Desktop,form.PasswordId,"onChange",
                 JsonSerializer.Serialize(new {value=password}),sid,ct);
             if(!changedPassword)
-                return new(true,true,false,"atoss-zk-login-unconfirmed");
+                return new(true,true,false,"atoss-zk-password-rejected");
             var clicked=await SendAtossZkEventAsync(client,origin,child,
                 update,form.Desktop,form.LoginId,"onClick",
                 "{\"pageX\":0,\"pageY\":0,\"which\":1,\"x\":0,\"y\":0}",
                 sid,ct);
             if(!clicked)
-                return new(true,true,false,"atoss-zk-login-unconfirmed");
-            // A 200 ZK response (or session cookie) is NOT proof of login:
-            // re-enter the server session and require the login form to be
-            // absent from an authentic ATOSS widget page.
-            var checkOuter=await ReadAtossPageAsync(client,origin,entry,null,ct);
-            if(checkOuter is null)
-                return new(true,true,false,"atoss-zk-login-unconfirmed");
-            var nextFrame=FindAtossFrame(checkOuter,entry,origin);
-            if(nextFrame is null)
-                return new(true,true,false,"atoss-zk-login-unconfirmed");
+                return new(true,true,false,"atoss-zk-click-rejected");
+            // Keep the SAME authenticated desktop for the first check.
+            // Loading /SES/html creates a new UUID and could reset the
+            // ZK session, masking even a successfully submitted login.
             var checkHtml=await ReadAtossPageAsync(
-                client,origin,nextFrame,entry,ct);
+                client,origin,child,entry,ct);
             if(checkHtml is null||
                !checkHtml.Contains("ATOSS Staff Efficiency Suite",
-                   StringComparison.OrdinalIgnoreCase) ||
-               !checkHtml.Contains("zkmx(",StringComparison.Ordinal) ||
-               ParseAtossZkForm(checkHtml,nextFrame,origin) is not null)
-                return new(true,true,false,"atoss-zk-login-unconfirmed");
+                   StringComparison.OrdinalIgnoreCase)||
+               !checkHtml.Contains("zkmx(",StringComparison.Ordinal)||
+               ParseAtossZkForm(checkHtml,child,origin) is not null)
+                return new(true,true,false,"atoss-zk-session-unconfirmed");
             return new(true,true,true,"atoss-zk-login-confirmed");
         }catch(Exception ex) when(ex is HttpRequestException or
             InvalidOperationException or TaskCanceledException or

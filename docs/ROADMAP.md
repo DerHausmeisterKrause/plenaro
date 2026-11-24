@@ -1,3 +1,29 @@
+## 24.11.2026 – Phase 7/7: ATOSS ZK Dialoginitialisierung vor Anmeldung
+
+- [x] Nutzer-Livelog 15:29 geprüft: ATOSS ZK-Seite wird abgerufen, `atoss-zk-login-unconfirmed` vor der Plenaro-Proxy-Navigation. Der Code fasste Fehler bei Passwort-/Klickereignis und späterem Login-Check zusammen.
+- [x] Konkrete Abweichung vom ATOSS-HAR identifiziert: der echte Browser sendet `onClientInfo` und `onDialogRendered` (mit aktueller DialogPanel-UUID), anschließend `onDialogFocus` vor der Interaktion; der bisherige serverseitige Login übersprang diese ZK-Initialisierung.
+- [x] Initialisierung im vorhandenen ASP.NET-Backend mit dem serverseitig ausgegebenen aktuellen `DialogPanel`-Widget ergänzt; ZK-SID und die erlaubte HTTPS-Upstream-Sitzung bleiben unverändert. Passworteingabe erst nach erfolgreichem Bootstrap.
+- [x] Anmeldefehler in Dialoginitialisierung, Benutzername, Kennwort, Anmeldeklick und anschließende Sitzungsbestätigung getrennt; keine Geheimnisse im Debuglog.
+- [x] Sitzungsprüfung nach dem Anmeldeklick zuerst gegen den bereits aktiven dynamischen ATOSS-Iframe statt des `/SES/html`-Einstiegs, da dessen erneutes Laden eine neue UUID-Sitzung anlegen kann.
+- [x] Synthetische Vertragstests simulieren `onClientInfo` + `onDialogRendered`, `onDialogFocus`, zwei `onChange` und einen `onClick`; Initialisierungsfehler darf keine Zugangsdaten versenden. Kein produktives ATOSS-Konto wird getestet.
+- [ ] GitHub-PR, CI und Merge abschließen.
+- [ ] Live-Abnahme: ATOSS neu verbinden und tatsächliche Anmeldung prüfen; falls weiterhin Fehler, neuen eindeutigen ZK-Schritt aus Admin-Diagnose auswerten. Kein behaupteter erfolgreicher Login ohne Bestätigung.
+- [x] Keine neuen Dockercontainer, DNS-/TLS-Aliasse, Compose-Profile, Migrationen, Ports oder Browserworker.
+
+### Nach grünem CI-Merge aktualisieren
+
+```bash
+cd /opt/plenaro
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build --no-deps web
+docker compose restart nginx
+docker compose ps
+docker compose logs --tail=80 web
+```
+
+---
+
 ## 24.11.2026 – Phase 7/7: ATOSS-ZK-Login, dynamischen Iframe-Abruf korrigieren
 
 - [x] HAR `atoss1` nach gescheitertem Liveversuch untersucht: Browser-Proxy lädt `/SES/html` und anschließend die dynamische `/SES/uuid.../html`-Seite mit HTTP 200, inklusive ZK-Widget-Baum und Loginmaske. Separater serverseitiger Anmeldeversuch meldete `atoss-zk-login-page-unavailable`; Passwort wurde dabei noch nicht eingereicht.
