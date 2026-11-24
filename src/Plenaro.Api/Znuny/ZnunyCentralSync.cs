@@ -115,6 +115,10 @@ public sealed class ZnunyCentralSync(
                         save.Parameters.Add("changed",NpgsqlDbType.TimestampTz).Value=
                             item.Changed is {} d?d.UtcDateTime:DBNull.Value;
                         await save.ExecuteNonQueryAsync(ct);
+                        // Reuse the existing central article fetch: no per-user
+                        // polling, new container or additional remote request.
+                        await ZnunyArticleReadTracker.ObserveAsync(
+                            db,item.Id,result.Articles,null,ct);
                     }catch(ZnunyReader.RemoteFailure ex){
                         // A single oversized/unavailable ticket must not
                         // interrupt indexing of every other ticket.
