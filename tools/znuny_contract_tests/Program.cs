@@ -2202,14 +2202,14 @@ var parseAtoss=typeof(FavoriteProxy).GetMethod("ParseAtossZkForm",
     BindingFlags.Static|BindingFlags.NonPublic)!;
 var atossFrame=typeof(FavoriteProxy).GetMethod("FindAtossFrame",
     BindingFlags.Static|BindingFlags.NonPublic)!;
-var atossOrigin=new Uri("https://atoss.example.org/");
-var atossOuter=new Uri(atossOrigin,"SES/html");
-var atossChild=new Uri(atossOrigin,"SES/"+fakeAtossUuid+"/html");
+var zkTestOrigin=new Uri("https://atoss.example.org/");
+var zkTestOuter=new Uri(zkTestOrigin,"SES/html");
+var zkTestChild=new Uri(zkTestOrigin,"SES/"+fakeAtossUuid+"/html");
 Assert((Uri?)atossFrame.Invoke(null,new object[]{
-    fakeAtossOuter,atossOuter,atossOrigin})==atossChild,
+    fakeAtossOuter,zkTestOuter,zkTestOrigin})==zkTestChild,
     "ATOSS outer login resolves only the current same-origin UUID iframe");
 var parsedAtoss=parseAtoss.Invoke(null,new object[]{
-    fakeAtossLogin,atossChild,atossOrigin});
+    fakeAtossLogin,zkTestChild,zkTestOrigin});
 Assert(parsedAtoss is not null &&
     parsedAtoss.GetType().GetProperty("UsernameId")!.GetValue(parsedAtoss)?.ToString()=="user1" &&
     parsedAtoss.GetType().GetProperty("PasswordId")!.GetValue(parsedAtoss)?.ToString()=="pass1" &&
@@ -2241,7 +2241,7 @@ using(var atossClient=new HttpClient(new MockHandler(req=>{
     if(req.Method==HttpMethod.Post &&
        path.StartsWith("/SES/"+fakeAtossUuid+"/zkauA10;jsessionid=",StringComparison.Ordinal)){
         Assert(req.Headers.Contains("ZK-SID") &&
-            req.Headers.Referrer==atossChild &&
+            req.Headers.Referrer==zkTestChild &&
             req.Headers.GetValues("Origin").Single()=="https://atoss.example.org",
             "ATOSS AU posts include valid ZK-SID and same-origin referer");
         var posted=req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
@@ -2272,7 +2272,7 @@ using(var atossClient=new HttpClient(new MockHandler(req=>{
     var loginMethod=typeof(FavoriteProxy).GetMethod("TryAtossZkLoginAsync",
         BindingFlags.Static|BindingFlags.NonPublic)!;
     var task=(Task)loginMethod.Invoke(null,new object[]{
-        atossClient,atossOrigin,atossOuter,"test.user","FAKE_PASSWORD",
+        atossClient,zkTestOrigin,zkTestOuter,"test.user","FAKE_PASSWORD",
         CancellationToken.None})!;
     await task;
     var outcome=task.GetType().GetProperty("Result")!.GetValue(task)!;
@@ -2286,12 +2286,12 @@ var maliciousZkForm=fakeAtossLogin.Replace(
     @"\x2F\x2Fevil.example.org\x2Fsteal",
     StringComparison.Ordinal);
 Assert(parseAtoss.Invoke(null,new object[]{
-    maliciousZkForm,atossChild,atossOrigin}) is null,
+    maliciousZkForm,zkTestChild,zkTestOrigin}) is null,
     "ATOSS ZK login rejects any cross-origin or forged update URL");
 var missingButtonZkForm=fakeAtossLogin.Replace(
     "label:'Anmelden'","label:'Kennwort ändern'",StringComparison.Ordinal);
 Assert(parseAtoss.Invoke(null,new object[]{
-    missingButtonZkForm,atossChild,atossOrigin}) is null,
+    missingButtonZkForm,zkTestChild,zkTestOrigin}) is null,
     "ATOSS ZK login never sends credentials without an unambiguous login action");
 
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
