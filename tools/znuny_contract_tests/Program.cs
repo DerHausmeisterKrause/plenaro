@@ -2096,6 +2096,50 @@ debugProxy.ConfigureDebug(debugOwner,false);
 Assert(debugProxy.DebugEvents(debugOwner,debugFavorite,0).Count==0,
     "disabling debug immediately clears buffered events");
 
+// Read-state-safe favorite proxy diagnostics: sensitive URL path and query
+// are NOT exported, while repeated 400s are grouped by an opaque HMAC key.
+var diagnosticProxy=new FavoriteProxy(new ConfigurationBuilder().Build());
+var diagnosticUser=Guid.NewGuid();
+var diagnosticFavorite=Guid.NewGuid();
+diagnosticProxy.ConfigureDebug(diagnosticUser,true);
+var httpDebug=typeof(FavoriteProxy).GetMethod("DebugHttp",
+    BindingFlags.Instance|BindingFlags.NonPublic)!;
+void DiagnosticHttp(string path){
+    httpDebug.Invoke(diagnosticProxy,new object?[]{
+        diagnosticUser,diagnosticFavorite,"warning","http-response",
+        "POST","api",400,path
+    });
+}
+DiagnosticHttp("/api/private/12345?token=top-secret");
+DiagnosticHttp("/api/private/12345?token=another-secret");
+DiagnosticHttp("/api/private/67890?token=top-secret");
+var grouped=diagnosticProxy.DebugEvents(diagnosticUser,diagnosticFavorite,0);
+Assert(grouped.Count==3 &&
+    grouped[0].Route==grouped[1].Route &&
+    grouped[0].Route!=grouped[2].Route &&
+    grouped[0].Route.Length==10 &&
+    !JsonSerializer.Serialize(grouped).Contains("private",StringComparison.Ordinal) &&
+    !JsonSerializer.Serialize(grouped).Contains("secret",StringComparison.Ordinal) &&
+    !JsonSerializer.Serialize(grouped).Contains("12345",StringComparison.Ordinal),
+    "same endpoint groups by per-process HMAC without URL/query/data leaks");
+var classify400=typeof(FavoriteProxy).GetMethod("ClassifyHttp400",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+string? Http400Hint(string body)=>(string?)classify400.Invoke(null,new object[]{body});
+Assert(Http400Hint("Invalid CSRF token supplied: secret-value")==
+        "upstream-400-csrf-hint" &&
+    Http400Hint("One or more validation errors occurred")==
+        "upstream-400-validation-hint" &&
+    Http400Hint("password=secret-value")==null,
+    "upstream 400 diagnosis uses fixed reason categories, never text");
+var workerClassifier=loginHelper.GetMethod("ClassifyReason",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+string? WorkerHint(string value)=>
+    (string?)workerClassifier.Invoke(null,new object?[]{value});
+Assert(WorkerHint("no-login-fields")=="browser-no-login-fields" &&
+    WorkerHint("not-confirmed")=="browser-login-not-confirmed" &&
+    WorkerHint("password=secret-value")=="browser-login-not-confirmed",
+    "browser worker classification never exposes arbitrary reasons");
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory
