@@ -73,7 +73,7 @@ export function FavoriteDebugSettingsPanel(){
     {loading?<p role="status">Lade Debug-Einstellung …</p>:
       <label className="um-check" htmlFor="favorites-debug-enable">
         <input id="favorites-debug-enable" type="checkbox" checked={enabled}
-          disabled={busy||!!error} onChange={e=>void toggle(e.target.checked)}/>
+          disabled={busy} onChange={e=>void toggle(e.target.checked)}/>
         Favoriten-Debugmodus für mein Administratorkonto aktivieren
       </label>}
     {error&&<p role="alert" className="um-feedback failure">{error}</p>}
