@@ -2188,9 +2188,11 @@ const string fakeAtossLogin="""
 zkmx([0,'synthetic',{dt:'z_demo',
 cu:'\x2FSES\x2Fuuid11111111-1111-1111-1111-111111111111',
 uu:'\x2FSES\x2Fuuid11111111-1111-1111-1111-111111111111\x2FzkauA10\x3Bjsessionid\x3DTEST_SESSION'}, {}, [
+['widgets.layout.DialogPanel','dialog1',{modalDialog:true,$onDialogRendered:true},{},[
 ['widgets.input.FocusTextbox','user1',{placeholder:'Benutzername',type:'text'},[]],
 ['widgets.input.FocusTextbox','pass1',{placeholder:'Kennwort',type:'password'},[]],
 ['widgets.wgt.AtossDialogButton','login1',{label:'Anmelden',$onClick:true},[]]
+]]
 ]]);
 </script></body></html>
 """;
@@ -2213,7 +2215,8 @@ var parsedAtoss=parseAtoss.Invoke(null,new object[]{
 Assert(parsedAtoss is not null &&
     parsedAtoss.GetType().GetProperty("UsernameId")!.GetValue(parsedAtoss)?.ToString()=="user1" &&
     parsedAtoss.GetType().GetProperty("PasswordId")!.GetValue(parsedAtoss)?.ToString()=="pass1" &&
-    parsedAtoss.GetType().GetProperty("LoginId")!.GetValue(parsedAtoss)?.ToString()=="login1",
+    parsedAtoss.GetType().GetProperty("LoginId")!.GetValue(parsedAtoss)?.ToString()=="login1" &&
+    parsedAtoss.GetType().GetProperty("DialogId")!.GetValue(parsedAtoss)?.ToString()=="dialog1",
     "ATOSS ZK login derives current user/password/button widget IDs");
 
 string FromZkForm(string body,string key) =>
@@ -2254,18 +2257,34 @@ using(var atossClient=new HttpClient(new MockHandler(req=>{
         Assert(FromZkForm(posted,"dtid")=="z_demo",
             "ATOSS AU desktop ID is the current server-issued ID");
         var cmd=FromZkForm(posted,"cmd_0");
-        zkCommands.Add(cmd);
-        if(cmd=="onChange"){
+        if(cmd=="onClientInfo"){
+            Assert(FromZkForm(posted,"cmd_1")=="onDialogRendered" &&
+                FromZkForm(posted,"uuid_1")=="dialog1" &&
+                FromZkForm(posted,"data_1")=="{}",
+                "ATOSS login must first initialize the current server-side dialog");
+            zkCommands.Add("onClientInfo+onDialogRendered");
+        }else if(cmd=="onDialogFocus"){
+            Assert(FromZkForm(posted,"uuid_0")=="dialog1" &&
+                JsonDocument.Parse(FromZkForm(posted,"data_0")).RootElement
+                    .GetProperty("activeComponent").GetString()=="user1",
+                "ATOSS login must focus the current dialog's username field");
+            zkCommands.Add(cmd);
+        }else if(cmd=="onChange"){
             var id=FromZkForm(posted,"uuid_0");
             var value=JsonDocument.Parse(FromZkForm(posted,"data_0")).RootElement
                 .GetProperty("value").GetString();
             Assert((id=="user1"&&value=="test.user") ||
                 (id=="pass1"&&value=="FAKE_PASSWORD"),
                 "ATOSS AU updates only the two exact login fields");
+            zkCommands.Add(cmd);
         }else{
             Assert(cmd=="onClick" &&
-                FromZkForm(posted,"uuid_0")=="login1",
-                "ATOSS AU submits only the login button");
+                FromZkForm(posted,"uuid_0")=="login1" &&
+                zkCommands.SequenceEqual(new[]{
+                    "onClientInfo+onDialogRendered","onDialogFocus",
+                    "onChange","onChange"}),
+                "ATOSS AU clicks login only after two bootstrap events and both fields");
+            zkCommands.Add(cmd);
             clickSent=true;
         }
         return new HttpResponseMessage(HttpStatusCode.OK){
@@ -2284,8 +2303,45 @@ using(var atossClient=new HttpClient(new MockHandler(req=>{
     var outcome=task.GetType().GetProperty("Result")!.GetValue(task)!;
     Assert((bool)outcome.GetType().GetProperty("Authenticated")!.GetValue(outcome)! &&
         (bool)outcome.GetType().GetProperty("Submitted")!.GetValue(outcome)! &&
-        zkCommands.SequenceEqual(new[]{"onChange","onChange","onClick"}),
-        "ATOSS login uses two field changes, one login click and verified post-login HTML");
+        zkCommands.SequenceEqual(new[]{
+            "onClientInfo+onDialogRendered","onDialogFocus",
+            "onChange","onChange","onClick"}),
+        "ATOSS login initializes the dialog before two fields and one verified click");
+}
+// A failed ZK initialization must never expose or submit the vault password.
+var unexpectedCredentialsSent=false;
+using(var badDialogClient=new HttpClient(new MockHandler(req=>{
+    if(req.Method==HttpMethod.Get && req.RequestUri!.AbsolutePath=="/SES/html")
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent(fakeAtossOuter,Encoding.UTF8,"text/html")
+        };
+    if(req.Method==HttpMethod.Get &&
+       req.RequestUri!.AbsolutePath=="/SES/"+fakeAtossUuid+"/html")
+        return new HttpResponseMessage(HttpStatusCode.OK){
+            Content=new StringContent(fakeAtossLogin,Encoding.UTF8,"text/html")
+        };
+    if(req.Method==HttpMethod.Post){
+        var posted=req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+        if(posted.Contains("FAKE_PASSWORD",StringComparison.Ordinal) ||
+           posted.Contains("onClick",StringComparison.Ordinal) ||
+           posted.Contains("onChange",StringComparison.Ordinal))
+            unexpectedCredentialsSent=true;
+        return new HttpResponseMessage(HttpStatusCode.BadRequest);
+    }
+    throw new InvalidOperationException("Unknown ATOSS test request");
+}))){
+    var startLogin=typeof(FavoriteProxy).GetMethod("TryAtossZkLoginAsync",
+        BindingFlags.Static|BindingFlags.NonPublic)!;
+    var failedTask=(Task)startLogin.Invoke(null,new object[]{
+        badDialogClient,zkTestOrigin,zkTestOuter,"test.user",
+        "FAKE_PASSWORD",CancellationToken.None})!;
+    await failedTask;
+    var outcome=failedTask.GetType().GetProperty("Result")!.GetValue(failedTask)!;
+    Assert((string)outcome.GetType().GetProperty("Code")!.GetValue(outcome)!==
+        "atoss-zk-dialog-initialization-failed" &&
+        (bool)outcome.GetType().GetProperty("Submitted")!.GetValue(outcome)!==false &&
+        !unexpectedCredentialsSent,
+        "ATOSS failed bootstrap stops before password and login click");
 }
 // Distinguish real upstream iframe errors from a missing login widget.
 var frameReader=typeof(FavoriteProxy).GetMethod("ReadAtossPageDetailedAsync",
