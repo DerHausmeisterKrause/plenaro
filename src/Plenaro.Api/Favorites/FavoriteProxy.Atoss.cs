@@ -131,6 +131,8 @@ public sealed partial class FavoriteProxy
             Content=new FormUrlEncodedContent(new[]{
                 new KeyValuePair<string,string>("dtid",desktop),
                 new KeyValuePair<string,string>("cmd_0",action),
+                // The ATOSS HAR marks interactive AU events important.
+                new KeyValuePair<string,string>("opt_0","i"),
                 new KeyValuePair<string,string>("uuid_0",widget),
                 new KeyValuePair<string,string>("data_0",json)
             })
