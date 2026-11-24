@@ -286,40 +286,37 @@ public sealed partial class FavoriteProxy
                !SameUpstream(origin,update))
                 return new(true,false,false,"atoss-zk-login-form-unavailable");
             var sid=RandomNumberGenerator.GetInt32(100,30000);
+            if(!await InitializeAtossZkDialogAsync(
+                   client,origin,child,update,form,sid,ct))
+                return new(true,false,false,"atoss-zk-dialog-initialization-failed");
             var changedUser=await SendAtossZkEventAsync(client,origin,child,
                 update,form.Desktop,form.UsernameId,"onChange",
                 JsonSerializer.Serialize(new {value=username}),sid,ct);
             if(!changedUser)
-                return new(true,false,false,"atoss-zk-field-rejected");
+                return new(true,false,false,"atoss-zk-username-rejected");
             // A password is not sent if the username update failed.
             var changedPassword=await SendAtossZkEventAsync(client,origin,child,
                 update,form.Desktop,form.PasswordId,"onChange",
                 JsonSerializer.Serialize(new {value=password}),sid,ct);
             if(!changedPassword)
-                return new(true,true,false,"atoss-zk-login-unconfirmed");
+                return new(true,true,false,"atoss-zk-password-rejected");
             var clicked=await SendAtossZkEventAsync(client,origin,child,
                 update,form.Desktop,form.LoginId,"onClick",
                 "{\"pageX\":0,\"pageY\":0,\"which\":1,\"x\":0,\"y\":0}",
                 sid,ct);
             if(!clicked)
-                return new(true,true,false,"atoss-zk-login-unconfirmed");
-            // A 200 ZK response (or session cookie) is NOT proof of login:
-            // re-enter the server session and require the login form to be
-            // absent from an authentic ATOSS widget page.
-            var checkOuter=await ReadAtossPageAsync(client,origin,entry,null,ct);
-            if(checkOuter is null)
-                return new(true,true,false,"atoss-zk-login-unconfirmed");
-            var nextFrame=FindAtossFrame(checkOuter,entry,origin);
-            if(nextFrame is null)
-                return new(true,true,false,"atoss-zk-login-unconfirmed");
+                return new(true,true,false,"atoss-zk-click-rejected");
+            // Keep the SAME authenticated desktop for the first check.
+            // Loading /SES/html creates a new UUID and could reset the
+            // ZK session, masking even a successfully submitted login.
             var checkHtml=await ReadAtossPageAsync(
-                client,origin,nextFrame,entry,ct);
+                client,origin,child,entry,ct);
             if(checkHtml is null||
                !checkHtml.Contains("ATOSS Staff Efficiency Suite",
-                   StringComparison.OrdinalIgnoreCase) ||
-               !checkHtml.Contains("zkmx(",StringComparison.Ordinal) ||
-               ParseAtossZkForm(checkHtml,nextFrame,origin) is not null)
-                return new(true,true,false,"atoss-zk-login-unconfirmed");
+                   StringComparison.OrdinalIgnoreCase)||
+               !checkHtml.Contains("zkmx(",StringComparison.Ordinal)||
+               ParseAtossZkForm(checkHtml,child,origin) is not null)
+                return new(true,true,false,"atoss-zk-session-unconfirmed");
             return new(true,true,true,"atoss-zk-login-confirmed");
         }catch(Exception ex) when(ex is HttpRequestException or
             InvalidOperationException or TaskCanceledException or
