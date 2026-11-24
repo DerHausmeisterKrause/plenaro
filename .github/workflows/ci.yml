@@ -539,6 +539,18 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' -c "$USER_COOKIE" -b "$USER_COOKIE" -X PUT "$API/api/v1/settings/global" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"instanceName":"Unauthorized","supportEmail":"","defaultWeekStart":"sunday"}')" = "403"
           test "$(curl -s -o /dev/null -w '%{http_code}' -c "$COOKIE" -b "$COOKIE" -X PUT "$API/api/v1/settings/global" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"instanceName":"Plenaro CI","supportEmail":"support@example.invalid","defaultWeekStart":"sunday"}')" = "204"
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/settings/global" | grep -q '"instanceName":"Plenaro CI"'
+          # Admin-specific favorite debug settings must not leak to ordinary users.
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/admin/favorites-debug/settings")" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/admin/favorites-debug/settings")" = "403"
+          curl -fsS -b "$COOKIE" "$API/api/v1/admin/favorites-debug/settings" | python3 -c 'import json,sys;assert json.load(sys.stdin)["enabled"] is False'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/favorites-debug/settings" -H 'Content-Type: application/json' -d '{"enabled":true}')" = "400"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X PUT "$API/api/v1/admin/favorites-debug/settings" -H "X-CSRF-TOKEN: $USER_CSRF" -H 'Content-Type: application/json' -d '{"enabled":true}')" = "403"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$API/api/v1/admin/favorites-debug/settings" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"enabled":true}')" = "204"
+          curl -fsS -b "$COOKIE" "$API/api/v1/admin/favorites-debug/settings" | python3 -c 'import json,sys;assert json.load(sys.stdin)["enabled"] is True'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/admin/favorites-debug/events?favoriteId=00000000-0000-4000-8000-000000000001")" = "403"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" "$API/api/v1/admin/favorites-debug/events?favoriteId=00000000-0000-4000-8000-000000000001")" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$API/api/v1/admin/favorites-debug/clear" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"favoriteId":"00000000-0000-4000-8000-000000000001"}')" = "404"
+
           docker compose restart web
           docker compose up -d --wait --wait-timeout 120
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/settings/me" | grep -q '"theme":"dark"'
