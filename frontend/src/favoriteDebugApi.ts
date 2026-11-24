@@ -1,6 +1,6 @@
 export type FavoriteDebugEntry={
   id:number;at:string;level:'info'|'warning'|'error';code:string;
-  method:string;resource:string;status:number|null;
+  method:string;resource:string;status:number|null;route?:string;
 };
 export type FavoriteDebugBatch={enabled:boolean;events:FavoriteDebugEntry[]};
 
