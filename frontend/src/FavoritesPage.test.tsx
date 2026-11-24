@@ -3,7 +3,14 @@ import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {MemoryRouter,Route,Routes} from 'react-router-dom';
 import {FavoritePage,FavoriteSettingsPanel} from './FavoritesPage';
+import {FavoriteDebugSettingsPanel} from './FavoriteDebugPanel';
 import type {Favorite} from './favoritesApi';
+
+const debugMocks=vi.hoisted(()=>({
+  readFavoriteDebugSetting:vi.fn(),setFavoriteDebugSetting:vi.fn(),
+  readFavoriteDebugEvents:vi.fn(),clearFavoriteDebugEvents:vi.fn(),
+}));
+vi.mock('./favoriteDebugApi',()=>debugMocks);
 
 const mocks=vi.hoisted(()=>({
   loadFavorites:vi.fn(),
@@ -28,16 +35,23 @@ const favorite={
   url:'https://example.org/docs',
 };
 
-function renderStrictFavorite(){
+function renderStrictFavorite(admin=false){
   return render(<StrictMode>
     <MemoryRouter initialEntries={['/favorites/'+favorite.id]}>
-      <Routes><Route path="/favorites/:id" element={<FavoritePage/>}/></Routes>
+      <Routes><Route path="/favorites/:id" element={<FavoritePage admin={admin}/>} /></Routes>
     </MemoryRouter>
   </StrictMode>);
 }
 
 beforeEach(()=>{
   vi.clearAllMocks();
+  debugMocks.readFavoriteDebugSetting.mockResolvedValue({enabled:true});
+  debugMocks.setFavoriteDebugSetting.mockResolvedValue(undefined);
+  debugMocks.readFavoriteDebugEvents.mockResolvedValue({enabled:true,events:[{
+    id:1,at:'2026-11-24T08:00:00Z',level:'error',code:'upstream-unavailable',
+    method:'GET',resource:'script',status:502
+  }]});
+  debugMocks.clearFavoriteDebugEvents.mockResolvedValue(undefined);
   mocks.loadFavorites.mockResolvedValue([favorite]);
   mocks.startFavorite.mockResolvedValue({
     url:'https://wiki.apps.example.org/_plenaro/favorite-bootstrap?token=example-test',
@@ -46,6 +60,21 @@ beforeEach(()=>{
 afterEach(cleanup);
 
 describe('Favorite iframe bootstrap',()=>{
+  it('hides diagnostic panels and makes no debug request for non-admin users',async()=>{
+    renderStrictFavorite();
+    expect(await screen.findByTitle('Wiki')).toBeTruthy();
+    expect(screen.queryByRole('region',{name:'Favoriten-Diagnose'})).toBeNull();
+    expect(debugMocks.readFavoriteDebugEvents).not.toHaveBeenCalled();
+  });
+
+  it('shows safe proxy HTTP errors only for admin users',async()=>{
+    renderStrictFavorite(true);
+    expect(await screen.findByRole('region',{name:'Favoriten-Diagnose'})).toBeTruthy();
+    expect(await screen.findByText(/Zielserver nicht erreichbar, Verbindung oder TLS prüfen/)).toBeTruthy();
+    expect(screen.getByText('502')).toBeTruthy();
+    expect(debugMocks.readFavoriteDebugEvents).toHaveBeenCalledWith(favorite.id,0);
+  });
+
   it('starts one proxy session despite StrictMode double effect',async()=>{
     renderStrictFavorite();
     const frame=await screen.findByTitle('Wiki');
@@ -172,5 +201,20 @@ describe('Personal self-service favorite management',()=>{
     await waitFor(()=>expect(mocks.updatePersonalFavorite).toHaveBeenCalledWith(
       entries[1].id,expect.objectContaining({url:'https://example.net/updated'})
     ));
+  });
+});
+
+
+describe('Admin favoriten debug setting',()=>{
+  it('persists an admin-only opt-in toggle from settings',async()=>{
+    debugMocks.readFavoriteDebugSetting.mockResolvedValueOnce({enabled:false});
+    render(<MemoryRouter><FavoriteDebugSettingsPanel/></MemoryRouter>);
+    const box=await screen.findByRole('checkbox',{
+      name:'Favoriten-Debugmodus für mein Administratorkonto aktivieren'
+    });
+    expect((box as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(box);
+    await waitFor(()=>expect(debugMocks.setFavoriteDebugSetting).toHaveBeenCalledWith(true));
+    await waitFor(()=>expect((box as HTMLInputElement).checked).toBe(true));
   });
 });
