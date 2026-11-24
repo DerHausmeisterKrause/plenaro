@@ -1192,3 +1192,7 @@ h1,h2,h3,p { margin-top: 0; }
   .znuny-report-daily{padding:16px}
   .znuny-daily-progress-head,.znuny-daily-progress-footer{font-size:12px}
 }
+
+/* WPF-equivalent unread Znuny article indicator. Distinct from the manual pin. */
+.ticket-unread-star { color: #d8a000; fill: #f4c43b; stroke-width: 1.8;
+  vertical-align: -3px; margin-right: 5px; flex-shrink: 0; }

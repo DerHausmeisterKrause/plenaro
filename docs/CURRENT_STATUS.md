@@ -1,3 +1,29 @@
+## 24.11.2026 – Phase 5/7: Gelber Stern bei neuen Znuny-Ticketnachrichten
+
+- [x] Desktop-Referenz `TicketArticleReadStateService`, `TicketSystemService.ApplyArticleReadPresentation`, `TodayViewModel.SelectedTicketArticle` und `TodayView.xaml` geprüft.
+- [x] Migrationsdatei `0032_znuny_article_read_state.sql`: personalisierte Artikel-Wasserstände, ungelesene Artikel und Bestätigungen persistieren; keine Änderungen an Znuny.
+- [x] Bestehenden zentralen Znuny-Artikelindex wiederverwenden: nach initialer Baseline werden nur zuverlässig neuere Artikel (Zeitstempel, numerische ID) ungelesen; wiederholte Synchronisation oder ältere Artikel erzeugen keinen Doppelstern. Bereits indexierte Tickets erhalten ihren initialen Wasserstand beim Nachindexieren.
+- [x] Sternanzeige in Heute, Aktuelle, Neue, Erledigte sowie Ticket-System-Listen; manuelles Ticket-Anpinnen bleibt davon unabhängig.
+- [x] Die ausgewählte sichtbare Nachricht wird einzeln gelesen; bei mehreren neuen Nachrichten bleibt der Stern bis zur letzten ungelesenen Nachricht stehen.
+- [x] Benutzergebundener CSRF-geschützter Lesestatus-Endpunkt, persönliche Ticketberechtigung weiterhin über bestehende Endpoint-Filter erzwungen.
+- [x] Unit-/Frontend- und Docker-Smoke-Regressionen für Vergleich, Lesestatus, CSRF und Mehrbenutzer-Isolation ergänzt.
+- [ ] GitHub-CI, PR-Merge und Produktiv-Deployment prüfen.
+- [ ] Live-Znuny-Abnahme: neue Kundenartikel bei zwei verschiedenen Benutzern erzeugen, Stern nach zentraler Synchronisation und nach Lesen prüfen.
+
+**Deployment nach erfolgreichem Merge** (bestehende Installation):
+```bash
+cd /opt/plenaro
+git pull --ff-only origin main
+docker compose up -d --build --no-deps web
+docker compose restart nginx
+docker compose ps
+docker compose logs --tail=80 web
+```
+Die Migration läuft automatisch beim Webstart; es wird kein weiterer Container benötigt.
+Die ersten neu erkannten Artikel nach Upgrade werden als bestehender Stand initialisiert; neue Nachrichten danach werden markiert.
+
+---
+
 ## 23.11.2026 – Phase 5/7: Homeoffice-Tage im Monatsreport
 
 - [x] Desktop-Referenz geprüft: `ReportsViewModel` verwendet `WorkDayService.GetMonthlyMarkerStatistics()` und zählt Tage mit effektivem HO-Marker genau einmal.

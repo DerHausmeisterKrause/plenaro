@@ -231,7 +231,10 @@ public static class ZnunySyncEndpoints
                 SELECT t.ticket_id,t.ticket_number,t.title,t.queue,t.state,
                     t.state_type,t.owner_agent_id,t.responsible_agent_id,
                     t.created_at,t.changed_at,
-                    (pin.ticket_id IS NOT NULL) AS is_pinned
+                    (pin.ticket_id IS NOT NULL) AS is_pinned,
+                    (SELECT count(*)::integer FROM znuny_ticket_article_read_state a
+                     WHERE a.user_id=@user AND a.ticket_id=t.ticket_id
+                       AND a.read_at IS NULL) AS unread_article_count
                 FROM znuny_cached_tickets t
                 INNER JOIN znuny_approved_agent_bindings b ON b.user_id=@user
                 LEFT JOIN znuny_user_settings p ON p.user_id=b.user_id
@@ -299,9 +302,11 @@ public static class ZnunySyncEndpoints
             cmd.Parameters.AddWithValue("max",pageSize);
             cmd.Parameters.AddWithValue("skip",skip);
             var tickets=new List<object>();
-            await using var r=await cmd.ExecuteReaderAsync(ct);
+            var ticketIds=new List<string>();
+            await using (var r=await cmd.ExecuteReaderAsync(ct))
             while(await r.ReadAsync(ct))
             {
+                ticketIds.Add(r.GetString(0));
                 DateTimeOffset? Date(int col)=>r.IsDBNull(col)?null:
                     new DateTimeOffset(r.GetDateTime(col),TimeSpan.Zero);
                 tickets.Add(new {
@@ -311,9 +316,12 @@ public static class ZnunySyncEndpoints
                     ownerId=r.IsDBNull(6)?(int?)null:r.GetInt32(6),
                     responsibleId=r.IsDBNull(7)?(int?)null:r.GetInt32(7),
                     createdAt=Date(8),changedAt=Date(9),
-                    isPinned=r.GetBoolean(10)
+                    isPinned=r.GetBoolean(10),
+                    unreadArticleCount=r.GetInt32(11)
                 });
             }
+            await ZnunyArticleReadTracker.InitializeFromHeadsAsync(
+                db,account.Id,ticketIds,ct);
             return Results.Ok(tickets);
         });
 

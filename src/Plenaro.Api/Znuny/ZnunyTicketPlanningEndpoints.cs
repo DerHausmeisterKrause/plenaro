@@ -58,7 +58,10 @@ public static class ZnunyTicketPlanningEndpoints
             await using var cmd=new NpgsqlCommand("""
                 SELECT s.id,s.ticket_id,t.ticket_number,t.title,t.queue,t.state,
                     t.state_type,t.owner_agent_id,t.responsible_agent_id,
-                    s.starts_at,s.ends_at,s.note
+                    s.starts_at,s.ends_at,s.note,
+                    (SELECT count(*)::integer FROM znuny_ticket_article_read_state a
+                     WHERE a.user_id=@user AND a.ticket_id=s.ticket_id
+                       AND a.read_at IS NULL) AS unread_article_count
                 FROM znuny_ticket_segments s
                 JOIN znuny_cached_tickets t ON t.ticket_id=s.ticket_id
                 JOIN znuny_approved_agent_bindings b ON b.user_id=@user
@@ -78,8 +81,11 @@ public static class ZnunyTicketPlanningEndpoints
             cmd.Parameters.Add("start",NpgsqlDbType.TimestampTz).Value=start;
             cmd.Parameters.Add("end",NpgsqlDbType.TimestampTz).Value=end;
             var agenda=new List<object>();
-            await using var r=await cmd.ExecuteReaderAsync(ct);
+            var visibleTicketIds=new List<string>();
+            await using (var r=await cmd.ExecuteReaderAsync(ct))
             while(await r.ReadAsync(ct))
+            {
+                visibleTicketIds.Add(r.GetString(1));
                 agenda.Add(new {
                     id=r.GetGuid(0),ticketId=r.GetString(1),
                     ticketNumber=r.GetString(2),title=r.GetString(3),
@@ -88,8 +94,12 @@ public static class ZnunyTicketPlanningEndpoints
                     responsibleId=r.IsDBNull(8)?(int?)null:r.GetInt32(8),
                     startsAt=new DateTimeOffset(r.GetDateTime(9),TimeSpan.Zero),
                     endsAt=new DateTimeOffset(r.GetDateTime(10),TimeSpan.Zero),
-                    note=r.GetString(11)
+                    note=r.GetString(11),
+                    unreadArticleCount=r.GetInt32(12)
                 });
+            }
+            await ZnunyArticleReadTracker.InitializeFromHeadsAsync(
+                db,user.Value,visibleTicketIds,ct);
             return Results.Ok(agenda);
         });
 

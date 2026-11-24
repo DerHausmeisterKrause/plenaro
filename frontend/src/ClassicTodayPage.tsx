@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CalendarDays, Clock3, ExternalLink, MapPin, Pin, RefreshCw, Search, SlidersHorizontal, Ticket } from 'lucide-react';
+import { CalendarDays, Clock3, ExternalLink, MapPin, Pin, RefreshCw, Search, SlidersHorizontal, Star, Ticket } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { ClassicTasksPage } from './ClassicTasksPage';
 import { localDate } from './tasksApi';
@@ -349,7 +349,10 @@ export function ClassicTodayPage() {
                   {agendaTimeLabel(item)}
                 </span>
                 <span className="plenaro-agenda-content">
-                  <strong>{item.title}</strong>
+                  <strong>{item.kind==='ticket'&&ticketAgenda.some(t=>
+                    t.ticketId===item.ticketId&&!!t.unreadArticleCount)&&
+                    <Star role="img" aria-label="Neue ungelesene Ticket-Nachricht"
+                      className="ticket-unread-star" size={17}/>}{item.title}</strong>
                   {item.description&&<small>{item.description}</small>}
                   {item.location&&<small><MapPin size={12}/>{item.location}</small>}
                 </span>
@@ -367,7 +370,9 @@ export function ClassicTodayPage() {
               <button type="button"
                 className={`plenaro-task-row${selectedTicketId===ticket.ticketId?' selected':''}`}
                 onClick={()=>setSelectedTicketId(ticket.ticketId)}>
-                <span><strong>{ticket.title}</strong>
+                <span><strong>{!!ticket.unreadArticleCount&&
+                  <Star role="img" aria-label="Neue ungelesene Ticket-Nachricht"
+                    className="ticket-unread-star" size={17}/>} {ticket.title}</strong>
                   <small>#{ticket.ticketNumber||ticket.ticketId} · {ticket.queue}</small></span>
                 <span className="tasks-state">{ticket.state}</span>
               </button>

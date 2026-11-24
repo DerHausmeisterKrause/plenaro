@@ -30,6 +30,7 @@ let candidateAccess={approved:false,agentId:null as number|null,
 let replyTemplateFixture='';
 let personalReplyTemplateFixture='';
 let customerArticlesFixture:ZnunyArticle[]|null=null;
+let unreadArticleIdsFixture:string[]=[];
 let nativeZnunyReady=false;
 let nativeProxyEnabled=false;
 let nativeInteractiveLogin=false;
@@ -57,6 +58,7 @@ beforeEach(() => {
   replyTemplateFixture='';
   personalReplyTemplateFixture='';
   customerArticlesFixture=null;
+  unreadArticleIdsFixture=[];
   nativeZnunyReady=false;
   nativeProxyEnabled=false;
   nativeInteractiveLogin=false;
@@ -99,11 +101,20 @@ beforeEach(() => {
     if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/articles')) return {
       ok:true,status:200,json:async()=>({
         ticketId:'77',ticketNumber:'2026#77',title:'Ticket mit Details',
+        unreadArticleIds:[...unreadArticleIdsFixture],
         articles:customerArticlesFixture??[{id:'12',subject:'Kundenanfrage',body:'Bitte helfen Sie uns.',
           from:'Kunde <kunde@example.org>',to:'support@example.org',replyTo:'',
           senderType:'customer',channel:'Email',created:'2026-10-31 09:00:00'}],
       }),
     };
+    if (path.startsWith('/api/v1/znuny/tickets/') && path.endsWith('/read') &&
+        options?.method==='POST') {
+      const articleId=path.split('/').at(-2)??'';
+      unreadArticleIdsFixture=unreadArticleIdsFixture.filter(id=>id!==articleId);
+      ticketFixture.mine=ticketFixture.mine.map(t=>t.ticketId==='77'?
+        {...t,unreadArticleCount:unreadArticleIdsFixture.length}:t);
+      return {ok:true,status:204};
+    }
     if (path==='/api/v1/znuny/agents') return {
       ok:true,status:200,json:async()=>[
         {id:77,name:'Agent Siebenundsiebzig'},
@@ -340,6 +351,31 @@ describe('Plenaro web shell', () => {
     expect(screen.queryByRole('link', { name: 'Aufgaben' })).toBeNull();
     fireEvent.click(screen.getByRole('tab',{name:'Lokale Aufgaben'}));
     expect(await screen.findByRole('region',{name:'Aufgabenliste'})).toBeTruthy();
+  });
+
+  it('zeigt gelbe Sterne nur für ungelesene Znuny-Artikel und quittiert sie einzeln',async()=>{
+    ticketFixture.mine=[{ticketId:'77',ticketNumber:'2026#77',
+      title:'Ticket mit zwei neuen Nachrichten',queue:'IT',state:'open',
+      stateType:'open',ownerId:77,responsibleId:null,
+      createdAt:null,changedAt:null,unreadArticleCount:2}];
+    customerArticlesFixture=['13','14'].map(id=>({
+      id,subject:'Neue Nachricht '+id,body:'Nachricht '+id,
+      from:'Kunde <kunde@example.org>',to:'support@example.org',replyTo:'',
+      senderType:'customer',channel:'Email',created:'2026-11-24 09:00:00'
+    }));
+    unreadArticleIdsFixture=['13','14'];
+    renderAt('/workspace');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    expect(await screen.findByRole('img',{name:'Neue ungelesene Ticket-Nachricht'})).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:/Ticket mit zwei neuen Nachrichten/}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
+      String(url).endsWith('/articles/13/read')&&(opts as RequestInit)?.method==='POST')).toBe(true));
+    // Opening the ticket does not clear the other unread message.
+    expect(screen.getByRole('img',{name:'Neue ungelesene Ticket-Nachricht'})).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Ticket-Nachricht auswählen'),
+      {target:{value:'14'}});
+    await waitFor(()=>expect(screen.queryByRole('img',
+      {name:'Neue ungelesene Ticket-Nachricht'})).toBeNull());
   });
 
   it('lädt die neuen Tickets zentral und zeigt fehlende Kandidatenfreigaben', async () => {

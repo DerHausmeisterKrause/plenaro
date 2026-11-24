@@ -78,7 +78,9 @@ public sealed class ZnunyCentralSync(
                     SELECT t.ticket_id,t.changed_at
                     FROM znuny_cached_tickets t
                     LEFT JOIN znuny_ticket_search_documents d ON d.ticket_id=t.ticket_id
+                    LEFT JOIN znuny_ticket_article_heads h ON h.ticket_id=t.ticket_id
                     WHERE d.ticket_id IS NULL OR d.indexed_changed_at IS DISTINCT FROM t.changed_at
+                       OR h.ticket_id IS NULL
                     ORDER BY CASE WHEN lower(t.state_type)='closed' THEN 1 ELSE 0 END,
                         t.changed_at DESC NULLS LAST,t.ticket_id DESC
                     LIMIT 4
@@ -115,6 +117,10 @@ public sealed class ZnunyCentralSync(
                         save.Parameters.Add("changed",NpgsqlDbType.TimestampTz).Value=
                             item.Changed is {} d?d.UtcDateTime:DBNull.Value;
                         await save.ExecuteNonQueryAsync(ct);
+                        // Reuse the existing central article fetch: no per-user
+                        // polling, new container or additional remote request.
+                        await ZnunyArticleReadTracker.ObserveAsync(
+                            db,item.Id,result.Articles,null,ct);
                     }catch(ZnunyReader.RemoteFailure ex){
                         // A single oversized/unavailable ticket must not
                         // interrupt indexing of every other ticket.

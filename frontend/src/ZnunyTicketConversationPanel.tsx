@@ -4,18 +4,20 @@ import {emailFrameDocument,isHtmlMail,normalizeCid,referencedCids} from './email
 import {getZnunyPersonal,getZnunyServer} from './znunyApi';
 import {customerArticle,ensureCloseNotice,renderReplyTemplate} from './znunyReplyTemplate';
 import {
-  readZnunyArticles,readZnunyInlineImage,sendZnunyReply,
+  readZnunyArticles,readZnunyInlineImage,sendZnunyReply,markZnunyArticleRead,
   znunyAttachmentDownloadUrl,type ZnunyArticle,
 } from './znunySyncApi';
 
-export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onClosed}:{
-  ticketId:string;closed:boolean;closeRequest?:number;onClosed?:()=>void;
+export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onClosed,onReadChange}:{
+  ticketId:string;closed:boolean;closeRequest?:number;
+  onClosed?:()=>void;onReadChange?:()=>void;
 }) {
   const [opened,setOpened]=useState(true);
   const [articles,setArticles]=useState<ZnunyArticle[]>([]);
   const [ticketNumber,setTicketNumber]=useState('');
   const [ticketTitle,setTicketTitle]=useState('');
   const [selectedId,setSelectedId]=useState('');
+  const [unreadIds,setUnreadIds]=useState<string[]>([]);
   const [busy,setBusy]=useState(false);
   const [replying,setReplying]=useState(false);
   const [closeMode,setCloseMode]=useState(false);
@@ -31,8 +33,10 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
     try{
       const data=await readZnunyArticles(ticketId);
       setArticles(data.articles);
+      setUnreadIds(data.unreadArticleIds??[]);
       setTicketNumber(data.ticketNumber);setTicketTitle(data.title);
       setSelectedId(id=>data.articles.some(item=>item.id===id)?id:
+        data.articles.find(item=>(data.unreadArticleIds??[]).includes(item.id))?.id??
         data.articles[data.articles.length-1]?.id??'');
       setLoaded(true);
     }catch(e){
@@ -40,7 +44,7 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
     }finally{setBusy(false);}
   }
   useEffect(()=>{
-    setArticles([]);setSelectedId('');setOpened(true);setEmailExpanded(false);
+    setArticles([]);setSelectedId('');setUnreadIds([]);setOpened(true);setEmailExpanded(false);
     setTicketNumber('');setTicketTitle('');
     setLoaded(false);setError('');setNotice('');setReplying(false);setReply('');
     setCloseMode(false);setTemplateWarning('');
@@ -54,12 +58,27 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
       if(document.hidden||busy||replying)return;
       void readZnunyArticles(ticketId).then(data=>{
         setArticles(data.articles);
+        setUnreadIds(data.unreadArticleIds??[]);
         setSelectedId(id=>data.articles.some(item=>item.id===id)?id:
+          data.articles.find(item=>(data.unreadArticleIds??[]).includes(item.id))?.id??
           data.articles[data.articles.length-1]?.id??'');
       }).catch(()=>{ /* existing articles remain readable */ });
     },60_000);
     return()=>window.clearInterval(interval);
   },[ticketId,busy,replying]);
+  // Like WPF: reading the selected article (not merely opening the ticket)
+  // acknowledges exactly that article. Other unread articles keep the star.
+  useEffect(()=>{
+    if(!loaded||!opened||!selectedId||!unreadIds.includes(selectedId))return;
+    let active=true;
+    void markZnunyArticleRead(ticketId,selectedId).then(()=>{
+      if(!active)return;
+      setUnreadIds(old=>old.filter(id=>id!==selectedId));
+      onReadChange?.();
+    }).catch(()=>{ /* Keep unread if the server could not confirm reading. */ });
+    return()=>{active=false;};
+  },[ticketId,selectedId,unreadIds,loaded,opened,onReadChange]);
+
   const selected=articles.find(a=>a.id===selectedId);
   const htmlMail=selected ? isHtmlMail(selected.body,selected.contentType) : false;
   useEffect(()=>{
@@ -133,6 +152,7 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
       try{
         const data=await readZnunyArticles(ticketId);
         setArticles(data.articles);
+        setUnreadIds(data.unreadArticleIds??[]);
         setSelectedId(data.articles[data.articles.length-1]?.id??'');
       }catch{
         setNotice('Antwort bestätigt. Der Nachrichtenverlauf konnte nicht aktualisiert werden.');
@@ -162,7 +182,7 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
         <select aria-label="Ticket-Nachricht auswählen" value={selectedId}
           onChange={e=>{setSelectedId(e.target.value);setReplying(false);setEmailExpanded(false);}}>
           {articles.map((a,i)=><option key={a.id||i} value={a.id}>
-            {i+1} · {a.created||'Datum unbekannt'} · {a.subject||'Ohne Betreff'}
+            {unreadIds.includes(a.id)?'★ Neu · ':''}{i+1} · {a.created||'Datum unbekannt'} · {a.subject||'Ohne Betreff'}
           </option>)}
         </select>
       </label>}

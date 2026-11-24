@@ -254,6 +254,23 @@ jobs:
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=mine" | python3 -c 'import json,sys;assert set(x["ticketId"] for x in json.load(sys.stdin))=={"77","78"}'
           curl -fsS -b "$COOKIE" "$API/api/v1/znuny/tickets?view=mine" | python3 -c 'import json,sys;assert set(x["ticketId"] for x in json.load(sys.stdin))=={"42","78"}'
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=completed" | python3 -c 'import json,sys;assert [x["ticketId"] for x in json.load(sys.stdin)]==["81"]'
+          # WPF-style article read tracking: first snapshot is a silent baseline,
+          # then exactly the owning Plenaro user sees unread articles.
+          docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "INSERT INTO znuny_ticket_article_heads(ticket_id,newest_article_id,newest_created_at) VALUES('77','100','2026-11-24 07:00:00+00'),('78','100','2026-11-24 07:00:00+00')"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=mine" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert next(x for x in d if x["ticketId"]=="77")["unreadArticleCount"]==0'
+          docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "INSERT INTO znuny_ticket_article_read_state(user_id,ticket_id,article_id) SELECT b.user_id,'77',ids.id FROM znuny_approved_agent_bindings b CROSS JOIN (VALUES('101'),('102')) AS ids(id) WHERE b.agent_id=77"
+          docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "INSERT INTO znuny_ticket_article_read_state(user_id,ticket_id,article_id) SELECT b.user_id,'78','101' FROM znuny_approved_agent_bindings b WHERE b.agent_id=77"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=mine" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert next(x for x in d if x["ticketId"]=="77")["unreadArticleCount"]==2 and next(x for x in d if x["ticketId"]=="78")["unreadArticleCount"]==1'
+          curl -fsS -b "$COOKIE" "$API/api/v1/znuny/tickets?view=mine" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert next(x for x in d if x["ticketId"]=="78")["unreadArticleCount"]==0'
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/v1/znuny/tickets/77/articles/101/read" -X POST)" = "401"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/77/articles/101/read" -X POST)" = "400"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -H "X-CSRF-TOKEN: $USER_CSRF" "$API/api/v1/znuny/tickets/42/articles/101/read" -X POST)" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -H "X-CSRF-TOKEN: $USER_CSRF" "$API/api/v1/znuny/tickets/77/articles/101/read" -X POST)" = "204"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=mine" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert next(x for x in d if x["ticketId"]=="77")["unreadArticleCount"]==1'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -H "X-CSRF-TOKEN: $USER_CSRF" "$API/api/v1/znuny/tickets/77/articles/102/read" -X POST)" = "204"
+          curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=mine" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert next(x for x in d if x["ticketId"]=="77")["unreadArticleCount"]==0'
+          echo 'CI checkpoint: isolated unread articles, per-article read acknowledgement, CSRF'
+
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=new" | python3 -c 'import json,sys;assert json.load(sys.stdin)==[]'
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/77/workspace" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert d["description"]==""'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/42/workspace")" = "404"
