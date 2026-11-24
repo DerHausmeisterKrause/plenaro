@@ -2096,6 +2096,41 @@ debugProxy.ConfigureDebug(debugOwner,false);
 Assert(debugProxy.DebugEvents(debugOwner,debugFavorite,0).Count==0,
     "disabling debug immediately clears buffered events");
 
+// Regression from the user's 24 Nov OrgManager HAR: exactly the three
+// rejected GET/POST requests carry both 'CSRF' and 'CurrentLanguage';
+// successful fetches omit them. The previous proxy silently dropped both.
+var copyFavoriteHeaders=typeof(FavoriteProxy).GetMethod(
+    "CopyApprovedRequestHeaders",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+void VerifyFavoriteHeaderForwarding(string method){
+    var browser=new Microsoft.AspNetCore.Http.DefaultHttpContext();
+    browser.Request.Method=method;
+    browser.Request.Headers["CSRF"]="private-example-csrf-token";
+    browser.Request.Headers["CurrentLanguage"]="de";
+    browser.Request.Headers["X-CSRF-Token"]="other-token";
+    browser.Request.Headers["X-Requested-With"]="XMLHttpRequest";
+    browser.Request.Headers["Cookie"]="dangerous-browser-cookie";
+    browser.Request.Headers["Host"]="untrusted-browser-host";
+    browser.Request.Headers["X-Sensitive-Unknown"]="never-forward";
+    using var upstream=new HttpRequestMessage(new HttpMethod(method),
+        "https://orgmgmt.example.org/orgmgmt/api/simulation");
+    copyFavoriteHeaders.Invoke(null,new object[]{browser.Request,upstream});
+    Assert(upstream.Headers.TryGetValues("CSRF",out var antiCsrf) &&
+        antiCsrf.Single()=="private-example-csrf-token" &&
+        upstream.Headers.TryGetValues("CurrentLanguage",out var language) &&
+        language.Single()=="de" &&
+        upstream.Headers.TryGetValues("X-CSRF-Token",out var legacyCsrf) &&
+        legacyCsrf.Single()=="other-token" &&
+        upstream.Headers.Contains("X-Requested-With") &&
+        !upstream.Headers.Contains("Cookie") &&
+        !upstream.Headers.Contains("Host") &&
+        !upstream.Headers.Contains("X-Sensitive-Unknown") &&
+        !upstream.Headers.Contains("Proxy-Authorization"),
+        "OrgManager anti-CSRF/language headers forwarded on both GET and POST; browser cookies and unknown headers never escape");
+}
+VerifyFavoriteHeaderForwarding("GET");
+VerifyFavoriteHeaderForwarding("POST");
+
 // Read-state-safe favorite proxy diagnostics: sensitive URL path and query
 // are NOT exported, while repeated 400s are grouped by an opaque HMAC key.
 var diagnosticProxy=new FavoriteProxy(new ConfigurationBuilder().Build());

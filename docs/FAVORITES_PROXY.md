@@ -1,3 +1,28 @@
+## 24.11.2026 – Phase 7/7: OrgManager-API HTTP 400 aus HAR gezielt behoben
+
+- [x] Nutzer-HAR untersucht: **45 Anfragen**, dreimal HTTP 400 (GET /orgmgmt/api/simulation, POST /orgmgmt/api/data/views/objectList, POST /orgmgmt/api/data/views/2305/root/withDynamicLists/1), alle mit `CSRF` und `CurrentLanguage`; erfolgreiche API-Anfragen ohne diese Header. Keine HAR-Daten oder Geheimnisse ins Repository übernommen.
+- [x] Tatsächliche Ursache im Proxy gefunden: bisherige Header-Allowlist kannte `X-CSRF-Token`, nicht aber `CSRF` oder `CurrentLanguage`.
+- [x] Diese beiden Header unverändert an den freigegebenen HTTPS-Upstream der jeweiligen Favoritensitzung weiterleiten; weiterhin keine Browser-Cookies, Host, Proxy-Authorization oder unbekannten Header.
+- [x] WPF-Referenz `DerHausmeisterKrause/project_tool/Services/WebShortcutBrowserSessionManager.cs` verglichen: native WebView2-Anfragen übernehmen Webseiten-Header; Web-Proxy braucht gezielte Header-Parität.
+- [x] Vertragstests für GET und POST mit OrgManager-Headern und negative Kontrollen für Cookie-/Host-/unbekannte Header.
+- [ ] CI erfolgreich abschließen und PR in `main` mergen.
+- [ ] Live-Abnahme: OrgManager-Favorit neu verbinden und alle drei API-Anfragen überprüfen. Ein anderer JavaScript-only-Autologin ohne Browserworker bleibt unverändert.
+- [x] Keine neuen Container, DNS-Einträge, Aliasnamen, Zertifikate, Datenbankmigrationen oder Compose-Profile.
+
+### Deployment nach grünem CI-Merge
+
+```bash
+cd /opt/plenaro
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build --no-deps web
+docker compose restart nginx
+docker compose ps
+docker compose logs --tail=80 web
+```
+
+---
+
 ## 24.11.2026 – Phase 7/7: Favoriten-HTTP-400 und Browser-/HTML-Login präzise diagnostizieren
 
 - [x] Live-Logs analysiert: Favorit A liefert HTML/Skripte/Stile mit HTTP 200, aber einzelne API-GET/POSTs mit HTTP 400; Favorit B erreicht den Browser-/HTML-Fallback, aber nicht eindeutig einen erfolgreichen Login.

@@ -918,6 +918,24 @@ public sealed partial class FavoriteProxy
         return null;
     }
 
+    // Header allowlist: only the approved HTTPS favorite's upstream receives
+    // these values. In particular OrgManager/ATOSS sends its anti-CSRF token
+    // in the literal 'CSRF' header (NOT 'X-CSRF-Token'); its endpoints also
+    // send 'CurrentLanguage'. Forward both unmodified but never log values.
+    // Do not forward Cookie/Host/Forwarded/Proxy-Authorization or arbitrary
+    // browser headers between personal favorites on the shared origin.
+    private static void CopyApprovedRequestHeaders(
+        HttpRequest incoming,HttpRequestMessage upstream)
+    {
+        foreach(var header in new[]{"Accept","Accept-Language","User-Agent",
+            "X-Requested-With","X-Requested-By","If-None-Match","If-Modified-Since",
+            "Range","Authorization","X-CSRF-Token","X-CSRFToken","X-XSRF-TOKEN",
+            "X-Atlassian-Token","CSRF","CurrentLanguage"}){
+            if(incoming.Headers.TryGetValue(header,out var values))
+                upstream.Headers.TryAddWithoutValidation(header,values.ToArray());
+        }
+    }
+
     private async Task ForwardAsync(HttpContext ctx,ProxySession session,
         Uri external,string appPath,string pathPrefix,CancellationToken ct)
     {
@@ -948,16 +966,7 @@ public sealed partial class FavoriteProxy
             if(ctx.Request.ContentLength is { } len)
                 req.Content.Headers.ContentLength=len;
         }
-        // Same-origin JavaScript login/API calls sometimes carry bearer or
-        // CSRF headers. The destination is already pinned to this favorite's
-        // exact HTTPS origin; never forward browser cookies or Host headers.
-        foreach(var header in new[]{"Accept","Accept-Language","User-Agent",
-            "X-Requested-With","X-Requested-By","If-None-Match","If-Modified-Since",
-            "Range","Authorization","X-CSRF-Token","X-CSRFToken","X-XSRF-TOKEN",
-            "X-Atlassian-Token"}){
-            if(ctx.Request.Headers.TryGetValue(header,out var values))
-                req.Headers.TryAddWithoutValidation(header,values.ToArray());
-        }
+        CopyApprovedRequestHeaders(ctx.Request,req);
         if(ctx.Request.Headers.TryGetValue("Origin",out var browserOrigin)&&
             browserOrigin.ToString().Equals(
                 external.GetLeftPart(UriPartial.Authority),
