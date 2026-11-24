@@ -2051,6 +2051,20 @@ var incomplete=Plenaro.Api.Tasks.ReportAccounting.Reconcile([],[
 Assert(incomplete.TotalSeconds==1800&&incomplete.LocalOnlyEntries==2,
     "when Znuny unavailable local confirmed journal is retained but never claimed complete");
 
+// The WPF read-state watermark checks chronology before numeric article IDs.
+var stamp=new DateTime(2026,11,24,8,0,0,DateTimeKind.Utc);
+Assert(ZnunyArticleReadTracker.IsReliablyAfter(stamp.AddMinutes(1),"100",stamp,"101"),
+    "newer article timestamp wins even when numeric ID is lower");
+Assert(!ZnunyArticleReadTracker.IsReliablyAfter(stamp.AddMinutes(-1),"999",stamp,"100"),
+    "late indexed older articles do not trigger an unread star");
+Assert(ZnunyArticleReadTracker.IsReliablyAfter(stamp,"102",stamp,"101") &&
+    !ZnunyArticleReadTracker.IsReliablyAfter(stamp,"101",stamp,"101") &&
+    !ZnunyArticleReadTracker.IsReliablyAfter(stamp,"100",stamp,"101"),
+    "same timestamp compares article IDs and repeated sync stays idempotent");
+Assert(ZnunyArticleReadTracker.IsReliablyAfter(null,"105",null,"104") &&
+    !ZnunyArticleReadTracker.IsReliablyAfter(null,"old-article",null,"104"),
+    "numeric fallback is used only for reliably ordered article IDs");
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory
