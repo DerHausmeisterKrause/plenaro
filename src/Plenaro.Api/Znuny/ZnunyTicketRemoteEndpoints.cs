@@ -41,11 +41,36 @@ public static class ZnunyTicketRemoteEndpoints
                     cred.Value.Password,counter,ct);
                 var detail=await reader.GetArticlesAsync(context.Server!,session,
                     ticketId,counter,ct);
+                await using var db=await Open(config,ct);
+                var account=await users.GetUserAsync(http.User);
+                if(account is null||account.IsDisabled)return Results.Unauthorized();
+                await ZnunyArticleReadTracker.ObserveAsync(
+                    db,ticketId,detail.Articles,account.Id,ct);
+                var unreadArticleIds=await ZnunyArticleReadTracker.UnreadIdsAsync(
+                    db,account.Id,ticketId,ct);
                 return Results.Ok(new {ticketId=detail.TicketId,
                     ticketNumber=detail.TicketNumber,title=detail.Title,
-                    articles=detail.Articles});
+                    articles=detail.Articles,unreadArticleIds});
             }catch(ZnunyReader.RemoteFailure e){return RemoteReadError(e.Code);}
         }).RequireRateLimiting("znuny-ticket-read");
+
+        // Acknowledge only a genuinely tracked, unread article. The group
+        // filter rechecks personal ticket access; CSRF protects this write.
+        group.MapPost("/tickets/{ticketId}/articles/{articleId}/read",
+            async(string ticketId,string articleId,HttpContext http,
+                UserManager<ApplicationUser> users,IConfiguration config,
+                IAntiforgery antiforgery,CancellationToken ct)=>{
+                if(!await antiforgery.IsRequestValidAsync(http))
+                    return Results.BadRequest(new{error="Ungültiger CSRF-Schutz."});
+                if(articleId.Length is <1 or >80 || articleId.Any(char.IsControl))
+                    return Results.BadRequest(new{error="Ungültige Artikel-ID."});
+                var user=await users.GetUserAsync(http.User);
+                if(user is null||user.IsDisabled)return Results.Unauthorized();
+                await using var db=await Open(config,ct);
+                await ZnunyArticleReadTracker.MarkReadAsync(
+                    db,user.Id,ticketId,articleId,ct);
+                return Results.NoContent();
+            });
 
         // Downloads never use a caller-supplied URL or filename. The ticket,
         // article and file IDs identify the attachment inside a freshly
