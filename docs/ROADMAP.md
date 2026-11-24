@@ -9,7 +9,7 @@
 - [x] Privater Browserlogin unterscheidet Worker nicht erreichbar, Formular/Aktion fehlen, Login nicht bestätigt und tatsächlich importierte Session-Cookies.
 - [x] Irreführende, bei jedem Seitenabruf wiederholte Autofill-DNS-Warnung entfernt; einmalige INFO erklärt die Sicherheitsgrenze des gemeinsamen Hostnamens. Keine Passwortinjektion auf Shared-Origin.
 - [x] Neue Frontend-/Vertragstests für Ursachenhinweise, sichere HMAC-Kennung und Worker-Ergebnisse ergänzt.
-- [ ] CI abschließen und PR mergen.
+- [x] [PR #57](https://github.com/DerHausmeisterKrause/plenaro/pull/57) in `main` gemergt; [CI #45394182767](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45394182767) vollständig grün (Backend, Frontend, Tests, Docker-Smoke, Browser-Login).
 - [ ] Live-Abnahme: favoritenweise Neu verbinden, Fehlermeldungen nach Kennung (#...) und Ursachenhinweisen prüfen. Ohne eindeutigen Ursachehinweis lässt sich HTTP 400 nicht allein aus Statuscodes reparieren. JavaScript-only-Login kann ohne verfügbaren Browserworker im Shared-Host nicht automatisch ausgefüllt werden; manuelle Anmeldung bleibt möglich.
 
 ### Deployment nach CI/PR-Merge
