@@ -2337,9 +2337,9 @@ using(var badDialogClient=new HttpClient(new MockHandler(req=>{
         "FAKE_PASSWORD",CancellationToken.None})!;
     await failedTask;
     var outcome=failedTask.GetType().GetProperty("Result")!.GetValue(failedTask)!;
-    Assert((string)outcome.GetType().GetProperty("Code")!.GetValue(outcome)!==
+    Assert((string)outcome.GetType().GetProperty("Code")!.GetValue(outcome)! ==
         "atoss-zk-dialog-initialization-failed" &&
-        (bool)outcome.GetType().GetProperty("Submitted")!.GetValue(outcome)!=false &&
+        (bool)outcome.GetType().GetProperty("Submitted")!.GetValue(outcome)! == false &&
         !unexpectedCredentialsSent,
         "ATOSS failed bootstrap stops before password and login click");
 }
