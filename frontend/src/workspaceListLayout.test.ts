@@ -1,8 +1,8 @@
 import {readFileSync} from 'node:fs';
 import {describe,expect,it} from 'vitest';
 
-// Read from disk: Vitest can replace CSS-module imports with empty stubs.
-const styles=readFileSync(new URL('./styles.css',import.meta.url),'utf8');
+// The CI runs Vitest from frontend/. Read the real stylesheet, not a CSS stub.
+const styles=readFileSync('src/styles.css','utf8');
 
 /** Guard the actual CSS contract: jsdom cannot calculate grid/flex heights. */
 describe('Workplace task-list height',()=>{
