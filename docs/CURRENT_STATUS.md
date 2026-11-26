@@ -1,3 +1,11 @@
+## 26.11.2026 – Phase 7/7: Nachrichtenliste – Nummerierung
+
+- [x] Älteste Nachricht Nr. 1, neueste oben mit höchster Nummer; Datum DD.MM.YYYY HH:mm:ss, ungelesen-Stern und Auswahl bleiben erhalten.
+- [x] Regressionstest ergänzt; keine Migration oder Konfigurationsänderung.
+- [ ] CI und produktive Sichtprüfung.
+
+---
+
 ## 26.11.2026 – Phase 7/7: Nachrichtenliste und native Antwortauswahl (Nachbesserung)
 
 - [x] WPF-Referenz `Views/TaskDetailPanel.xaml` und Znuny-7.3.8-/6.5-Artikelaktionsquellen verglichen.
