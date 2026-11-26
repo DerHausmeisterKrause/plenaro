@@ -22,7 +22,7 @@ modified='{"name":"Personal Wiki Link","url":"https://example.net/other#/homepag
 test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$url/personal/$ID" "${header[@]}" -d "$modified")" = "204"
 SECOND=$(curl -fsS -b "$COOKIE" -X POST "$url/personal" "${header[@]}" -d "$two" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
 test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$url/personal/order" "${header[@]}" -d "{\"ids\":[\"$SECOND\",\"$ID\"]}")" = "204"
-curl -fsS -b "$COOKIE" "$url/" | python3 -c 'import json,sys;a=json.load(sys.stdin);assert len(a)==2 and a[0]["name"]=="My Search" and a[0]["url"]=="https://192.168.1.50:8443/search?tab=1#/settings" and a[1]["url"]=="https://example.net/other"'
+curl -fsS -b "$COOKIE" "$url/" | python3 -c 'import json,sys;a=json.load(sys.stdin);assert len(a)==2 and a[0]["name"]=="My Search" and a[0]["url"]=="https://192.168.1.50:8443/search?tab=1#/settings" and a[1]["url"]=="https://example.net/other#/homepage"'
 # Opening modes are persisted on the individual owner's favorite.
 test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$url/personal/$ID/mode" "${header[@]}" -d '{"openMode":"external"}')" = "204"
 curl -fsS -b "$COOKIE" "$url/" | python3 -c 'import json,sys;a=json.load(sys.stdin);assert a[1]["openMode"]=="external" and a[0]["openMode"]=="proxy"'
