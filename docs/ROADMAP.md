@@ -6,7 +6,7 @@
 - [x] Die eingebetteten **Ticketsystem-** und **Wissensdatenbank**-Seiten verwenden die gleiche flache, dezente Browser-Kopfzeile wie die Favoriten (kleines Symbol, Name, knappe Zusatzinfo rechts/ daneben). Alle bisherigen „Neu verbinden“- und Wiki-Zugangsdatenaktionen bleiben verfügbar; iframe-Sitzungen, Proxys und Sicherheitsgrenzen sind unverändert.
 - [x] „Favoriten verwalten“-Schaltfläche **nur aus dem Favoriten-Browserkopf** entfernt, weil die Verwaltung bereits über Einstellungen/Navigationsleiste erfolgt. Persönliche Favoritenverwaltung selbst bleibt unverändert.
 - [x] Automatisierte UI-Regressionstests für Such-/Sortierzeile in drei Reitern, Wissensdatenbank-/Znuny-Portal-Kopf sowie fehlenden „Favoriten verwalten“-Button.
-- [ ] Pull Request und vollständige GitHub-CI prüfen, anschließend nach `main` mergen.
+- [x] [PR #67](https://github.com/DerHausmeisterKrause/plenaro/pull/67) erfolgreich nach `main` gemergt (Squash-Commit `d855605ad782df462b44c4586f52e0c8351d6475`); [GitHub-CI #45770100589](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45770100589) vollständig erfolgreich (Frontend-/Backend-Build, UI-Regressionstests, Znuny-Vertragstests, TLS, Docker-Smoke und Favoriten-Browser-Login).
 - [ ] Produktive Sichtprüfung: Such-/Filterzeile in allen Ticketreitern und kompaktes Kopf-Layout in Favoriten, Ticketsystem und Wiki.
 - [x] Keine Datenbankmigration, keine zusätzlichen Container, Ports, Domains oder Nginx-Änderungen.
 
