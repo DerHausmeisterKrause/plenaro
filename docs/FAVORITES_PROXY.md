@@ -1282,3 +1282,28 @@ Bootstrap-Token teilen. Ein gemeinsamer Pfadhost kann nicht beliebige
 Drittanbieter-CDNs, WebSockets, Service Worker oder OAuth-Callbacks einer
 fremden App automatisch kompatibel machen. Der serverseitige Cookie-Jar
 isoliert keine beliebigen JavaScript-Anwendungen auf derselben Browser-Origin.
+
+
+## HTTPS-Zieladressen und Netzwerkdiagnose
+
+Persönliche Favoriten akzeptieren HTTPS-DNS-Namen, zulässige IPv4-/IPv6-
+Adressen (IPv6 in eckigen Klammern), Ports, Unterpfade, Query-Parameter und
+Hash-Routen wie `https://admin.cloud.microsoft/#/homepage`. Der Hash wird
+in der Browser-Navigation beibehalten und nicht als HTTP-Parameter an den
+Zielserver geschickt. Die bestehende TCP-Peer-Validierung bleibt aktiv;
+Loopback, Link-Local und Metadaten-Endpunkte sind weiterhin gesperrt.
+TLS-Zertifikate müssen auch bei IP-Zielen vertrauenswürdig sein und zur
+IP-Adresse passen. HTTP ist nicht freigegeben.
+
+SharePoint/Excel/OneDrive werden wieder wie normale Favoriten behandelt.
+Externe SSO-/MFA-Weiterleitungen bleiben durch die bestehende
+Same-Origin-Regel blockiert. Bei solchen Webseiten steht weiterhin
+„Originalseite öffnen“ als manuelle Alternative bereit.
+
+Beim tatsächlichen Proxy-Aufruf werden DNS-Auflösung, TLS-Fehler,
+TCP-Verbindungsablehnung, fehlender Netzwerkpfad, Zeitüberschreitung und
+HTTP 403 unterschieden. Es gibt keinen zusätzlichen Vorab-Request.
+Firewall, Routing und Zielserver sind vom Plenaro-Server bzw. Webcontainer
+aus zu prüfen. Ein Timeout oder HTTP 403 ist kein eindeutiger Nachweis
+einer Firewall-Sperre; eine Firewall-Freigabe garantiert keine
+Kompatibilität mit externem SSO oder Browser-Einbettung.
