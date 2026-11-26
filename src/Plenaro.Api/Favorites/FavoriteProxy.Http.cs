@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -874,6 +875,34 @@ public sealed partial class FavoriteProxy
     // A failed iframe navigation used to produce an empty 502/403 page.
     // Return a small, actionable, self-contained document instead; never
     // include the upstream URL, credentials or internal network addresses.
+    internal static (int Status,string Code,string Message) NetworkFailure(HttpRequestException error)
+    {
+        for(Exception? cause=error;cause is not null;cause=cause.InnerException)
+            if(cause.Message.Contains("Host address is blocked",StringComparison.Ordinal))
+                return (502,"private-upstream-blocked","Die Zieladresse ist aus Sicherheitsgründen gesperrt "+
+                    "(Loopback, Link-Local oder Metadaten-Adresse).");
+        if(error.HttpRequestError==HttpRequestError.NameResolutionError)
+            return (502,"upstream-dns","Der Plenaro-Server kann den DNS-Namen nicht auflösen. "+
+                "Bitte DNS und Netzwerkfreigabe prüfen.");
+        if(error.HttpRequestError==HttpRequestError.SecureConnectionError)
+            return (502,"upstream-tls","Die HTTPS-Verbindung ist an der Zertifikats-/TLS-Prüfung gescheitert. "+
+                "Bei IP-Adressen muss das Zertifikat auch für diese IP gültig und vertrauenswürdig sein.");
+        for(Exception? cause=error;cause is not null;cause=cause.InnerException)
+            if(cause is SocketException socket){
+                if(socket.SocketErrorCode==SocketError.TimedOut)
+                    return (504,"upstream-timeout","Der Zielserver antwortet nicht. "+
+                        "Firewall-Freigabe, Routing und Zielserver prüfen; eine Sperre ist nicht sicher nachgewiesen.");
+                if(socket.SocketErrorCode==SocketError.ConnectionRefused)
+                    return (502,"upstream-refused","Die TCP-Verbindung wurde abgelehnt. "+
+                        "Bitte HTTPS-Port, Zielserver und Firewall-Regeln prüfen.");
+                if(socket.SocketErrorCode is SocketError.HostUnreachable or SocketError.NetworkUnreachable)
+                    return (502,"upstream-unreachable","Der Zielserver ist vom Plenaro-Server nicht erreichbar. "+
+                        "Bitte Routing und Firewall-Freigabe prüfen.");
+            }
+        return (502,"upstream-unavailable","Der Zielserver ist über den Plenaro-Proxy nicht erreichbar. "+
+            "Bitte HTTPS-Port, Firewall-Freigabe und Netzwerk vom Plenaro-Server prüfen.");
+    }
+
     private static async Task ProxyNavigationErrorAsync(
         HttpContext ctx,int status,string code,string message,CancellationToken ct)
     {
@@ -995,7 +1024,7 @@ public sealed partial class FavoriteProxy
                     return;
                 }
                 ctx.Response.Headers.Location=external.GetLeftPart(
-                    UriPartial.Authority)+pathPrefix+redirect.PathAndQuery;
+                    UriPartial.Authority)+pathPrefix+redirect.PathAndQuery+redirect.Fragment;
             }
             var disposition=res.Content.Headers.ContentDisposition;
             if(disposition is not null)
@@ -1119,23 +1148,17 @@ public sealed partial class FavoriteProxy
                 await res.Content.CopyToAsync(ctx.Response.Body,ct);
             }
         }catch(HttpRequestException error) when(!ct.IsCancellationRequested){
-            var blocked=error.Message.Contains("Host address is blocked",
-                StringComparison.Ordinal);
+            var failure=NetworkFailure(error);
             DebugHttp(session.User,session.Favorite,"error",
-                blocked?"private-address-blocked":"upstream-unavailable",method,resource,502,appPath);
-            await ProxyNavigationErrorAsync(ctx,502,
-                blocked?"private-upstream-blocked":"upstream-unavailable",
-                blocked
-                    ?"Die Zieladresse ist aus Sicherheitsgründen gesperrt "+
-                      "(z. B. Loopback, Link-Local oder Metadaten-Adresse). "+
-                      "Interne HTTPS-Webseiten mit gültigem DNS und TLS "+
-                      "sind als Favoriten erlaubt."
-                    :"Der Zielserver ist über den Plenaro-Proxy nicht erreichbar.",
-                ct);
+                failure.Code=="private-upstream-blocked"?"private-address-blocked":failure.Code,
+                method,resource,failure.Status,appPath);
+            await ProxyNavigationErrorAsync(ctx,failure.Status,failure.Code,failure.Message,ct);
         }catch(OperationCanceledException) when(!ct.IsCancellationRequested){
             DebugHttp(session.User,session.Favorite,"error","upstream-timeout",method,resource,504,appPath);
             await ProxyNavigationErrorAsync(ctx,504,"upstream-timeout",
-                "Der Zielserver hat nicht rechtzeitig geantwortet.",ct);
+                "Der Zielserver hat nicht rechtzeitig geantwortet. "+
+                "Bitte Firewall-Freigabe, Routing und Erreichbarkeit vom Plenaro-Server prüfen. "+
+                "Ein Timeout allein beweist keine Firewall-Sperre.",ct);
         }catch(InvalidOperationException){
             DebugHttp(session.User,session.Favorite,"error","upstream-resource-limit",method,resource,413,appPath);
             await ProxyNavigationErrorAsync(ctx,413,"upstream-resource-limit",
