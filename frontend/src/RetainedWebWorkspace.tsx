@@ -24,8 +24,8 @@ function activePage(path:string,search:string,key:string):Page|null{
 
 // A stable DOM parent for each visited website, just like the Classic WPF
 // persistent WebView host. Do not reparent iframes or replay bootstrap URLs.
-export function RetainedWebWorkspace({userId,admin,onInvalidSession}:{
-  userId:string;admin:boolean;onInvalidSession:()=>void;
+export function RetainedWebWorkspace({userId,admin,onInvalidSession,onModeChanged}:{
+  userId:string;admin:boolean;onInvalidSession:()=>void;onModeChanged?:()=>void;
 }){
   const location=useLocation();
   const selected=activePage(location.pathname,location.search,location.key);
@@ -76,7 +76,7 @@ export function RetainedWebWorkspace({userId,admin,onInvalidSession}:{
       return <div key={page.key} className="retained-web-page" hidden={!visible} inert={!visible}>
         {page.kind==='wiki'?<WikiPage/>:page.kind==='ticket'?
           <ZnunyWebPortalPage retainedTicket={page.ticket??null} navigationKey={page.requestKey}/>:
-          <FavoritePage favoriteId={page.id} admin={admin} visible={visible}/>}
+          <FavoritePage favoriteId={page.id} admin={admin} visible={visible} onModeChanged={onModeChanged}/>}
       </div>;
     })}
   </>;
