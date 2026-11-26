@@ -4,7 +4,7 @@
 set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 tmp=$(mktemp -d)
-trap 'rm -rf -- "$tmp"' EXIT
+trap 'rc=$?; if ((rc!=0)); then cat "$tmp/output" "$tmp/docker.log" 2>/dev/null || true; fi; rm -rf -- "$tmp"; exit "$rc"' EXIT
 mkdir -p "$tmp/bin" "$tmp/local/tools"
 cp "$root/tools/update-stack.sh" "$tmp/local/tools/"
 cp "$root/update.sh" "$tmp/local/"
