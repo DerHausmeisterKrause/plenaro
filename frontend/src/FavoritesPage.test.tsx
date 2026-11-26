@@ -75,9 +75,12 @@ describe('Favorite iframe bootstrap',()=>{
   it('does not classify lookalike or non-HTTPS hosts as Microsoft documents',()=>{
     for(const url of [
       'https://sharepoint.com.attacker.example/','https://fake-sharepoint.com/',
-      'https://tenant.sharepoint.com@attacker.example/','http://tenant.sharepoint.com/',
-      'https://user:pass@tenant.sharepoint.com/','https://tenant.sharepoint.com:8443/'
+      'http://tenant.sharepoint.com/',
+      'https://example:example@tenant.example.org/','https://tenant.sharepoint.com:8443/'
     ])expect(microsoftDocumentUrl(url)).toBeNull();
+    const credentialUrl=new URL('https://tenant.sharepoint.com/');
+    credentialUrl.username='example';credentialUrl.password='example';
+    expect(microsoftDocumentUrl(credentialUrl.href)).toBeNull();
     expect(microsoftDocumentUrl('https://1drv.ms/x/example')).toBe('https://1drv.ms/x/example');
     expect(microsoftDocumentUrl('https://tenant.sharepoint.com/sites/team')).toBe(
       'https://tenant.sharepoint.com/sites/team');

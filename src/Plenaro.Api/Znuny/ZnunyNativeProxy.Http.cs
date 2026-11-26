@@ -260,6 +260,17 @@ public sealed partial class ZnunyNativeProxy
         // Native HTML, CSS, JS and JSON are served from the second origin.
         // Relative paths need no rewrite. Replace absolute canonical URLs,
         // escaped JSON/JS URLs and common percent-encoded URL forms.
+        // A TLS-terminating upstream may still advertise http:// CGI and
+        // AJAX URLs. Upgrade only the configured upstream authority to the
+        // existing HTTPS proxy; the proxy itself never connects over HTTP.
+        var insecure="http://"+origin.Authority;
+        text=text.Replace(insecure,destination,StringComparison.OrdinalIgnoreCase)
+            .Replace(insecure.Replace("/","\\/"),destination.Replace("/","\\/"),
+                StringComparison.OrdinalIgnoreCase)
+            .Replace(Uri.EscapeDataString(insecure),Uri.EscapeDataString(destination),
+                StringComparison.OrdinalIgnoreCase)
+            .Replace(insecure.Replace("/","&#47;"),destination.Replace("/","&#47;"),
+                StringComparison.OrdinalIgnoreCase);
         return text.Replace(source,destination,StringComparison.OrdinalIgnoreCase)
             .Replace(source.Replace("/","\\/"),
                 destination.Replace("/","\\/"),StringComparison.OrdinalIgnoreCase)
@@ -348,22 +359,32 @@ public sealed partial class ZnunyNativeProxy
            !html.Contains("AgentTicketCompose",StringComparison.OrdinalIgnoreCase))
             return html;
         return FormPattern.Replace(html,form=>{
-            var formId=Attribute(form.Groups["attrs"].Value,"id")??"";
-            if(!Regex.IsMatch(formId,@"^Reply(?:All)?[0-9]+$",
-                RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
-                return form.Value;
             var body=form.Groups["body"].Value;
-            if(!InputPattern.Matches(body).Any(input=>
-                Attribute(input.Groups["attrs"].Value,"name")=="Action" &&
-                Attribute(input.Groups["attrs"].Value,"value")=="AgentTicketCompose"))
-                return form.Value;
+            var inputs=InputPattern.Matches(body);
+            // Older/custom OTRS skins use different IDs. Identify real
+            // compose forms by their original hidden Action, TicketID and
+            // ArticleID, not by a guessed DOM ID or translated label.
+            bool HasField(string name,string? value=null)=>inputs.Any(input=>
+                string.Equals(Attribute(input.Groups["attrs"].Value,"name"),name,
+                    StringComparison.OrdinalIgnoreCase) &&
+                (value is null||string.Equals(Attribute(input.Groups["attrs"].Value,"value"),
+                    value,StringComparison.OrdinalIgnoreCase)));
+            if(!HasField("Action","AgentTicketCompose")||
+               !HasField("TicketID")||!HasField("ArticleID"))return form.Value;
             return SelectTagPattern.Replace(form.Value,select=>{
                 var attrs=select.Groups["attrs"].Value;
-                if(Attribute(attrs,"name")!="ResponseID")return select.Value;
-                var id=Attribute(attrs,"id")??"";
-                if(!Regex.IsMatch(id,@"^ResponseID(?:All)?[0-9]+$",
-                    RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
-                    return select.Value;
+                if(!string.Equals(Attribute(attrs,"name"),"ResponseID",
+                    StringComparison.OrdinalIgnoreCase))return select.Value;
+                // Keep truly asynchronous placeholders intact. Only bypass
+                // the visual widget if the server provided a real template.
+                var contentStart=select.Index+select.Length;
+                var contentEnd=form.Value.IndexOf("</select",contentStart,
+                    StringComparison.OrdinalIgnoreCase);
+                if(contentEnd<contentStart||!Regex.IsMatch(
+                    form.Value[contentStart..contentEnd],
+                    @"<option\b[^>]*\bvalue\s*=\s*(?:""[1-9][0-9]*""|'[1-9][0-9]*'|[1-9][0-9]*(?=[\s>]))",
+                    RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,
+                    TimeSpan.FromMilliseconds(100)))return select.Value;
                 var classes=AttributePattern.Matches(attrs).FirstOrDefault(m=>
                     m.Groups["name"].Value.Equals("class",StringComparison.OrdinalIgnoreCase));
                 if(classes is null)return select.Value;
@@ -376,6 +397,39 @@ public sealed partial class ZnunyNativeProxy
                     attrs[(classes.Index+classes.Length)..]+">";
             });
         });
+    }
+
+    // Some agent updates return HTML inside JSON strings. Decode structurally
+    // rather than using regex on escaped JSON; leave unrelated values intact.
+    private static string NativeReplyJson(string json)
+    {
+        if(!json.Contains("ResponseID",StringComparison.OrdinalIgnoreCase)||
+           !json.Contains("AgentTicketCompose",StringComparison.OrdinalIgnoreCase))return json;
+        try{
+            var node=System.Text.Json.Nodes.JsonNode.Parse(json);
+            bool changed=false;
+            System.Text.Json.Nodes.JsonNode? Visit(System.Text.Json.Nodes.JsonNode? current)
+            {
+                if(current is System.Text.Json.Nodes.JsonValue value &&
+                   value.TryGetValue<string>(out var html)){
+                    var next=NativeReplySelects(html);
+                    if(next!=html){changed=true;return System.Text.Json.Nodes.JsonValue.Create(next);}
+                }else if(current is System.Text.Json.Nodes.JsonObject obj){
+                    foreach(var key in obj.Select(x=>x.Key).ToArray()){
+                        var old=obj[key];var next=Visit(old);
+                        if(!ReferenceEquals(old,next))obj[key]=next;
+                    }
+                }else if(current is System.Text.Json.Nodes.JsonArray arr){
+                    for(var i=0;i<arr.Count;i++){
+                        var old=arr[i];var next=Visit(old);
+                        if(!ReferenceEquals(old,next))arr[i]=next;
+                    }
+                }
+                return current;
+            }
+            var result=Visit(node);
+            return changed?result!.ToJsonString():json;
+        }catch(System.Text.Json.JsonException){return json;}
     }
 
     private static bool PotentialHtmlMime(string? media)=>media is null or
@@ -418,7 +472,11 @@ public sealed partial class ZnunyNativeProxy
     {
         if(ctx.Request.Method is not ("GET" or "POST" or "HEAD" or "PUT" or
             "PATCH" or "DELETE")||!ApprovedBrowserMutation(ctx.Request,publicOrigin)){
-            ctx.Response.StatusCode=403;return;
+            ctx.Response.StatusCode=403;
+            if(IsAjaxRequest(ctx.Request))
+                ctx.RequestServices.GetRequiredService<ILogger<ZnunyNativeProxy>>()
+                    .LogWarning("Znuny native AJAX rejected by browser mutation guard; HTTP 403");
+            return;
         }
         var builder=new UriBuilder(session.Upstream){
             Path=ctx.Request.Path.ToUriComponent(),
@@ -459,10 +517,12 @@ public sealed partial class ZnunyNativeProxy
             using var response=await session.Client.SendAsync(request,
                 HttpCompletionOption.ResponseHeadersRead,ct);
             ctx.Response.StatusCode=(int)response.StatusCode;
-            if(IsAjaxRequest(ctx.Request)&&(int)response.StatusCode>=400)
+            if(IsAjaxRequest(ctx.Request)&&
+               (target.AbsolutePath.Equals(session.Entry.AbsolutePath,StringComparison.OrdinalIgnoreCase) ||
+                (int)response.StatusCode>=400))
                 ctx.RequestServices.GetRequiredService<ILogger<ZnunyNativeProxy>>()
-                    .LogWarning("Znuny native AJAX response HTTP {Status}; details suppressed",
-                        (int)response.StatusCode);
+                    .LogInformation("Znuny native AJAX {Method} HTTP {Status}; details suppressed",
+                        ctx.Request.Method,(int)response.StatusCode);
             // Forward only necessary response metadata. Never expose upstream
             // Set-Cookie, internal URLs, server identifiers or hop-by-hop headers.
             if(response.Headers.Location is { } redirect){
@@ -526,11 +586,20 @@ public sealed partial class ZnunyNativeProxy
                 var changed=Rewrite(decoded,session.Upstream,publicOrigin);
                 if(response.IsSuccessStatusCode &&
                    response.Content.Headers.ContentDisposition is null &&
-                   target.AbsolutePath.Equals(session.Entry.AbsolutePath,StringComparison.OrdinalIgnoreCase) &&
-                   (ctx.Response.ContentType?.StartsWith("text/html",
-                    StringComparison.OrdinalIgnoreCase)==true||
-                    type?.MediaType=="application/xhtml+xml"))
-                    changed=NativeReplySelects(changed);
+                   target.AbsolutePath.Equals(session.Entry.AbsolutePath,StringComparison.OrdinalIgnoreCase)){
+                    var media=type?.MediaType;
+                    var adapted=media is "application/json" or "text/json"
+                        ?NativeReplyJson(changed):
+                        (ctx.Response.ContentType?.StartsWith("text/html",
+                            StringComparison.OrdinalIgnoreCase)==true||
+                         media is "application/xhtml+xml" or "text/plain")
+                            ?NativeReplySelects(changed):changed;
+                    if(adapted!=changed)
+                        ctx.RequestServices.GetRequiredService<ILogger<ZnunyNativeProxy>>()
+                            .LogInformation("Znuny native reply select adapted; HTTP {Status}",
+                                (int)response.StatusCode);
+                    changed=adapted;
+                }
                 var output=encoding.GetBytes(changed);
                 await ctx.Response.Body.WriteAsync(output,ct);
             }else{

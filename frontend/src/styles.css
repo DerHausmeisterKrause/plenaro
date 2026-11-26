@@ -1335,3 +1335,13 @@ h1,h2,h3,p { margin-top: 0; }
 .plenaro-notification-prompt h2, .plenaro-notification-prompt p { margin: 0; }
 .plenaro-notification-prompt .plenaro-notification-actions { justify-content: flex-end; }
 .plenaro-notification-count { min-width: 17px; width: max-content; }
+
+/* Always visible single-select article list with native keyboard scrolling. */
+.classic-wpf-optional-inner .znuny-message-listbox {
+  display:block; width:100%; min-width:0; max-width:100%;
+  margin-top:5px; padding:4px; overflow-y:auto; font:inherit;
+  color:var(--text); background:var(--surface);
+  border:1px solid var(--border); border-radius:8px;
+}
+.znuny-message-listbox option { padding:5px 7px; }
+.znuny-message-listbox:focus-visible { outline:2px solid var(--blue); outline-offset:2px; }

@@ -1,3 +1,15 @@
+## 26.11.2026 – Phase 7/7: Nachrichtenliste und native Antwortauswahl (Nachbesserung)
+
+- [x] WPF-Referenz `Views/TaskDetailPanel.xaml` und Znuny-7.3.8-/6.5-Artikelaktionsquellen verglichen.
+- [x] Nachrichten-Dropdown in Plenaro durch eine native scrollbare Listbox mit vier Zeilen ersetzt; absteigend nach Datum, Artikel-ID als Tie-Breaker, neueste ungelesene Nachricht initial selektiert, einzelne Lesebestätigung unverändert.
+- [x] Antwortformular-Erkennung über echte Action/TicketID/ArticleID statt feste DOM-IDs, auch bei text/plain- und JSON-HTML-AJAX-Antworten; HTTP-CGI-Links des konfigurierten Upstreams auf HTTPS-Proxy umgeschrieben. Sicherheitsgrenzen unverändert.
+- [x] AJAX-Status und erfolgreiche Antwortformular-Anpassungen ohne URLs oder Ticketinhalte protokolliert.
+- [x] Vorherigen CI-Guard-Fehler (synthetische Credential-URL) korrigiert; Regressionstests angepasst.
+- [ ] CI-Ergebnis und produktiver Test. Hängende Antwortauswahl nicht abschließend diagnostiziert; bei erneutem Fehler Browser-Netzwerkstatus und Proxy-Diagnose prüfen.
+- [x] Keine neuen Container, Domains oder Migrationen.
+
+---
+
 ## 26.11.2026 – Phase 7/7: SharePoint-/Excel-Favoriten und Znuny-Antwortauswahl
 
 - [x] Fehler `upstream-redirect` nachvollzogen: generischer Favoritenproxy blockiert fremde Origins absichtlich. Microsoft dokumentiert reguläre Cross-Origin-iFrame-Blockaden: https://learn.microsoft.com/de-de/troubleshoot/sharepoint/security/cross-domain-iframe-requests-are-blocked .
