@@ -3,7 +3,6 @@ import { CalendarDays, Clock3, ExternalLink, MapPin, Pin, RefreshCw, Search, Sli
 import { useLocation } from 'react-router-dom';
 import { ClassicTasksPage } from './ClassicTasksPage';
 import { localDate } from './tasksApi';
-import { getMonthMarkers, saveDayMarker, type DayMarker, type DayType } from './dayMarkersApi';
 import { graphStatus, readOutlookWeek, type OutlookEvent } from './graphApi';
 import { ClassicTicketDetailPanel } from './ClassicTicketDetailPanel';
 import {
@@ -12,8 +11,7 @@ import {
   type CachedTicket, type TicketAccess, type TicketAgendaSegment, type TicketListFilters,
 } from './znunySyncApi';
 import { agendaTimeLabel, buildTodayAgenda, localDayBounds } from './todayAgenda';
-import {GermanDay,preflightHomeofficeMail,sendBrRequest,
-  reconcileHomeOfficeCalendar} from './brRequestsApi';
+import { isoWeekNumber } from './isoWeek';
 
 type Tab = 'today' | 'active' | 'new' | 'completed' | 'local';
 const labels: {key:Tab;label:string}[] = [
@@ -32,7 +30,6 @@ export function ClassicTodayPage() {
   const [ticketAgenda,setTicketAgenda]=useState<TicketAgendaSegment[]>([]);
   const [outlook,setOutlook]=useState<OutlookEvent[]>([]);
   const [access,setAccess]=useState<TicketAccess|null>(null);
-  const [marker,setMarker]=useState<DayMarker|null>(null);
   const [selectedTicketId,setSelectedTicketId]=useState<string|null>(null);
   const [detailsExpanded,setDetailsExpanded]=useState(false);
   const rowsRef=useRef<HTMLDivElement|null>(null);
@@ -49,12 +46,10 @@ export function ClassicTodayPage() {
   const [pinBusy,setPinBusy]=useState<string|null>(null);
   const [loading,setLoading]=useState(true);
   const [listLoading,setListLoading]=useState(false);
-  const [busy,setBusy]=useState(false);
   const [outlookConnected,setOutlookConnected]=useState(false);
   const [calendarError,setCalendarError]=useState('');
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
-  const [confirmHomeOffice,setConfirmHomeOffice]=useState(false);
   const [refresh,setRefresh]=useState(0);
 
   useEffect(()=>{
@@ -71,12 +66,10 @@ export function ClassicTodayPage() {
   useEffect(()=>{
     let active=true;
     setLoading(true);setError('');
-    const [yy,mm]=day.slice(0,7).split('-').map(Number);
-    void Promise.all([getTicketAgenda(day),getMonthMarkers(yy,mm),getTicketAccess()])
-      .then(([segments,days,currentAccess])=>{
+    void Promise.all([getTicketAgenda(day),getTicketAccess()])
+      .then(([segments,currentAccess])=>{
         if(!active)return;
         setTicketAgenda(segments);
-        setMarker(days.find(item=>item.day===day)??null);
         setAccess(currentAccess);setLoading(false);
       })
       .catch(e=>{if(active){setError(e instanceof Error?e.message:'Heute nicht verfügbar.');setLoading(false);}});
@@ -177,44 +170,6 @@ export function ClassicTodayPage() {
     }catch(e){setError(e instanceof Error?e.message:'Kandidatenfilter konnte nicht gespeichert werden.');}
     finally{setToggleBusy(false);}
   }
-  async function reconcileTodayHomeOffice(){
-    if(busy||!marker?.isHo)return;
-    setBusy(true);setError('');setNotice('');
-    try{
-      const result=await reconcileHomeOfficeCalendar(day);
-      setNotice(result.message);
-      setRefresh(x=>x+1);
-    }catch(e){
-      setError(e instanceof Error?e.message:
-        'Outlook-Homeoffice-Termin konnte nicht abgeglichen werden.');
-    }finally{setBusy(false);}
-  }
-  async function setMarkerValue(type:DayType,isBr:boolean,isHo:boolean,
-    confirmed=false) {
-    if(busy)return;
-    const newHo=isHo&&!marker?.isHo;
-    if(newHo&&!confirmed){
-      setConfirmHomeOffice(true);
-      return;
-    }
-    setBusy(true);setError('');setNotice('');
-    let saved=false;
-    try{
-      if(newHo)await preflightHomeofficeMail(true);
-      await saveDayMarker(day,type,isBr,isHo);
-      saved=true;
-      setRefresh(x=>x+1);
-      if(newHo){
-        const result=await sendBrRequest(day);
-        setNotice(result.message);
-      }else setNotice('Tagesmarker gespeichert.');
-    }catch(e){
-      setError((saved&&newHo
-        ?'HO-Marker gespeichert, aber Outlook-Termin/E-Mail nicht vollständig bestätigt: '
-        :'Homeoffice wurde nicht beantragt: ')+
-        (e instanceof Error?e.message:'Unbekannter Fehler.'));
-    }finally{setBusy(false);}
-  }
   const today=new Date(day+'T12:00:00');
 
   return <div className="page plenaro-today">
@@ -230,55 +185,12 @@ export function ClassicTodayPage() {
     }>
       <section className="plenaro-today-left" aria-label="Arbeitsplatz-Ticketbereich">
         <div className="content-card plenaro-workday">
-          <div>
-            <h2>Arbeitstag heute</h2>
-            <p>{new Intl.DateTimeFormat('de-DE',{dateStyle:'full'}).format(today)}</p>
-            <p className="um-hint">Tagesmarker für deine persönliche Planung</p>
-          </div>
-          <div className="plenaro-marker-actions" aria-label="Tagesart einstellen">
-            {(['Normal','UL','AM'] as DayType[]).map(type=><button key={type}
-              type="button" disabled={busy}
-              className={`plenaro-marker-pill${(marker?.dayType??'Normal')===type?' active':''}`}
-              aria-pressed={(marker?.dayType??'Normal')===type}
-              onClick={()=>void setMarkerValue(type,marker?.isBr??false,marker?.isHo??false)}>
-              {type}</button>)}
-            <button type="button" disabled={busy}
-              className={`plenaro-marker-pill${marker?.isHo?' active':''}`}
-              aria-pressed={marker?.isHo??false}
-              onClick={()=>void setMarkerValue(marker?.dayType??'Normal',
-                marker?.isBr??false,!marker?.isHo)}>HO</button>
-            <button type="button" disabled={busy}
-              className={`plenaro-marker-pill${marker?.isBr?' active':''}`}
-              aria-pressed={marker?.isBr??false}
-              onClick={()=>void setMarkerValue(marker?.dayType??'Normal',
-                !marker?.isBr,marker?.isHo??false)}>BR</button>
-          </div>
-          {marker?.isHo&&<button type="button"
-            className="classic-text-action" disabled={busy}
-            onClick={()=>void reconcileTodayHomeOffice()}>
-            <CalendarDays size={15}/>Outlook-Homeoffice-Termin prüfen / nachtragen
-          </button>}
+          <h2>Arbeitstag heute</h2>
+          <p className="plenaro-workday-date">
+            {new Intl.DateTimeFormat('de-DE',{dateStyle:'full'}).format(today)}
+            {' · KW '+isoWeekNumber(today)}
+          </p>
         </div>
-        {confirmHomeOffice&&<div className="homeoffice-dialog-backdrop">
-          <section className="homeoffice-dialog content-card" role="dialog"
-            aria-modal="true" aria-labelledby="today-homeoffice-confirm-title">
-            <h3 id="today-homeoffice-confirm-title">Homeoffice beantragen</h3>
-            <p>Willst du wirklich am <strong>{GermanDay(day)}</strong> Homeoffice beantragen?</p>
-            <p className="um-hint">Plenaro legt einen ganztägigen Outlook-Termin
-              mit dem Verfügbarkeitsstatus „An anderem Ort tätig“ an oder verwendet
-              einen vorhandenen Termin und versendet danach die Homeoffice-E-Mail.</p>
-            <div className="homeoffice-dialog-actions">
-              <button type="button" className="button button-secondary"
-                onClick={()=>setConfirmHomeOffice(false)}>Nein</button>
-              <button type="button" className="button button-primary"
-                onClick={()=>{
-                  setConfirmHomeOffice(false);
-                  void setMarkerValue(marker?.dayType??'Normal',
-                    marker?.isBr??false,true,true);
-                }}>Ja, beantragen</button>
-            </div>
-          </section>
-        </div>}
         <div className="content-card plenaro-today-list">
           <div className="plenaro-list-title">
             <h2>{labels.find(item=>item.key===tab)?.label}:</h2>
