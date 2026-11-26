@@ -50,15 +50,15 @@ export function WikiPage(){
   },[wiki?.ready,wiki?.favoriteId,revision]);
 
   return <div className="page znuny-web-portal wiki-browser-page">
-    <div className="znuny-web-portal-toolbar content-card wiki-browser-toolbar">
-      <div>
-        <span className="eyebrow"><BookOpenText size={14}/>PLENARO / WISSENSDATENBANK</span>
+    <div className="znuny-web-portal-toolbar content-card wiki-browser-toolbar favorite-browser-toolbar">
+      <div className="favorite-browser-identity">
+        <BookOpenText size={15} aria-hidden="true"/>
         <h1>Wissensdatenbank</h1>
-        <p>{wiki?.configured
-          ? wiki.name+' · persönliche Wiki-Anmeldung'
-          : 'Zentral bereitgestelltes Firmenwiki'}</p>
+        <span className="favorite-browser-context">
+          {wiki?.configured?wiki.name:'Firmenwiki'}
+        </span>
       </div>
-      <div className="favorites-toolbar">
+      <div className="favorites-toolbar favorite-browser-actions">
         <button type="button" className="button button-secondary"
           disabled={!wiki?.ready||starting}
           onClick={()=>setRevision(value=>value+1)}>
