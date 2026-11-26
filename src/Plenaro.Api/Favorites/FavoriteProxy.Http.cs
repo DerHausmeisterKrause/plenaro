@@ -1014,13 +1014,21 @@ public sealed partial class FavoriteProxy
                 (int)res.StatusCode>=500?"error":
                 (int)res.StatusCode>=400?"warning":"info",
                 "http-response",method,resource,(int)res.StatusCode,appPath);
+            if(res.StatusCode==HttpStatusCode.Forbidden&&HttpMethods.IsGet(method)&&Navigation(ctx.Request)){
+                await ProxyNavigationErrorAsync(ctx,403,"upstream-http-forbidden",
+                    "Der Zielserver oder ein vorgeschalteter Filter verweigert den Zugriff (HTTP 403). "+
+                    "Bitte Berechtigungen, Firewall-/Proxy-Freigaben und Anmeldung prüfen. "+
+                    "Die Netzwerkverbindung besteht; die genaue Sperrursache ist nicht eindeutig.",ct);
+                return;
+            }
             if(res.Headers.Location is { } location){
                 var redirect=new Uri(target,location);
                 if(!SameUpstream(session.Upstream,redirect)){
                     DebugHttp(session.User,session.Favorite,"error","redirect-cross-origin",method,resource,502,appPath);
                     await ProxyNavigationErrorAsync(ctx,502,"upstream-redirect",
-                        "Die Webseite leitet auf einen anderen Server weiter. "+
-                        "Hinterlege die endgültige HTTPS-Adresse als Favorit.",ct);
+                        "Die Webseite leitet auf einen anderen Server weiter, z. B. zur externen SSO-Anmeldung. "+
+                        "Diese Weiterleitung ist im isolierten Proxy nicht freigegeben. "+
+                        "Hinterlege die endgültige HTTPS-Adresse als Favorit oder verwende bei externem SSO „Originalseite öffnen“.",ct);
                     return;
                 }
                 ctx.Response.Headers.Location=external.GetLeftPart(
