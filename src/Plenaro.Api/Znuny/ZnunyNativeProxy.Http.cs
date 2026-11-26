@@ -467,6 +467,17 @@ public sealed partial class ZnunyNativeProxy
         return output.ToArray();
     }
 
+    private static string DiagnosticMime(string? media)=>media?.ToLowerInvariant() switch{
+        "application/json" or "text/json" or "application/problem+json"=>"json",
+        "text/html" or "application/xhtml+xml"=>"html",
+        "application/javascript" or "text/javascript" or "application/x-javascript" or "text/ecmascript" or "application/ecmascript"=>"script",
+        "text/css"=>"style",
+        "text/plain"=>"plain",
+        "application/octet-stream"=>"binary",
+        null=>"missing",
+        _=>"other"
+    };
+
     private async Task ProxyRequestAsync(HttpContext ctx,ProxySession session,
         Uri publicOrigin,CancellationToken ct)
     {
@@ -513,16 +524,28 @@ public sealed partial class ZnunyNativeProxy
             request.Headers.Referrer=new Uri(session.Upstream,
                 refererUrl.PathAndQuery);
         }
+        var started=System.Diagnostics.Stopwatch.GetTimestamp();
         try{
             using var response=await session.Client.SendAsync(request,
                 HttpCompletionOption.ResponseHeadersRead,ct);
             ctx.Response.StatusCode=(int)response.StatusCode;
-            if(IsAjaxRequest(ctx.Request)&&
-               (target.AbsolutePath.Equals(session.Entry.AbsolutePath,StringComparison.OrdinalIgnoreCase) ||
-                (int)response.StatusCode>=400))
+            var ajax=IsAjaxRequest(ctx.Request);
+            var dest=ctx.Request.Headers["Sec-Fetch-Dest"].ToString();
+            var asset=dest is "script" or "style";
+            var cgi=target.AbsolutePath.Equals(session.Entry.AbsolutePath,StringComparison.OrdinalIgnoreCase);
+            var responseKind=DiagnosticMime(response.Content.Headers.ContentType?.MediaType);
+            // Identify failed or wrongly typed script/style responses and
+            // CGI AJAX round trips without logging URLs, params, credentials
+            // or ticket contents. A 200 HTML response can be a login page,
+            // a valid fragment or an error; do not guess or fabricate options.
+            if((ajax&&(cgi||(int)response.StatusCode>=400))||
+               (asset&&((int)response.StatusCode>=400||
+                   (dest=="script"&&responseKind!="script")||
+                   (dest=="style"&&responseKind!="style"))))
                 ctx.RequestServices.GetRequiredService<ILogger<ZnunyNativeProxy>>()
-                    .LogInformation("Znuny native AJAX {Method} HTTP {Status}; details suppressed",
-                        ctx.Request.Method,(int)response.StatusCode);
+                    .LogInformation("Znuny native {Kind} {Method} HTTP {Status}; response={Mime}; headers={ElapsedMs}ms; details suppressed",
+                        ajax?"AJAX":dest,ctx.Request.Method,(int)response.StatusCode,
+                        responseKind,(long)System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             // Forward only necessary response metadata. Never expose upstream
             // Set-Cookie, internal URLs, server identifiers or hop-by-hop headers.
             if(response.Headers.Location is { } redirect){
