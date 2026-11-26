@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ClassicTaskArchivePanel } from './ClassicArchivePanels';
 import { CalendarDays, CheckCircle2, ClipboardList, Pencil, Play, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react';
@@ -91,6 +91,8 @@ export function ClassicTasksPage() {
   const [quickTitle, setQuickTitle] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const listRef=useRef<HTMLDivElement|null>(null);
+  const listScrollTop=useRef(0);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
 
@@ -114,6 +116,11 @@ export function ClassicTasksPage() {
     }).catch(e => { if (active) { setError(e instanceof Error ? e.message : 'Laden fehlgeschlagen.'); setLoading(false); } });
     return () => { active = false; };
   }, [query, statusFilter, requestedTaskId]);
+
+  // A local-task reload must keep the list at the user's last scroll offset.
+  useLayoutEffect(()=>{
+    if(listRef.current)listRef.current.scrollTop=listScrollTop.current;
+  },[tasks,loading]);
 
   const visible = onlyOpen ? tasks.filter(t => t.status !== 'completed' && t.status !== 'cancelled') : tasks;
   const selected = tasks.find(t => t.id === selectedId);
@@ -193,7 +200,8 @@ export function ClassicTasksPage() {
           </label>
           <label className="classic-inline-check"><input type="checkbox" checked={onlyOpen} onChange={e => setOnlyOpen(e.target.checked)}/>Alle offenen</label>
         </div>
-        <div className="classic-list-scroll" role="list">
+        <div className="classic-list-scroll" role="list" ref={listRef}
+          onScroll={event=>{listScrollTop.current=event.currentTarget.scrollTop;}}>
           {loading && <p role="status" className="classic-empty-list">Lade Aufgaben …</p>}
           {!loading && visible.length === 0 && <div className="classic-empty-list">
             <ClipboardList size={26}/><h2>Keine Aufgaben gefunden</h2>
