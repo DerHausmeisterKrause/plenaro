@@ -200,7 +200,7 @@ export function FavoritePage({admin=false,favoriteId,visible=true,onModeChanged}
   // an already invalid single-use bootstrap token. Share ONE in-flight
   // request across both effect invocations for the same favorite/revision.
   const startup=useRef<{
-    key:string;promise:Promise<{item:Favorite;url:string}>
+    key:string;promise:Promise<{item:Favorite;url:string;failure?:string}>
   }|null>(null);
   useEffect(()=>{
     let active=true;
@@ -212,6 +212,7 @@ export function FavoritePage({admin=false,favoriteId,visible=true,onModeChanged}
         const items=await loadFavorites();
         const item=items.find(x=>x.id===id&&x.enabled);
         if(!item)throw new Error('Favorit nicht vorhanden oder deaktiviert.');
+        try{
         if(item.openMode==='external'||item.openMode==='direct'){
           const original=new URL(item.url??'');
           if(original.protocol!=='https:'||original.username||original.password||
@@ -233,12 +234,13 @@ export function FavoritePage({admin=false,favoriteId,visible=true,onModeChanged}
           (!legacyBootstrap&&!sharedBootstrap))
           throw new Error('Ungültige Favoriten-Proxy-Adresse.');
         return {item,url:destination.toString()};
+        }catch(e){return {item,url:'',failure:e instanceof Error?e.message:'Webseite nicht erreichbar.'};}
       })();
       startup.current={key,promise};
     }
-    void startup.current.promise.then(({item,url})=>{
+    void startup.current.promise.then(({item,url,failure})=>{
       if(active){
-        setFavorite(item);setUrl(url);
+        setFavorite(item);setUrl(url);setError(failure??'');
         if(!url)setLoading(false);
       }
     }).catch(e=>{
