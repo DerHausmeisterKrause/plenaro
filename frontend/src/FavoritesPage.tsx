@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
 import {Link,useParams} from 'react-router-dom';
+import {microsoftDocumentUrl} from './favoriteNavigation';
 import {FavoriteDebugConsole} from './FavoriteDebugPanel';
 import {ArrowDown,ArrowUp,ExternalLink,Plus,RefreshCw,Save,ShieldCheck,
   Star,Trash2} from 'lucide-react';
@@ -201,6 +202,9 @@ export function FavoritePage({admin=false}:{admin?:boolean}){
         const items=await loadFavorites();
         const item=items.find(x=>x.id===id&&x.enabled);
         if(!item)throw new Error('Favorit nicht vorhanden oder deaktiviert.');
+        // Bookmarks and the settings Open link also bypass the proxy for
+        // Microsoft 365. The actual navigation is an explicit user click.
+        if(microsoftDocumentUrl(item.url))return {item,url:''};
         const result=await startFavorite(id);
         const destination=new URL(result.url);
         // The dedicated-host proxy uses /_plenaro/favorite-bootstrap.
@@ -222,6 +226,7 @@ export function FavoritePage({admin=false}:{admin?:boolean}){
     void startup.current.promise.then(({item,url})=>{
       if(active){
         setFavorite(item);setUrl(url);
+        if(!url)setLoading(false);
       }
     }).catch(e=>{
       if(active){setError(e instanceof Error?e.message:'Webseite nicht erreichbar.');
@@ -229,6 +234,7 @@ export function FavoritePage({admin=false}:{admin?:boolean}){
     });
     return()=>{active=false;};
   },[id,revision]);
+  const direct=favorite?microsoftDocumentUrl(favorite.url):null;
   return <div className="page znuny-web-portal favorite-browser-page">
     <div className="znuny-web-portal-toolbar content-card favorite-browser-toolbar">
       <div className="favorite-browser-identity">
@@ -238,14 +244,22 @@ export function FavoritePage({admin=false}:{admin?:boolean}){
       </div>
       <div className="favorites-toolbar favorite-browser-actions">
         <button type="button" className="button button-secondary"
-          onClick={()=>setRevision(n=>n+1)} disabled={loading}>
+          onClick={()=>setRevision(n=>n+1)} disabled={loading||!!direct}>
           <RefreshCw size={15}/>Neu verbinden</button>
         {favorite?.url&&<a className="button button-secondary"
           href={favorite.url} target="_blank" rel="noopener noreferrer">
           <ExternalLink size={15}/>Originalseite öffnen</a>}
       </div>
     </div>
-    {admin&&id&&<FavoriteDebugConsole favoriteId={id}/>}
+    {direct&&!loading&&!error&&<section className="content-card">
+      <h2>Microsoft 365</h2>
+      <p>SharePoint und Excel Online verwenden die Microsoft-Anmeldung und können
+        nicht zuverlässig über einen fremden Webseiten-Proxy eingebettet werden.
+        Das Dokument wird deshalb direkt im Browser geöffnet.</p>
+      <a className="button button-primary" href={direct} target="_blank" rel="noopener noreferrer">
+        <ExternalLink size={16}/>Dokument in Microsoft 365 öffnen</a>
+    </section>}
+    {admin&&id&&!direct&&<FavoriteDebugConsole favoriteId={id}/>} 
     {error&&<div className="content-card znuny-portal-error" role="alert">
       <strong>Favorit konnte nicht geöffnet werden</strong><p>{error}</p></div>}
     {loading&&!error&&<div role="status" className="znuny-native-loading">
