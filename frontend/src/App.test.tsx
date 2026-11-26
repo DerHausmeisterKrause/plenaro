@@ -1176,7 +1176,8 @@ describe('Plenaro web shell', () => {
     expect(ticketUrl.readOnly).toBe(true);
     expect(ticketUrl.disabled).toBe(false);
     fireEvent.focus(ticketUrl);
-    expect(ticketUrl.selectionStart).toBe(null);
+    expect(ticketUrl.selectionStart).toBe(0);
+    expect(ticketUrl.selectionEnd).toBe(ticketUrl.value.length);
     expect(screen.getByRole('link',{name:/Ticket öffnen/}).getAttribute('href')).toBe('/ticket-system?ticket=77');
     fireEvent.click(screen.getByRole('button',{name:/Speichern/}));
     await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
