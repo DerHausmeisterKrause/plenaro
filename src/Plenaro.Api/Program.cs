@@ -83,6 +83,9 @@ builder.Services.AddHttpClient("Plenaro.Znuny", client =>
 }).ConfigurePrimaryHttpMessageHandler(ZnunyConnectionTester.SecureHandler);
 builder.Services.AddScoped<ZnunyConnectionTester>();
 builder.Services.AddSingleton<ZnunyReader>();
+builder.Services.AddSingleton<AttachmentScanner>();
+builder.Services.AddSingleton<AttachmentPreviewCache>();
+builder.Services.AddHostedService(services=>services.GetRequiredService<AttachmentPreviewCache>());
 builder.Services.AddSingleton<ZnunyTicketVisibility>();
 builder.Services.AddSingleton<ZnunyNativeProxy>();
 builder.Services.AddSingleton<FavoriteProxy>();
