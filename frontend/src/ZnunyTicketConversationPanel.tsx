@@ -20,6 +20,16 @@ function newestFirst(articles:ZnunyArticle[]){
     return b.id.localeCompare(a.id);
   });
 }
+// Keep unzoned Znuny timestamps as supplied (no implicit UTC shift).
+function germanArticleDate(value:string):string {
+  const match=value?.trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?$/);
+  if(match)return match[3]+'.'+match[2]+'.'+match[1]+' '+match[4]+':'+match[5]+':'+(match[6]??'00');
+  const date=new Date(value);
+  if(!value||!Number.isFinite(date.getTime()))return value||'Datum unbekannt';
+  const datePart=new Intl.DateTimeFormat('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'}).format(date);
+  const timePart=new Intl.DateTimeFormat('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(date);
+  return datePart+' '+timePart;
+}
 function selectedArticleId(articles:ZnunyArticle[],unread:string[],previous=''){
   if(articles.some(a=>a.id===previous))return previous;
   const ordered=newestFirst(articles);
@@ -197,7 +207,7 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
           size={4} value={selectedId}
           onChange={e=>{setSelectedId(e.target.value);setReplying(false);setEmailExpanded(false);}}>
           {newestFirst(articles).map((a,i)=><option key={a.id||i} value={a.id}>
-            {unreadIds.includes(a.id)?'★ Neu · ':''}{a.created||'Datum unbekannt'} · {a.subject||'Ohne Betreff'}
+            {articles.length-i} | {germanArticleDate(a.created)} | {unreadIds.includes(a.id)?'★ Neu · ':''}{a.subject||'Ohne Betreff'}
           </option>)}
         </select>
       </label>}
@@ -206,7 +216,7 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
           <p><strong>Betreff:</strong> {selected.subject||'Ohne Betreff'}</p>
           <p><strong>Von:</strong> {selected.from||'Unbekannt'}</p>
           {selected.to&&<p><strong>An:</strong> {selected.to}</p>}
-          <p><strong>Datum:</strong> {selected.created||'Unbekannt'} · {selected.channel||selected.senderType}</p>
+          <p><strong>Datum:</strong> {germanArticleDate(selected.created)} · {selected.channel||selected.senderType}</p>
         </div>
         {htmlMail&&selected.body&&<>
           <div className="znuny-message-toolbar">
