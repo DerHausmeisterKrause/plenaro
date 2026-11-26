@@ -302,12 +302,21 @@ public sealed partial class ZnunyNativeProxy
     // A document navigation (including the CGI agent entry point) may
     // legitimately return HTML with an incorrect MIME header. Never perform
     // content sniffing on background assets, downloads or ticket attachments.
+    // The CGI endpoint serves both full pages and AJAX fragments/JSON.
+    // Modern dropdown and article loads must retain their original MIME.
+    private static bool IsAjaxRequest(HttpRequest request)=>
+        request.Headers["X-Requested-With"].ToString().Equals(
+            "XMLHttpRequest",StringComparison.OrdinalIgnoreCase) ||
+        request.Headers["Sec-Fetch-Dest"].ToString()=="empty" ||
+        request.Headers["Sec-Fetch-Mode"].ToString() is "cors" or "same-origin";
+
     private static bool IsDocumentNavigation(HttpRequest request,Uri target,Uri entry)
     {
         if(!HttpMethods.IsGet(request.Method)&&!HttpMethods.IsPost(request.Method))
             return false;
         var dest=request.Headers["Sec-Fetch-Dest"].ToString();
         if(dest is "document" or "iframe")return true;
+        if(IsAjaxRequest(request))return false;
         // Browser form submissions can load a full compose/action page.
         // Do not MIME-sniff background POST/AJAX calls, whose Accept header
         // can also include text/html even when the response is a fragment.
@@ -322,6 +331,51 @@ public sealed partial class ZnunyNativeProxy
         return target.Query.Length==0 &&
             target.AbsolutePath.Equals(entry.AbsolutePath,
                 StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Znuny 7.3's reply templates are already rendered as real <option>
+    // elements by AgentTicketCompose. The Modernize widget can get stuck
+    // loading inside an embedded portal. Use the existing native select only
+    // for the original Reply/ReplyAll forms; retain all values, IDs, hidden
+    // fields, and Znuny's normal change handler (no invented template IDs).
+    private static readonly Regex SelectTagPattern=new(
+        @"<select\b(?<attrs>[^>]*)>",
+        RegexOptions.Compiled|RegexOptions.IgnoreCase,TimeSpan.FromSeconds(2));
+
+    internal static string NativeReplySelects(string html)
+    {
+        if(!html.Contains("ResponseID",StringComparison.OrdinalIgnoreCase)||
+           !html.Contains("AgentTicketCompose",StringComparison.OrdinalIgnoreCase))
+            return html;
+        return FormPattern.Replace(html,form=>{
+            var formId=Attribute(form.Groups["attrs"].Value,"id")??"";
+            if(!Regex.IsMatch(formId,@"^Reply(?:All)?[0-9]+$",
+                RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
+                return form.Value;
+            var body=form.Groups["body"].Value;
+            if(!InputPattern.Matches(body).Any(input=>
+                Attribute(input.Groups["attrs"].Value,"name")=="Action" &&
+                Attribute(input.Groups["attrs"].Value,"value")=="AgentTicketCompose"))
+                return form.Value;
+            return SelectTagPattern.Replace(form.Value,select=>{
+                var attrs=select.Groups["attrs"].Value;
+                if(Attribute(attrs,"name")!="ResponseID")return select.Value;
+                var id=Attribute(attrs,"id")??"";
+                if(!Regex.IsMatch(id,@"^ResponseID(?:All)?[0-9]+$",
+                    RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
+                    return select.Value;
+                var classes=AttributePattern.Matches(attrs).FirstOrDefault(m=>
+                    m.Groups["name"].Value.Equals("class",StringComparison.OrdinalIgnoreCase));
+                if(classes is null)return select.Value;
+                var oldClass=Attribute(attrs,"class")??"";
+                var tokens=oldClass.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries);
+                if(!tokens.Contains("Modernize",StringComparer.Ordinal))return select.Value;
+                var replacement="class=\""+WebUtility.HtmlEncode(string.Join(" ",
+                    tokens.Where(x=>x!="Modernize")))+"\"";
+                return "<select"+attrs[..classes.Index]+replacement+
+                    attrs[(classes.Index+classes.Length)..]+">";
+            });
+        });
     }
 
     private static bool PotentialHtmlMime(string? media)=>media is null or
@@ -376,7 +430,9 @@ public sealed partial class ZnunyNativeProxy
             ctx.Response.StatusCode=403;return;
         }
         using var request=new HttpRequestMessage(new HttpMethod(ctx.Request.Method),target);
-        if(ctx.Request.ContentLength>0||ctx.Request.Headers.ContainsKey("Transfer-Encoding")){
+        if(ctx.Request.ContentLength>0||ctx.Request.Headers.ContainsKey("Transfer-Encoding")||
+            (!string.IsNullOrEmpty(ctx.Request.ContentType) &&
+             ctx.Request.Method is "POST" or "PUT" or "PATCH")){
             request.Content=new StreamContent(ctx.Request.Body);
             if(!string.IsNullOrEmpty(ctx.Request.ContentType))
                 request.Content.Headers.TryAddWithoutValidation("Content-Type",ctx.Request.ContentType);
@@ -385,6 +441,7 @@ public sealed partial class ZnunyNativeProxy
         }
         foreach(var name in new[]{"Accept","Accept-Language","User-Agent",
             "X-Requested-With","X-Requested-By","X-Requested-Action",
+            "X-CSRF-Token","X-XSRF-Token","X-OTRS-ChallengeToken",
             "If-Modified-Since","If-None-Match","Range"}){
             if(ctx.Request.Headers.TryGetValue(name,out var value))
                 request.Headers.TryAddWithoutValidation(name,value.ToArray());
@@ -402,6 +459,10 @@ public sealed partial class ZnunyNativeProxy
             using var response=await session.Client.SendAsync(request,
                 HttpCompletionOption.ResponseHeadersRead,ct);
             ctx.Response.StatusCode=(int)response.StatusCode;
+            if(IsAjaxRequest(ctx.Request)&&(int)response.StatusCode>=400)
+                ctx.RequestServices.GetRequiredService<ILogger<ZnunyNativeProxy>>()
+                    .LogWarning("Znuny native AJAX response HTTP {Status}; details suppressed",
+                        (int)response.StatusCode);
             // Forward only necessary response metadata. Never expose upstream
             // Set-Cookie, internal URLs, server identifiers or hop-by-hop headers.
             if(response.Headers.Location is { } redirect){
@@ -463,6 +524,13 @@ public sealed partial class ZnunyNativeProxy
                     return;
                 }
                 var changed=Rewrite(decoded,session.Upstream,publicOrigin);
+                if(response.IsSuccessStatusCode &&
+                   response.Content.Headers.ContentDisposition is null &&
+                   target.AbsolutePath.Equals(session.Entry.AbsolutePath,StringComparison.OrdinalIgnoreCase) &&
+                   (ctx.Response.ContentType?.StartsWith("text/html",
+                    StringComparison.OrdinalIgnoreCase)==true||
+                    type?.MediaType=="application/xhtml+xml"))
+                    changed=NativeReplySelects(changed);
                 var output=encoding.GetBytes(changed);
                 await ctx.Response.Body.WriteAsync(output,ct);
             }else{
@@ -472,8 +540,14 @@ public sealed partial class ZnunyNativeProxy
             }
         }catch(Exception e) when(e is HttpRequestException or
             TaskCanceledException or InvalidOperationException or IOException){
-            if(!ctx.Response.HasStarted)
+            if(!ctx.Response.HasStarted){
                 ctx.Response.StatusCode=502;
+                ctx.Response.Headers["X-Plenaro-Znuny-Error"]="upstream-request-failed";
+                if(IsAjaxRequest(ctx.Request)&&!ct.IsCancellationRequested)
+                    ctx.RequestServices.GetRequiredService<ILogger<ZnunyNativeProxy>>()
+                        .LogWarning("Znuny native AJAX failed ({Type}); details suppressed",
+                            e.GetType().Name);
+            }
         }
     }
 }

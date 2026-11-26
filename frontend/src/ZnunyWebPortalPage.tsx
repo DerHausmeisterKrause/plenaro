@@ -1,6 +1,6 @@
 import {useEffect,useState} from 'react';
 import {Link,useSearchParams} from 'react-router-dom';
-import {RefreshCw,ShieldCheck,Ticket,WifiOff} from 'lucide-react';
+import {ExternalLink,RefreshCw,ShieldCheck,Ticket,WifiOff} from 'lucide-react';
 
 type NativeStatus={enabled:boolean;mode?:string;reason?:string};
 
@@ -15,6 +15,7 @@ export function ZnunyWebPortalPage(){
   const validTicket=ticket===null||/^\d{1,40}$/.test(ticket);
   const [status,setStatus]=useState<NativeStatus|null>(null);
   const [url,setUrl]=useState('');
+  const [openUrl,setOpenUrl]=useState('');
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(true);
   const [revision,setRevision]=useState(0);
@@ -26,7 +27,7 @@ export function ZnunyWebPortalPage(){
     let active=true;
     setStatus(null);
     setError('');
-    setUrl('');
+    setUrl('');setOpenUrl('');
     setLoading(true);
     void fetch('/api/v1/znuny/native/status',{
       credentials:'same-origin',cache:'no-store'
@@ -45,7 +46,7 @@ export function ZnunyWebPortalPage(){
   useEffect(()=>{
     if(!status?.enabled)return;
     let active=true;
-    setLoading(true);setUrl('');setError('');setInteractive(false);
+    setLoading(true);setUrl('');setOpenUrl('');setError('');setInteractive(false);
     void(async()=>{
       try{
         if(!validTicket)throw new Error('Ungültige Ticket-ID.');
@@ -58,13 +59,22 @@ export function ZnunyWebPortalPage(){
           headers:{'X-CSRF-TOKEN':token.token,'Content-Type':'application/json'},
           body:JSON.stringify({ticketId:ticket,reset:revision>0})
         });
-        const body=await response.json().catch(()=>({})) as {url?:string;error?:string;code?:string;requiresInteractiveLogin?:boolean};
+        const body=await response.json().catch(()=>({})) as {url?:string;openUrl?:string;error?:string;code?:string;requiresInteractiveLogin?:boolean};
         if(!response.ok||!body.url)
           throw new Error((body.error||'Verbindungsaufbau fehlgeschlagen.')+' (HTTP '+response.status+(body.code?' / '+body.code:'')+')');
         const external=new URL(body.url);
         if(external.protocol!=='https:'||external.origin===window.location.origin)
           throw new Error('Ungültige Ticketsystem-Proxy-Adresse.');
-        if(active){setInteractive(body.requiresInteractiveLogin===true);setUrl(external.toString());}
+        if(active){
+          setInteractive(body.requiresInteractiveLogin===true);setUrl(external.toString());
+          if(body.openUrl){
+            const destination=new URL(body.openUrl);
+            if(destination.origin===external.origin&&destination.protocol==='https:'&&
+              !destination.username&&!destination.password&&
+              !destination.pathname.startsWith('/_plenaro/'))
+              setOpenUrl(destination.href);
+          }
+        }
       }catch(e){
         if(active){
           setError(e instanceof Error?e.message:'Native Ticketsystem-Ansicht nicht erreichbar.');
@@ -84,6 +94,11 @@ export function ZnunyWebPortalPage(){
         <span className="favorite-browser-context">Znuny</span>
       </div>
       <div className="znuny-browser-toolbar favorite-browser-actions">
+        {openUrl&&!loading&&!error&&<a className="button button-secondary"
+          href={openUrl} target="_blank" rel="noopener noreferrer"
+          title="Dieselbe geschützte Ticketsystem-Sitzung ohne Einbettung öffnen">
+          <ExternalLink size={15}/>Separat öffnen
+        </a>}
         <button type="button" className="button button-secondary"
           disabled={!configured||loading}
           title="Ticketsystem-Sitzung neu verbinden"
