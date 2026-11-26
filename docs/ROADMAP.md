@@ -7,7 +7,7 @@
 - [x] Breite umschaltbar: normale Aufteilung ca. 61 % Aufgabenliste / 39 % Ticketdetails, aufgeklappt ca. 25 % Aufgabenliste / 75 % Ticketdetails. Kein Verschieben oder Löschen von Ticketdaten.
 - [x] Bei Wechsel des Arbeitsplatz-Tabs normalisiert sich die Breite wieder; ohne ausgewähltes Ticket existiert kein Schalter. Unter 1050 px bleibt das bestehende gestapelte Ein-Spalten-Layout und der dort wirkungslose Schalter wird ausgeblendet.
 - [x] Frontend-Regressionstest prüft entfernten Text, Schalter nur bei Ticket-Auswahl, Aufklappen, Zurückklappen sowie Tab-Reset.
-- [ ] CI vollständig grün prüfen und Pull Request nach `main` mergen.
+- [x] [PR #62](https://github.com/DerHausmeisterKrause/plenaro/pull/62) erfolgreich nach `main` gemergt (Squash-Commit `a5e86ad194aeba9604538238a3abaa303e0c6dd5`); [GitHub-CI #45761769740](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45761769740) vollständig grün (Frontend-/Backend-Build, UI-Regression, Znuny-Vertragstests, TLS, Docker-Smoke, Favoriten-Browser-Login).
 - [ ] Live-Abnahme nach Deployment: Desktop-Abstände, Layoutwechsel, Lesbarkeit längerer Ticketinhalte und Responsive-Verhalten prüfen.
 - [x] Keine Backend-/Datenbankmigration, keine Docker-/Compose-/DNS-Änderungen.
 
