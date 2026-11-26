@@ -1024,6 +1024,24 @@ h1,h2,h3,p { margin-top: 0; }
   padding:7px 10px;}
 .znuny-candidate-controls .classic-wpf-help {margin:0;font-size:11px;flex:1;}
 .znuny-list-filter-toggle {display:flex;justify-content:flex-end;padding:3px 10px 8px;}
+/* A single compact search / sort row in each Znuny ticket view. */
+.znuny-list-toolbar {
+  display:flex;align-items:stretch;gap:8px;
+  min-width:0;padding:4px 10px 8px;
+}
+.znuny-list-toolbar .classic-search {
+  flex:1 1 0;min-width:0;margin:0;
+}
+.znuny-list-toolbar .znuny-filter-button {
+  flex:0 0 auto;align-self:stretch;min-height:38px;
+  padding:7px 10px;display:inline-flex;align-items:center;
+  justify-content:center;gap:6px;white-space:nowrap;font-size:11px;
+}
+@media (max-width:500px) {
+  .znuny-list-toolbar {flex-wrap:wrap;}
+  .znuny-list-toolbar .classic-search {flex-basis:100%;}
+  .znuny-list-toolbar .znuny-filter-button {margin-left:auto;}
+}
 .znuny-list-filter-fields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
   gap:7px;padding:10px;border:1px solid var(--border);
   background:var(--surface-soft);border-radius:9px;margin:0 10px 8px;}
@@ -1132,9 +1150,9 @@ h1,h2,h3,p { margin-top: 0; }
   .znuny-web-portal.page{padding:7px 8px 9px}
 }
 
-/* Minimal favorite toolbar: maximize space for the actual embedded page.
-   Only the favorite view changes; the Znuny portal keeps its own header. */
-.favorite-browser-page .favorite-browser-toolbar {
+/* Consistent minimal browser header for favorites, Znuny and the wiki.
+   Keep the content area large; controls and route-specific security remain unchanged. */
+.znuny-web-portal .favorite-browser-toolbar {
   min-height:44px; padding:6px 10px; gap:10px; border-radius:9px;
 }
 .favorite-browser-identity {
@@ -1158,7 +1176,7 @@ h1,h2,h3,p { margin-top: 0; }
   min-height:30px; padding:5px 9px; font-size:11px;
 }
 @media (max-width:720px) {
-  .favorite-browser-page .favorite-browser-toolbar {
+  .znuny-web-portal .favorite-browser-toolbar {
     flex-direction:column; align-items:stretch; gap:7px;
   }
   .favorite-browser-toolbar .favorite-browser-actions {
