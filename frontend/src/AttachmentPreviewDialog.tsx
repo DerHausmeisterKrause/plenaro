@@ -1,6 +1,7 @@
 import {lazy,Suspense,useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Download,ShieldCheck,X} from 'lucide-react';
+import {AttachmentImageCanvas} from './AttachmentImageCanvas';
 import type {ZnunyAttachment} from './znunySyncApi';
 
 const PdfPage=lazy(()=>import('./AttachmentPdfPage'));
@@ -111,11 +112,7 @@ export function AttachmentPreviewDialog({endpoint,attachment,onClose}:{
         <Suspense fallback={<div role="status">PDF-Viewer wird geladen …</div>}>
           <PdfPage file={loaded.file}/>
         </Suspense>:
-        <div className="attachment-preview-image-wrap">
-          <img className="attachment-preview-image" src={loaded.url}
-            alt={attachment.filename||'Anhang'}
-            onError={()=>{setLoaded(null);setError('Bild kann nicht dargestellt werden.');URL.revokeObjectURL(loaded.url);}}/>
-        </div>}
+        <AttachmentImageCanvas file={loaded.file} name={attachment.filename}/>} 
     </div>}
     <div className="attachment-preview-footer">Temporäre Vorschau · Cache verfällt nach drei Minuten ohne Zugriff.</div>
   </dialog>,document.body);
