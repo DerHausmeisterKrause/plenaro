@@ -102,3 +102,28 @@ test('Chromium decodes PNG bytes into canvas even with restricted image CSP',asy
     assert.deepEqual(pixels,[255,0,0,255]);
   }finally{await browser.close();}
 });
+
+
+test('Chromium retains cross-origin iframe state while its stable parent is hidden',async()=>{
+  const browser=await chromium.launch({headless:true,chromiumSandbox:false});
+  try{
+    const page=await browser.newPage();
+    let loads=0;
+    await page.route('https://workspace.example.org/',route=>route.fulfill({
+      contentType:'text/html',body:'<div id="host"><iframe title="retained" src="https://portal.example.org/"></iframe></div>'
+    }));
+    await page.route('https://portal.example.org/',route=>{
+      loads++;
+      return route.fulfill({contentType:'text/html',body:'<input id="draft"><div style="height:3000px"></div>'});
+    });
+    await page.goto('https://workspace.example.org/');
+    const frame=page.frameLocator('iframe');
+    await frame.locator('#draft').fill('unsaved draft');
+    await frame.locator('body').evaluate(el=>el.ownerDocument.defaultView.scrollTo(0,600));
+    await page.locator('#host').evaluate(el=>{el.hidden=true;el.inert=true;});
+    await page.locator('#host').evaluate(el=>{el.hidden=false;el.inert=false;});
+    assert.equal(await frame.locator('#draft').inputValue(),'unsaved draft');
+    assert.equal(await frame.locator('body').evaluate(el=>el.ownerDocument.defaultView.scrollY),600);
+    assert.equal(loads,1);
+  }finally{await browser.close();}
+});
