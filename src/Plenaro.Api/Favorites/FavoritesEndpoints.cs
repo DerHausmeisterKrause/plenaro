@@ -425,10 +425,11 @@ public static class FavoritesEndpoints
             try{
                 var url=await proxy.StartAsync(user.Id,favorite,upstream,vault,ct);
                 return Results.Ok(new{url});
-            }catch(HttpRequestException){
-                return Results.Problem("Freigegebene Webseite nicht erreichbar.",statusCode:502);
+            }catch(HttpRequestException error){
+                var failure=FavoriteProxy.NetworkFailure(error);
+                return Results.Json(new{error=failure.Message,code=failure.Code},statusCode:failure.Status);
             }catch(OperationCanceledException) when(!ct.IsCancellationRequested){
-                return Results.Problem("Webseite antwortet nicht.",statusCode:504);
+                return Results.Json(new{error="Webseite antwortet nicht. Bitte Firewall, Routing und Zielserver prüfen."},statusCode:504);
             }catch(InvalidOperationException){
                 return Results.Problem("Favoriten-Sitzung konnte nicht gestartet werden.",statusCode:503);
             }
