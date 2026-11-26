@@ -1,3 +1,11 @@
+## 26.11.2026 – Phase 7/7: Nachrichtenliste – Nummerierung
+
+- [x] Chronologische Nummerierung mit ältester Nachricht Nr. 1 und deutschem Datum inkl. Sekunden; Anzeige weiterhin neueste zuerst.
+- [x] Regressionstest und Dokumentation.
+- [ ] CI und produktive Sichtprüfung.
+
+---
+
 ## 26.11.2026 – Phase 7/7: Nachrichtenliste und native Antwortauswahl (Nachbesserung)
 
 - [x] WPF-Referenz `Views/TaskDetailPanel.xaml` und Znuny-7.3.8-/6.5-Artikelaktionsquellen verglichen.
