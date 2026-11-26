@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, 
 import { CalendarDays, ChevronLeft, ChevronRight, Cloud, GripVertical, Link2, RefreshCw, Save, Unplug } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { WeekDayMarkerControls } from './WeekDayMarkerControls';
+import { calendarNowLine } from './calendarNowLine';
 import { getMonthMarkers, type DayMarker } from './dayMarkersApi';
 import { graphStatus, readOutlookWeek, disconnectOutlook, type GraphStatus, type OutlookEvent } from './graphApi';
 import { listTasks, localDate, type WorkTask } from './tasksApi';
@@ -55,7 +56,7 @@ export function WeekCalendarPage() {
   const [moveNotice, setMoveNotice] = useState('');
   const days = useMemo(() => Array.from({ length: 5 }, (_, i) => plusDays(weekStart, i)), [weekStart]);
   const until = useMemo(() => plusDays(weekStart, 5), [weekStart]);
-  const nowDayIndex=days.findIndex(day=>localDate(day)===localDate(clock));
+  const nowLine=calendarNowLine(clock,days);
 
   // Mirror the original WPF WeekView now-line; update without reloading events.
   useEffect(()=>{
@@ -331,13 +332,13 @@ export function WeekCalendarPage() {
                   {hover === `${slotKey}-30` && <span className="classic-drop-indicator" aria-hidden="true">:30</span>}
                 </div>;
               })}
-              {hour===clock.getHours()&&nowDayIndex>=0&&<div
+              {nowLine?.hour===hour&&<div
                 className="classic-calendar-now-line"
                 role="img"
                 aria-label={'Aktuelle Uhrzeit '+new Intl.DateTimeFormat('de-DE',{hour:'2-digit',minute:'2-digit'}).format(clock)}
-                style={{top:(clock.getMinutes()+clock.getSeconds()/60)/60*100+'%'}}>
+                style={{top:nowLine.topPercent+'%'}}>
                 <span className="classic-calendar-now-marker"
-                  style={{left:'calc((100% - 66px) / 5 * '+(nowDayIndex+0.5)+')'}}/>
+                  style={{left:'calc((100% - 66px) / 5 * '+(nowLine.dayIndex+0.5)+')'}}/>
               </div>}
             </div>)}
           </div>
