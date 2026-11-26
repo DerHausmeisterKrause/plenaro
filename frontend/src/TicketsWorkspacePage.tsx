@@ -111,13 +111,22 @@ export function TicketsWorkspacePage() {
                 'Keine Suchbegriffe konfiguriert – keine gefilterten Treffer'}
           </span>
         </div>}
-        {(view==='mine'||view==='new')&&<div className="znuny-list-filter-toggle">
-          <button type="button" className="button button-secondary"
-            aria-expanded={filterOpen} onClick={()=>setFilterOpen(v=>!v)}>
+        <div className="znuny-list-toolbar">
+          <label className="classic-search">
+            <Search size={16}/>
+            <input aria-label="Tickets suchen"
+              placeholder="Volltextsuche: Betreff, Artikel, Notizen, Ticketnummer …"
+              maxLength={100} value={search}
+              onChange={e=>{setPage(0);setSearch(e.target.value);}}/>
+          </label>
+          <button type="button" className="button button-secondary znuny-filter-button"
+            aria-expanded={filterOpen} aria-controls="tickets-workspace-filters"
+            onClick={()=>setFilterOpen(v=>!v)}>
             <SlidersHorizontal size={15}/>Filter und Sortierung
           </button>
-        </div>}
-        {filterOpen&&view!=='completed'&&<div className="znuny-list-filter-fields">
+        </div>
+        {filterOpen&&<div id="tickets-workspace-filters"
+          className="znuny-list-filter-fields">
           <label>Sortieren nach
             <select aria-label="Tickets sortieren nach" value={filters.sort}
               onChange={e=>editFilter('sort',e.target.value as TicketListFilters['sort'])}>
@@ -138,11 +147,6 @@ export function TicketsWorkspacePage() {
               query:'',queue:'',state:'',sort:'changed',direction:'desc'
             });}}>Filter zurücksetzen</button>
         </div>}
-        <label className="classic-search">
-          <Search size={16}/>
-          <input aria-label="Tickets suchen" placeholder="Volltextsuche: Betreff, Artikel, Notizen, Ticketnummer …"
-            maxLength={100} value={search} onChange={e=>{setPage(0);setSearch(e.target.value);}}/>
-        </label>
         <div className="classic-list-scroll">
           {error&&<p role="alert" className="um-feedback failure">{error}</p>}
           {loading&&<p role="status">Ticketcache wird geladen …</p>}
