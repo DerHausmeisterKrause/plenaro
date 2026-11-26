@@ -1907,6 +1907,43 @@ Assert(!Navigation("POST","application/json",null,
     "/otrs/index.pl","?Action=AgentTicketCompose",mode:"cors"),
     "AJAX JSON POST never forces HTML MIME");
 
+Assert(!Navigation("GET","text/html","empty","/otrs/index.pl",
+    "?Action=AgentTicketZoom;Subaction=ArticleUpdate",mode:"cors"),
+    "HTML-accepting AJAX GET does not trigger document MIME override");
+Assert(!Navigation("GET","text/html",null,"/otrs/index.pl",
+    "?Action=AgentTicketZoom;Subaction=ArticleUpdate",mode:"same-origin"),
+    "same-origin AJAX GET is not a document");
+var nativeReplySelects=proxyType.GetMethod("NativeReplySelects",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+string NativeSelects(string html)=>(string)nativeReplySelects.Invoke(null,new object[]{html})!;
+const string replySelectHtml="""
+    <form id="Reply42" action="index.pl" method="get">
+    <input type="hidden" name="Action" value="AgentTicketCompose">
+    <input type="hidden" name="TicketID" value="123">
+    <input type="hidden" name="ArticleID" value="42">
+    <select name="ResponseID" id="ResponseID42" class="Modernize Small">
+    <option value="0">-</option><option value="8">Template</option>
+    </select></form>
+    <form id="ReplyAll42"><input name="Action" value="AgentTicketCompose">
+    <select id="ResponseIDAll42" class='Small Modernize' name="ResponseID">
+    <option value="9">Template 2</option></select></form>
+    <form id="other"><input name="Action" value="AgentTicketCompose">
+    <select id="ResponseID42" name="ResponseID" class="Modernize Small"></select></form>
+    <select name="StateID" class="Modernize"></select>
+    """;
+var nativeSelectHtml=NativeSelects(replySelectHtml);
+Assert(nativeSelectHtml.Contains("id=\"ResponseID42\" class=\"Small\"") &&
+    nativeSelectHtml.Contains("id=\"ResponseIDAll42\" class=\"Small\"") &&
+    nativeSelectHtml.Contains("name=\"TicketID\" value=\"123\"") &&
+    nativeSelectHtml.Contains("<option value=\"8\">Template</option>") &&
+    nativeSelectHtml.Contains("name=\"StateID\" class=\"Modernize\"") &&
+    nativeSelectHtml.Contains("name=\"ResponseID\" class=\"Modernize Small\"") &&
+    NativeSelects(nativeSelectHtml)==nativeSelectHtml,
+    "only actual reply forms use the native select; other controls and template values survive");
+Assert(NativeSelects("<form id='Reply42'><select name='ResponseID' class='Modernize'></select></form>")==
+    "<form id='Reply42'><select name='ResponseID' class='Modernize'></select></form>",
+    "unrelated or incomplete forms are not rewritten");
+
 // Verify the actual opaque-content reader, not only its MIME predicates.
 var opaqueReader=proxyType.GetMethod("ReadOpaqueNavigationAsync",
     BindingFlags.Static|BindingFlags.NonPublic)!;
