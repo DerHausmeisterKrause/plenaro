@@ -3,7 +3,8 @@
  * Office web apps and cookies. Do not send them to the shared reverse proxy.
  * Match DNS suffixes at label boundaries, not arbitrary substring matches.
  */
-export function microsoftDocumentUrl(value:string):string|null {
+export function microsoftDocumentUrl(value?:string|null):string|null {
+  if(!value)return null;
   try {
     const url=new URL(value);
     if(url.protocol!=='https:'||url.port||url.username||url.password)return null;

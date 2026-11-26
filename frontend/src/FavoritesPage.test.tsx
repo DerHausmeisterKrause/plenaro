@@ -78,6 +78,9 @@ describe('Favorite iframe bootstrap',()=>{
       'http://tenant.sharepoint.com/',
       'https://example:example@tenant.example.org/','https://tenant.sharepoint.com:8443/'
     ])expect(microsoftDocumentUrl(url)).toBeNull();
+    expect(microsoftDocumentUrl(undefined)).toBeNull();
+    expect(microsoftDocumentUrl(null)).toBeNull();
+    expect(microsoftDocumentUrl('')).toBeNull();
     const credentialUrl=new URL('https://tenant.sharepoint.com/');
     credentialUrl.username='example';credentialUrl.password='example';
     expect(microsoftDocumentUrl(credentialUrl.href)).toBeNull();
