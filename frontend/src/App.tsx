@@ -86,8 +86,6 @@ function Sidebar({ onNavigate, favorites }: { onNavigate: () => void; favorites:
             className={({isActive})=>'nav-link'+(isActive?' active':'')}>
             <Star size={19}/><span>{item.name}</span>
           </NavLink>)}
-          <NavLink className="nav-link" to="/settings?section=favorites"
-            onClick={onNavigate}><Star size={19}/><span>Favoriten verwalten</span></NavLink>
         </nav>
         <span className="nav-caption second">TOOLS & VERWALTUNG</span>
         <nav className="nav-list" aria-label="Werkzeuge und Verwaltung">
