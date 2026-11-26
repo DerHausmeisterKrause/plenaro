@@ -1,6 +1,5 @@
 import {useCallback,useEffect,useState} from 'react';
 import {Bug,RefreshCw,Trash2} from 'lucide-react';
-import {Link} from 'react-router-dom';
 import {
   readFavoriteDebugSetting,setFavoriteDebugSetting,
   readFavoriteDebugEvents,clearFavoriteDebugEvents,
@@ -168,6 +167,10 @@ export function FavoriteDebugConsole({favoriteId}:{favoriteId:string}){
     catch(e){setError(e instanceof Error?e.message:'Protokoll konnte nicht geleert werden.');}
     finally{setClearing(false);}
   }
+  // No card, placeholder or vertical gap unless the administrator
+  // explicitly opted in under Settings -> Webseiten / Favoriten.
+  // Non-admin users never mount this component (FavoritePage admin guard).
+  if(enabled!==true)return null;
   const visible=onlyProblems?entries.filter(e=>e.level!=='info'):entries;
   return <section className="content-card favorites-debug-console"
     aria-label="Favoriten-Diagnose">
@@ -181,10 +184,7 @@ export function FavoriteDebugConsole({favoriteId}:{favoriteId:string}){
       </div>
     </div>
     {error&&<p role="alert" className="um-feedback failure">{error}</p>}
-    {enabled===null?<p role="status">Diagnoseeinstellungen werden geladen …</p>:
-      enabled===false?<p>Debugmodus deaktiviert. Unter
-        {' '}<Link to="/settings?section=favorites">Einstellungen → Webseiten / Favoriten</Link>
-        {' '}kannst du ihn für dein Administratorkonto einschalten.</p>:<>
+    <>
         <label className="favorites-debug-filter">
           <input type="checkbox" checked={onlyProblems}
             onChange={e=>setOnlyProblems(e.target.checked)}/>
