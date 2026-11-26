@@ -1945,6 +1945,13 @@ Assert(NativeSelects("<form id='Reply42'><select name='ResponseID' class='Modern
     "<form id='Reply42'><select name='ResponseID' class='Modernize'></select></form>",
     "unrelated or incomplete forms are not rewritten");
 
+const string pendingReply="""
+    <form id="LegacyReply"><input name="Action" value="AgentTicketCompose">
+    <input name="TicketID" value="123"><input name="ArticleID" value="42">
+    <select name="ResponseID" class="Modernize"><option value="0">Loading ...</option></select></form>
+    """;
+Assert(NativeSelects(pendingReply)==pendingReply,
+    "actual asynchronous placeholders are not replaced with invented template options");
 var replyJsonMethod=proxyType.GetMethod("NativeReplyJson",
     BindingFlags.Static|BindingFlags.NonPublic)!;
 var replyJson=System.Text.Json.JsonSerializer.Serialize(new{html=replySelectHtml,number=42});
