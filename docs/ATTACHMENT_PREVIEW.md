@@ -6,7 +6,7 @@
 - Plenaro prüft die Ticketberechtigung, ruft die ausgewählte Datei aus Znuny ab und prüft Typ, Dateisignatur und Größe.
 - Der lokale ClamAV-Daemon erhält ausschließlich die Bytes des ausgewählten Anhangs per INSTREAM. Der bestehende Znuny-TicketGet kann technisch weitere Anhänge im Upstream-JSON enthalten; diese werden nicht gescannt, gespeichert oder ausgeliefert.
 - Nur ein vollständiges `stream: OK` führt zur Vorschau. Fund, Limitüberschreitung, fehlende/fehlerhafte Scanner-Antwort und Timeout sperren die Vorschau. Keine automatische Rückfallebene auf ungeprüfte Dateien.
-- Bilder werden aus einem Blob dargestellt, PDF-Seiten mit lokal gebündeltem PDF.js als Canvas gerendert. Keine aktiven PDF-Formulare, Skripte oder anklickbaren PDF-Links. Optionaler bewusster Download der bereits geprüften Bytes.
+- Rasterbilder werden direkt per createImageBitmap aus geprüften Bytes in Canvas gerendert (GIF als Standbild), unabhängig von blob:-Bildadressen; PDF-Seiten mit lokal gebündeltem PDF.js als Canvas gerendert. Keine aktiven PDF-Formulare, Skripte oder anklickbaren PDF-Links. Optionaler bewusster Download der bereits geprüften Bytes.
 - Der Browser muss Bytes zur Darstellung empfangen; weder die Anwendung noch Cache-Control können Bildschirmfotos, Browser-internes Spooling oder Speicherung durch den Benutzer grundsätzlich verhindern.
 
 ## Scanner starten

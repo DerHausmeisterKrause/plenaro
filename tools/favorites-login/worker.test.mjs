@@ -71,3 +71,34 @@ test('actual Chromium never clicks unrelated password reset buttons',async()=>{
     }finally{await context.close();}
   }finally{await browser.close();}
 });
+
+
+// Actual Chromium decoding check: the attachment preview must not rely on
+// an img-src policy permitting blob: URLs. No real attachment leaves the app.
+test('Chromium decodes PNG bytes into canvas even with restricted image CSP',async()=>{
+  const browser=await chromium.launch({headless:true,chromiumSandbox:false});
+  try{
+    const page=await browser.newPage();
+    await page.route('https://preview.example.org/',route=>route.fulfill({
+      status:200,contentType:'text/html',
+      headers:{'Content-Security-Policy':"default-src 'none'; img-src 'self'"},
+      body:'<!doctype html><canvas id="output"></canvas>'
+    }));
+    await page.goto('https://preview.example.org/');
+    const pixels=await page.evaluate(async()=>{
+      const source=document.createElement('canvas');
+      source.width=2;source.height=1;
+      const ctx=source.getContext('2d');
+      ctx.fillStyle='#ff0000';ctx.fillRect(0,0,2,1);
+      const png=await new Promise(resolve=>source.toBlob(resolve,'image/png'));
+      const bitmap=await createImageBitmap(png);
+      const output=document.getElementById('output');
+      output.width=bitmap.width;output.height=bitmap.height;
+      const target=output.getContext('2d');
+      target.drawImage(bitmap,0,0);
+      bitmap.close();
+      return Array.from(target.getImageData(0,0,1,1).data);
+    });
+    assert.deepEqual(pixels,[255,0,0,255]);
+  }finally{await browser.close();}
+});
