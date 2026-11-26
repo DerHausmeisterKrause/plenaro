@@ -207,3 +207,36 @@ vorweisen. Es ist keine zweite Container-IP oder ein zusätzlicher Port
 erforderlich. Eine Einbettung fremder aktiver Skripte unter **exakt**
 derselben Origin wie das Plenaro-Login wird aus
 Sitzungs-/XSS-Sicherheitsgründen nicht automatisch aktiviert.
+
+
+## Wiederaufruf und Antwort-Dropdown-Diagnose
+
+Der Web-Arbeitsbereich behält bereits geöffnete Iframes in derselben
+Browserinstanz. Beim Reiterwechsel bleiben Navigation, Formulare und
+Scrollposition soweit von der eingebetteten Seite unterstützt erhalten.
+Der normale Ticketsystem-Link setzt die Ansicht fort; ein expliziter
+Ticketlink öffnet das angeforderte Ticket. Die Plenaro-Anmeldung wird
+beim Wiederaufruf überprüft. Bei Logout, Kontowechsel, Browser-Neuladen
+oder Öffnen der Einstellungen werden die Frames verworfen. Maximal
+acht Favoriten plus Wiki und Ticketsystem bleiben gleichzeitig erhalten.
+
+Die Proxy-Sitzung ist weiterhin auf zwei Stunden absolut und 20 Minuten
+Inaktivität begrenzt; die Upstream-Anmeldung kann früher ablaufen.
+Bei einer abgelaufenen Sitzung „Neu verbinden“ verwenden. Keine
+automatische Verlängerung nur zum Zweck der Zustandserhaltung.
+
+Wenn Antwortvorlagen weiterhin auf Loading stehen, den Fehler einmal
+reproduzieren und gezielt die redigierten Proxy-Diagnosen ansehen:
+
+```bash
+docker compose logs --since 5m web | grep -E 'Znuny native (AJAX|script|style|reply select)'
+```
+
+Die Diagnose enthält HTTP-Status, normalisierte MIME-Kategorie und
+Zeit bis zu den Upstream-Headern; keine URL-Parameter, Zugangsdaten
+oder Antwortinhalte. Ein HTTP 200 beweist nicht, dass eine AJAX-Antwort
+fachlich korrekt ist. Bei rein clientseitigen Fehlern zusätzlich
+Browser-Entwicklertools (Konsole, Netzwerk) verwenden und nur
+Fehlertext, HTTP-Status und Ressourcentyp weitergeben, keine Tokens,
+Cookies, URLs mit Query oder Ticketinhalte. Die Frame-Sandbox und
+CSP werden nicht gelockert.
