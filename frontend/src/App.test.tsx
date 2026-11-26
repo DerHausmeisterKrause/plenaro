@@ -400,12 +400,15 @@ describe('Plenaro web shell', () => {
     fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
     expect(await screen.findByRole('img',{name:'Neue ungelesene Ticket-Nachricht'})).toBeTruthy();
     fireEvent.click(screen.getByRole('button',{name:/Ticket mit zwei neuen Nachrichten/}));
+    const list=await screen.findByRole('listbox',{name:'Ticket-Nachricht auswählen'});
+    expect(list.getAttribute('size')).toBe('4');
+    expect(within(list).getAllByRole('option').map(o=>(o as HTMLOptionElement).value)).toEqual(['14','13']);
     await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
-      String(url).endsWith('/articles/13/read')&&(opts as RequestInit)?.method==='POST')).toBe(true));
+      String(url).endsWith('/articles/14/read')&&(opts as RequestInit)?.method==='POST')).toBe(true));
     // Opening the ticket does not clear the other unread message.
     expect(screen.getByRole('img',{name:'Neue ungelesene Ticket-Nachricht'})).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Ticket-Nachricht auswählen'),
-      {target:{value:'14'}});
+      {target:{value:'13'}});
     await waitFor(()=>expect(screen.queryByRole('img',
       {name:'Neue ungelesene Ticket-Nachricht'})).toBeNull());
   });
@@ -565,10 +568,10 @@ describe('Plenaro web shell', () => {
     expect(within(link).getByText(/2 ungelesen/)).toBeTruthy();
     fireEvent.click(link);
     expect(await screen.findByRole('heading',{name:'Ticket mit neuen Nachrichten'})).toBeTruthy();
-    await waitFor(()=>expect(unreadArticleIdsFixture).toEqual(['14']));
+    await waitFor(()=>expect(unreadArticleIdsFixture).toEqual(['13']));
     fireEvent.click(await screen.findByRole('button',{name:'Benachrichtigungen öffnen, 1 ungelesen'}));
     expect(await screen.findByText('1 ungelesen · Ticket öffnen')).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Ticket-Nachricht auswählen'),{target:{value:'14'}});
+    fireEvent.change(screen.getByLabelText('Ticket-Nachricht auswählen'),{target:{value:'13'}});
     expect(await screen.findByRole('button',{name:'Benachrichtigungen öffnen, 0 ungelesen'})).toBeTruthy();
     expect(screen.getByText('Keine ungelesenen Benachrichtigungen.')).toBeTruthy();
   });
