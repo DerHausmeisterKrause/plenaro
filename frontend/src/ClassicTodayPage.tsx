@@ -49,7 +49,6 @@ export function ClassicTodayPage() {
   const [outlookConnected,setOutlookConnected]=useState(false);
   const [calendarError,setCalendarError]=useState('');
   const [error,setError]=useState('');
-  const [notice,setNotice]=useState('');
   const [refresh,setRefresh]=useState(0);
 
   useEffect(()=>{
@@ -174,7 +173,6 @@ export function ClassicTodayPage() {
 
   return <div className="page plenaro-today">
     {error&&<p role="alert" className="um-feedback failure">{error}</p>}
-    {notice&&<p role="status" className="um-feedback success">{notice}</p>}
     <div className="plenaro-tabs content-card" role="tablist" aria-label="Arbeitsplatz-Ansichten">
       {labels.map(item=><button role="tab" type="button" key={item.key}
         className={tab===item.key?'active':''} aria-selected={tab===item.key}
