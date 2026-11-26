@@ -230,11 +230,13 @@ export function FavoritePage({admin=false}:{admin?:boolean}){
     return()=>{active=false;};
   },[id,revision]);
   return <div className="page znuny-web-portal favorite-browser-page">
-    <div className="znuny-web-portal-toolbar content-card">
-      <div><span className="eyebrow"><Star size={14}/>Plenaro / Favoriten</span>
+    <div className="znuny-web-portal-toolbar content-card favorite-browser-toolbar">
+      <div className="favorite-browser-identity">
+        <Star size={15} aria-hidden="true"/>
         <h1>{favorite?.name??'Webfavorit'}</h1>
-        <p>Geschützte Webanwendung mit eigener Browsersitzung.</p></div>
-      <div className="favorites-toolbar">
+        <span className="favorite-browser-context">Favorit</span>
+      </div>
+      <div className="favorites-toolbar favorite-browser-actions">
         <button type="button" className="button button-secondary"
           onClick={()=>setRevision(n=>n+1)} disabled={loading}>
           <RefreshCw size={15}/>Neu verbinden</button>
