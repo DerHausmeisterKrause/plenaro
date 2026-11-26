@@ -1,5 +1,5 @@
 import { useEffect,useState } from 'react';
-import { ExternalLink, Save, Ticket, WifiOff } from 'lucide-react';
+import { ExternalLink, Maximize2, Minimize2, Save, Ticket, WifiOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { CachedTicket } from './znunySyncApi';
 import { checkZnunyWriteReadiness,changeZnunyTicketState,readTicketWorkspace,saveTicketWorkspace,
@@ -11,8 +11,10 @@ import { ZnunyTicketAssignmentPanel } from './ZnunyTicketAssignmentPanel';
 
 /** WPF-inspired ticket detail. Local notes remain separate from remote
  * Znuny article and assignment operations; both are explicitly confirmed. */
-export function ClassicTicketDetailPanel({ticket,onChanged}:{
+export function ClassicTicketDetailPanel({ticket,onChanged,detailsExpanded=false,
+  onToggleDetailsExpanded}:{
   ticket:CachedTicket;onChanged?:()=>void;
+  detailsExpanded?:boolean;onToggleDetailsExpanded?:()=>void;
 }){
   const [fields,setFields]=useState<TicketWorkspace>({description:'',ticketUrl:''});
   const [loading,setLoading]=useState(true);
@@ -83,7 +85,19 @@ export function ClassicTicketDetailPanel({ticket,onChanged}:{
 
   return <div className="classic-wpf-ticket-detail" aria-label="Classic Ticket-Detailbereich">
     <section className="content-card classic-wpf-task-card" aria-label="Task Details">
-      <span className="eyebrow">Task Details</span>
+      <div className="classic-wpf-ticket-heading">
+        <span className="eyebrow">Task Details</span>
+        {onToggleDetailsExpanded&&<button type="button"
+          className="classic-wpf-ticket-expand"
+          aria-label={detailsExpanded?'Ticketdetails verkleinern':'Ticketdetails vergrößern'}
+          title={detailsExpanded?'Normale Aufteilung wiederherstellen':'Ticketdetails breiter anzeigen'}
+          aria-pressed={detailsExpanded}
+          aria-controls="plenaro-ticket-details"
+          onClick={onToggleDetailsExpanded}>
+          {detailsExpanded?<Minimize2 size={17} aria-hidden="true"/>:
+            <Maximize2 size={17} aria-hidden="true"/>}
+        </button>}
+      </div>
       <h2>{ticket.title||'Ticket #'+ticket.ticketNumber}</h2>
       <div className="classic-wpf-ticket-meta">
         <span><Ticket size={13}/>Ticket #{ticket.ticketNumber||ticket.ticketId}</span>
