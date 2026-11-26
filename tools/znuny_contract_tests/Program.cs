@@ -2532,7 +2532,7 @@ async Task<AttachmentScanVerdict> ProbeScannerAsync(string reply,bool terminate)
         await using(var wire=client.GetStream()){
             var command=new byte[10];
             await wire.ReadExactlyAsync(command,deadline.Token);
-            Assert(Encoding.ASCII.GetString(command)=="zINSTREAM\\0",
+            Assert(Encoding.ASCII.GetString(command)=="zINSTREAM\0",
                 "scanner sends NUL-framed INSTREAM, not a server filesystem path");
             var header=new byte[4];
             await wire.ReadExactlyAsync(header,deadline.Token);
@@ -2543,7 +2543,7 @@ async Task<AttachmentScanVerdict> ProbeScannerAsync(string reply,bool terminate)
             await wire.ReadExactlyAsync(header,deadline.Token);
             Assert(received.SequenceEqual(samplePng)&&header.All(x=>x==0),
                 "ClamD INSTREAM uses network-order length and zero terminator");
-            await wire.WriteAsync(Encoding.ASCII.GetBytes(reply+(terminate?"\\0":"")),deadline.Token);
+            await wire.WriteAsync(Encoding.ASCII.GetBytes(reply+(terminate?"\0":"")),deadline.Token);
         }
         return await scanning;
     }finally{listener.Stop();}
