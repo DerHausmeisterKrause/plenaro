@@ -38,6 +38,21 @@ describe('Central knowledge-base and mandatory user auto-login',()=>{
     await waitFor(()=>expect(mocks.startWiki).toHaveBeenCalledTimes(1));
     expect(frame.getAttribute('sandbox')).toContain('allow-same-origin');
   });
+  it('uses the compact favorites-style header with existing wiki actions',async()=>{
+    renderPage();
+    expect(await screen.findByTitle('Wissensdatenbank – Firmenwiki')).toBeTruthy();
+    const toolbar=document.querySelector('.wiki-browser-toolbar.favorite-browser-toolbar');
+    expect(toolbar).not.toBeNull();
+    expect(toolbar?.querySelector('.favorite-browser-identity h1')?.textContent)
+      .toBe('Wissensdatenbank');
+    expect(toolbar?.querySelector('.favorite-browser-context')?.textContent?.trim())
+      .toBe('Firmenwiki');
+    expect(toolbar?.querySelector('.favorite-browser-actions')).not.toBeNull();
+    expect(screen.getByRole('button',{name:'Wiki neu verbinden'})).toBeTruthy();
+    expect(screen.getByRole('link',{name:'Wiki-Zugangsdaten'})).toBeTruthy();
+    expect(screen.queryByText('PLENARO / WISSENSDATENBANK')).toBeNull();
+    expect(screen.queryByText(/persönliche Wiki-Anmeldung/)).toBeNull();
+  });
   it('does not start when admin has not yet configured a Wiki',async()=>{
     mocks.readWikiSettings.mockResolvedValue({
       ...ready,configured:false,ready:false,favoriteId:null

@@ -243,7 +243,6 @@ export function FavoritePage({admin=false}:{admin?:boolean}){
         {favorite?.url&&<a className="button button-secondary"
           href={favorite.url} target="_blank" rel="noopener noreferrer">
           <ExternalLink size={15}/>Originalseite öffnen</a>}
-        <Link className="button button-secondary" to="/settings?section=favorites">Favoriten verwalten</Link>
       </div>
     </div>
     {admin&&id&&<FavoriteDebugConsole favoriteId={id}/>}

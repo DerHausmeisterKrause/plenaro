@@ -97,7 +97,7 @@ describe('Favorite iframe bootstrap',()=>{
     expect(screen.queryByText('Geschützte Webanwendung mit eigener Browsersitzung.'))
       .toBeNull();
     expect(screen.getByRole('link',{name:'Originalseite öffnen'})).toBeTruthy();
-    expect(screen.getByRole('link',{name:'Favoriten verwalten'})).toBeTruthy();
+    expect(screen.queryByRole('link',{name:'Favoriten verwalten'})).toBeNull();
   });
 
   it('shows safe proxy HTTP errors only for admin users',async()=>{

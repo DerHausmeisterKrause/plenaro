@@ -208,42 +208,41 @@ export function ClassicTodayPage() {
             </span>
           </div>}
           {(tab==='active'||tab==='new'||tab==='completed')&&<>
-            <label className="classic-search">
-              <Search size={16}/>
-              <input aria-label="Tickets suchen" value={ticketSearch} maxLength={100}
-                placeholder="Volltextsuche: Ticket, Betreff, E-Mails, Notizen …"
-                onChange={e=>{setPage(0);setTicketSearch(e.target.value);}}/>
-            </label>
-            {(tab==='active'||tab==='new')&&<>
-              <div className="znuny-list-filter-toggle">
-                <button className="button button-secondary" type="button"
-                  aria-expanded={filtersOpen} onClick={()=>setFiltersOpen(v=>!v)}>
-                  <SlidersHorizontal size={14}/>Filter und Sortierung
-                </button>
-              </div>
-              {filtersOpen&&<div className="znuny-list-filter-fields">
-                <label>Sortieren nach
-                  <select aria-label="Tickets sortieren nach" value={filters.sort}
-                    onChange={e=>updateFilter('sort',e.target.value as TicketListFilters['sort'])}>
-                    <option value="changed">Zuletzt geändert</option>
-                    <option value="created">Erstellt</option>
-                    <option value="title">Titel</option>
-                    <option value="number">Ticketnummer</option>
-                  </select>
-                </label>
-                <label>Richtung
-                  <select aria-label="Sortierrichtung" value={filters.direction}
-                    onChange={e=>updateFilter('direction',e.target.value as TicketListFilters['direction'])}>
-                    <option value="desc">Absteigend</option>
-                    <option value="asc">Aufsteigend</option>
-                  </select>
-                </label>
-                <button type="button" className="button button-secondary"
-                  onClick={()=>{setPage(0);setFilters({
-                    query:'',queue:'',state:'',sort:'changed',direction:'desc'
-                  });}}>Filter zurücksetzen</button>
-              </div>}
-            </>}
+            <div className="znuny-list-toolbar">
+              <label className="classic-search">
+                <Search size={16}/>
+                <input aria-label="Tickets suchen" value={ticketSearch} maxLength={100}
+                  placeholder="Volltextsuche: Ticket, Betreff, E-Mails, Notizen …"
+                  onChange={e=>{setPage(0);setTicketSearch(e.target.value);}}/>
+              </label>
+              <button className="button button-secondary znuny-filter-button" type="button"
+                aria-expanded={filtersOpen} aria-controls="workspace-ticket-filters"
+                onClick={()=>setFiltersOpen(v=>!v)}>
+                <SlidersHorizontal size={14}/>Filter und Sortierung
+              </button>
+            </div>
+            {filtersOpen&&<div id="workspace-ticket-filters" className="znuny-list-filter-fields">
+              <label>Sortieren nach
+                <select aria-label="Tickets sortieren nach" value={filters.sort}
+                  onChange={e=>updateFilter('sort',e.target.value as TicketListFilters['sort'])}>
+                  <option value="changed">Zuletzt geändert</option>
+                  <option value="created">Erstellt</option>
+                  <option value="title">Titel</option>
+                  <option value="number">Ticketnummer</option>
+                </select>
+              </label>
+              <label>Richtung
+                <select aria-label="Sortierrichtung" value={filters.direction}
+                  onChange={e=>updateFilter('direction',e.target.value as TicketListFilters['direction'])}>
+                  <option value="desc">Absteigend</option>
+                  <option value="asc">Aufsteigend</option>
+                </select>
+              </label>
+              <button type="button" className="button button-secondary"
+                onClick={()=>{setPage(0);setFilters({
+                  query:'',queue:'',state:'',sort:'changed',direction:'desc'
+                });}}>Filter zurücksetzen</button>
+            </div>}
           </>}
           {tab==='today'&&outlookConnected&&calendarError&&
             <p role="status" className="um-hint">{calendarError}</p>}

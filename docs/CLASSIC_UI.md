@@ -1,3 +1,28 @@
+## 26.11.2026 – Phase 7/7: Kompakte Ticketfilter und einheitliche Browser-Kopfzeilen
+
+- [x] WPF-Referenz `DerHausmeisterKrause/project_tool/Views/TodayView.xaml` (Suche/Sortierung) und bestehende Web-Komponenten geprüft; kein Backendverhalten geändert.
+- [x] Arbeitsplatz-Reiter **Aktuelle Aufgaben**, **Neue Aufgaben** und **Erledigte Aufgaben**: Volltextsuche und „Filter und Sortierung“ stehen in derselben flexiblen Zeile auf gleicher Höhe. Suchfeld nimmt die verfügbare Breite; die Sortieroptionen klappen darunter auf. Sortieren ist damit auch bei erledigten Tickets erreichbar. Auf sehr schmalen Viewports kann die Zeile umbrechen, ohne Buttons abzuschneiden.
+- [x] Auch in der eigenständigen `TicketsWorkspacePage` Suche und Filter auf eine Zeile gebracht, einschließlich der Ansicht „Erledigte Aufgaben“.
+- [x] Die eingebetteten **Ticketsystem-** und **Wissensdatenbank**-Seiten verwenden die gleiche flache, dezente Browser-Kopfzeile wie die Favoriten (kleines Symbol, Name, knappe Zusatzinfo rechts/ daneben). Alle bisherigen „Neu verbinden“- und Wiki-Zugangsdatenaktionen bleiben verfügbar; iframe-Sitzungen, Proxys und Sicherheitsgrenzen sind unverändert.
+- [x] „Favoriten verwalten“-Schaltfläche **nur aus dem Favoriten-Browserkopf** entfernt, weil die Verwaltung bereits über Einstellungen/Navigationsleiste erfolgt. Persönliche Favoritenverwaltung selbst bleibt unverändert.
+- [x] Automatisierte UI-Regressionstests für Such-/Sortierzeile in drei Reitern, Wissensdatenbank-/Znuny-Portal-Kopf sowie fehlenden „Favoriten verwalten“-Button.
+- [ ] Pull Request und vollständige GitHub-CI prüfen, anschließend nach `main` mergen.
+- [ ] Produktive Sichtprüfung: Such-/Filterzeile in allen Ticketreitern und kompaktes Kopf-Layout in Favoriten, Ticketsystem und Wiki.
+- [x] Keine Datenbankmigration, keine zusätzlichen Container, Ports, Domains oder Nginx-Änderungen.
+
+### Deployment nach grüner CI und Merge
+
+```bash
+cd /opt/plenaro
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build --no-deps web
+docker compose restart nginx
+docker compose ps
+```
+
+---
+
 ## 26.11.2026 – Phase 7/7: Kompakter Arbeitstag, KW, Scrollweitergabe, „Heute“ im Kalender
 
 - [x] Alte WPF-Tages-/Wochenansicht `project_tool/Views/TodayView.xaml` / `WeekView.xaml` und aktuelle React-Komponenten als Referenz geprüft.
