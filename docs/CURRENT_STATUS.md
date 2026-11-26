@@ -5,7 +5,7 @@
 - [x] Änderungen an der rechten Ticketdetailansicht oder beim Auf-/Zuklappen werden durch CSS-Grid/Flex automatisch berücksichtigt, ohne ResizeObserver, Polling oder DOM-Messungen.
 - [x] Mobil bis 1050 px bleibt das bisherige einspaltige Layout mit `max-height:66vh` für die Liste; Pagination, Tagesmarker, Filter und Ticket-Auswahl bleiben unverändert.
 - [x] CSS-Vertragstest `frontend/src/workspaceListLayout.test.ts` überprüft Flex-Füllung, Scrollbarkeit, Entfernung des Desktop-Limits und mobile Wiederherstellung.
-- [ ] PR, vollständige GitHub-CI und Merge nach `main` abschließen.
+- [x] [PR #64](https://github.com/DerHausmeisterKrause/plenaro/pull/64) nach `main` gemergt (Squash-Commit `28868e082c215d75d462b9483fa48d5848f2b332`); [GitHub-CI #45764732435](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45764732435) vollständig grün (Frontend-/Backend-Build, CSS-Regressionstests, Znuny-Vertragstests, TLS, Docker-Smoke und Favoriten-Browser-Login).
 - [ ] Produktive Sichtprüfung: Liste reicht bis zum unteren Kartenrand, passt sich geöffneten langen Tickets und Expand-/Restore-Modus an, unabhängig von der Anzahl der Einträge.
 - [x] Keine Backend-/Datenbankänderung, zusätzliche Container, DNS-Namen oder Compose-Anpassungen.
 
