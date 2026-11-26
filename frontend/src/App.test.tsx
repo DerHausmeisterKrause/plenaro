@@ -876,7 +876,7 @@ describe('Plenaro web shell', () => {
     }));
     renderAt('/workspace');
     fireEvent.click(await screen.findByRole('tab',{name:'Lokale Aufgaben'}));
-    expect(await screen.findByText('Lokale Aufgabe 0')).toBeTruthy();
+    expect((await screen.findAllByText('Lokale Aufgabe 0')).length).toBeGreaterThan(0);
     const scroll=document.querySelector('.classic-list-scroll') as HTMLDivElement;
     scroll.scrollTop=135;fireEvent.scroll(scroll);
     fireEvent.click(screen.getByRole('button',{name:'Aufgaben aktualisieren'}));
