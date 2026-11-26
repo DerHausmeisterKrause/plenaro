@@ -2553,6 +2553,18 @@ Assert(await ProbeScannerAsync("stream: OK",true)==AttachmentScanVerdict.Clean &
     await ProbeScannerAsync("stream: OK",false)==AttachmentScanVerdict.Unavailable,
     "wire-level clean/found/incomplete scan results are distinguished");
 
+// Use the configured web CGI route, never the REST or bootstrap URL.
+Assert(ZnunyTicketDetailEndpoints.BuildDirectTicketUrl("https://tickets.example.org/znuny/index.pl","77")
+    =="https://tickets.example.org/znuny/index.pl?Action=AgentTicketZoom;TicketID=77" &&
+    ZnunyTicketDetailEndpoints.BuildDirectTicketUrl("https://tickets.example.org/otrs/index.pl","123")
+    =="https://tickets.example.org/otrs/index.pl?Action=AgentTicketZoom;TicketID=123",
+    "direct ticket URL preserves configured CGI prefix and uses actual ticket ID");
+Assert(ZnunyTicketDetailEndpoints.BuildDirectTicketUrl("https://SERVER/index.pl","77")=="" &&
+    ZnunyTicketDetailEndpoints.BuildDirectTicketUrl("https://tickets.example.org/index.pl?x=y","77")=="" &&
+    ZnunyTicketDetailEndpoints.BuildDirectTicketUrl("http://tickets.example.org/index.pl","77")=="" &&
+    ZnunyTicketDetailEndpoints.BuildDirectTicketUrl("https://tickets.example.org/index.pl","77&foo=1")=="",
+    "direct ticket URL rejects unset or unsafe configuration and IDs");
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory
