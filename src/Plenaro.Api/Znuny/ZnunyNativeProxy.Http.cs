@@ -375,6 +375,16 @@ public sealed partial class ZnunyNativeProxy
                 var attrs=select.Groups["attrs"].Value;
                 if(!string.Equals(Attribute(attrs,"name"),"ResponseID",
                     StringComparison.OrdinalIgnoreCase))return select.Value;
+                // Keep truly asynchronous placeholders intact. Only bypass
+                // the visual widget if the server provided a real template.
+                var contentStart=select.Index+select.Length;
+                var contentEnd=form.Value.IndexOf("</select",contentStart,
+                    StringComparison.OrdinalIgnoreCase);
+                if(contentEnd<contentStart||!Regex.IsMatch(
+                    form.Value[contentStart..contentEnd],
+                    @"<option\b[^>]*\bvalue\s*=\s*(?:""[1-9][0-9]*""|'[1-9][0-9]*'|[1-9][0-9]*(?=[\s>]))",
+                    RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,
+                    TimeSpan.FromMilliseconds(100)))return select.Value;
                 var classes=AttributePattern.Matches(attrs).FirstOrDefault(m=>
                     m.Groups["name"].Value.Equals("class",StringComparison.OrdinalIgnoreCase));
                 if(classes is null)return select.Value;
