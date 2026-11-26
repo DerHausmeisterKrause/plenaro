@@ -64,7 +64,7 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
         public string Code=>code;
     }
 
-    private sealed record NativeStartResult(string Url,bool RequiresInteractiveLogin);
+    private sealed record NativeStartResult(string Url,bool RequiresInteractiveLogin,string OpenUrl);
 
     public static void Map(WebApplication app)
     {
@@ -123,7 +123,8 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
                 ctx.Response.Headers.CacheControl="no-store";
                 return Results.Ok(new{
                     url=result.Url,
-                    requiresInteractiveLogin=result.RequiresInteractiveLogin
+                    requiresInteractiveLogin=result.RequiresInteractiveLogin,
+                    openUrl=result.OpenUrl
                 });
             }catch(ProxyFailure e){
                 return Results.Json(new{error=e.Reason,code=e.Code},statusCode:503);
@@ -221,7 +222,10 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
             ctx.Response.StatusCode=426;return;
         }
         ctx.Response.Headers["X-Content-Type-Options"]="nosniff";
-        ctx.Response.Headers["Referrer-Policy"]="no-referrer";
+        // Do not leak the one-time token or external destinations. Same-origin
+        // AJAX can now send its legitimate page Referer to the upstream.
+        ctx.Response.Headers["Referrer-Policy"]=ctx.Request.Path==BootstrapPath?
+            "no-referrer":"same-origin";
         ctx.Response.Headers["Content-Security-Policy"]=
             BrowserContentSecurityPolicy(parent);
         // Upstream X-Frame-Options is deliberately NOT forwarded. The
@@ -471,7 +475,8 @@ public sealed partial class ZnunyNativeProxy(IConfiguration configuration)
             return new NativeStartResult(
                 external.GetLeftPart(UriPartial.Authority)+BootstrapPath+
                 "?token="+Uri.EscapeDataString(token),
-                session.InitialLogin==LoginState.Interactive);
+                session.InitialLogin==LoginState.Interactive,
+                external.GetLeftPart(UriPartial.Authority)+path);
         }finally{gate.Release();}
     }
 
