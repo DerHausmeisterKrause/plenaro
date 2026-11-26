@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   Activity, ArrowRight, ArrowUpRight, CalendarCheck2, CheckCircle2,
   ChevronRight, CircleAlert, Database, ExternalLink,
@@ -11,9 +11,7 @@ import { currentUser, setupRequired, type CurrentUser } from './authApi';
 import { SetupPage } from './SetupPage';
 import { SettingsPage } from './SettingsPage';
 import { WeekCalendarPage } from './WeekCalendarPage';
-import { ZnunyWebPortalPage } from './ZnunyWebPortalPage';
-import {FavoritePage} from './FavoritesPage';
-import {WikiPage} from './WikiPage';
+import {RetainedWebWorkspace} from './RetainedWebWorkspace';
 import {loadFavorites,type Favorite} from './favoritesApi';
 import {microsoftDocumentUrl} from './favoriteNavigation';
 import { ClassicTodayPage } from './ClassicTodayPage';
@@ -276,6 +274,7 @@ export function AppContent() {
   const [themeError, setThemeError] = useState('');
   const { web, database } = useHealth();
   const [user, setUser] = useState<CurrentUser | null | undefined>(undefined);
+  const invalidateSession=useCallback(()=>setUser(null),[]);
   const [favorites,setFavorites]=useState<Favorite[]>([]);
   const [favoriteVersion,setFavoriteVersion]=useState(0);
   const [setupState, setSetupState] = useState<'loading' | 'required' | 'complete' | 'error'>('loading');
@@ -381,13 +380,15 @@ export function AppContent() {
         </header>
         <main id="main-content">
           {themeError && <p role="alert" className="um-feedback failure app-settings-error">{themeError}</p>}
+          {user&&<RetainedWebWorkspace key={user.id} userId={user.id}
+            admin={user.roles.includes('Admin')} onInvalidSession={invalidateSession}/>}
           <Routes>
             <Route path="/" element={<PrivateArea user={user}><Dashboard web={web} database={database} instanceName={instanceName}/></PrivateArea>} />
             {navigation.filter(item => !['settings', 'week', 'today', 'ticketsystem', 'reports', 'wiki'].includes(item.key)).map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}
-            <Route path="/wiki" element={<PrivateArea user={user}><WikiPage/></PrivateArea>} />
+            <Route path="/wiki" element={<PrivateArea user={user}>{null}</PrivateArea>} />
             <Route path="/week" element={<PrivateArea user={user}><WeekCalendarPage/></PrivateArea>} />
-            <Route path="/ticket-system" element={<PrivateArea user={user}><ZnunyWebPortalPage/></PrivateArea>} />
-            <Route path="/favorites/:id" element={<PrivateArea user={user}><FavoritePage admin={!!user?.roles.includes('Admin')}/></PrivateArea>} />
+            <Route path="/ticket-system" element={<PrivateArea user={user}>{null}</PrivateArea>} />
+            <Route path="/favorites/:id" element={<PrivateArea user={user}>{null}</PrivateArea>} />
             <Route path="/tasks" element={<Navigate to={'/workspace'+location.search} replace />} />
             <Route path="/tickets" element={<Navigate to="/workspace" replace />} />
             <Route path="/reports" element={<PrivateArea user={user}><ReportsPage/></PrivateArea>} />
