@@ -7,7 +7,7 @@
 - [x] Im Wochenkalender den weißen Punkt/Marker auf der aktuellen-Zeit-Linie entfernt, die weiße Linie selbst und ihre Zeitaktualisierung beibehalten.
 - [x] Heutigen Kalendertag in der Kopfzeile zusätzlich zur bestehenden Farbmarkierung deutlich mit „Heute“ gekennzeichnet (nur innerhalb der angezeigten Woche).
 - [x] Regressionstests für Kalenderwochen (inkl. Jahresübergang), kompakten Arbeitsplatz, Scrollweitergabe per CSS-Vertrag und „Heute“-Kennzeichnung ohne Zeitlinienpunkt.
-- [ ] GitHub CI vollständig erfolgreich prüfen und PR nach `main` mergen.
+- [x] [PR #66](https://github.com/DerHausmeisterKrause/plenaro/pull/66) erfolgreich nach `main` gemergt (Squash-Commit `17a1a714686aa5605395fe607bcda95eecbdf812`); [GitHub-CI #45767928503](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45767928503) vollständig grün (Frontend-/Backend-Build, UI-Regressionstests, Znuny-Vertragstests, TLS, Docker-Smoke und Favoriten-Browser-Login).
 - [ ] Live-Abnahme: Arbeitstagskarte, Maus-Scrollen über kurzen Listen, „Heute“-Badge und Weiße-Linie-Optik kontrollieren.
 - [x] Keine Backend-/Datenbankänderung, neue Container, DNS-/Nginx-Einstellungen oder Compose-Profile.
 
