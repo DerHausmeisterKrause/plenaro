@@ -2474,6 +2474,85 @@ Assert(parseAtoss.Invoke(null,new object[]{
     missingButtonZkForm,zkTestChild,zkTestOrigin}) is null,
     "ATOSS ZK login never sends credentials without an unambiguous login action");
 
+// On-demand previews: require recognized passive format and a clean, complete
+// ClamD verdict; separate users and refresh only the accessed cache entry.
+var samplePng=new byte[]{137,80,78,71,13,10,26,10,1,2,3};
+Assert(AttachmentPreviewCache.PreviewMime(samplePng,"image/png; charset=binary")=="image/png" &&
+    AttachmentPreviewCache.PreviewMime(samplePng,"application/octet-stream")=="image/png" &&
+    AttachmentPreviewCache.PreviewMime(samplePng,"text/html") is null &&
+    AttachmentPreviewCache.PreviewMime("<svg onload='x'/>"u8,"image/svg+xml") is null &&
+    AttachmentPreviewCache.PreviewMime("%PDF-1.7"u8,"application/pdf")=="application/pdf" &&
+    AttachmentPreviewCache.PreviewMime(new byte[5*1024*1024+1],"image/png") is null,
+    "preview accepts actual allowlisted file signatures and rejects active/spoofed formats or oversize");
+Assert(AttachmentScanner.ParseVerdict("stream: OK")==AttachmentScanVerdict.Clean &&
+    AttachmentScanner.ParseVerdict("stream: Test FOUND")==AttachmentScanVerdict.Blocked &&
+    AttachmentScanner.ParseVerdict("INSTREAM size limit exceeded. ERROR")==AttachmentScanVerdict.Unavailable &&
+    AttachmentScanner.ParseVerdict("stream: OK unexpected")==AttachmentScanVerdict.Unavailable &&
+    AttachmentScanner.ParseVerdict("")==AttachmentScanVerdict.Unavailable,
+    "only an exact clean ClamD verdict releases a preview");
+
+using(var previewCache=new AttachmentPreviewCache()){
+    var startPreview=new DateTimeOffset(2026,1,1,0,0,0,TimeSpan.Zero);
+    var previewKey=new AttachmentPreviewCache.Key(Guid.NewGuid(),1,"https://tickets.example.org/",
+        "77","12","5");
+    var otherKey=previewKey with{User=Guid.NewGuid()};
+    var otherArticle=previewKey with{Article="13"};
+    var previewFile=new AttachmentPreviewCache.File(samplePng,"image/png");
+    previewCache.Put(previewKey,previewFile,startPreview);
+    Assert(previewCache.Get(otherKey,startPreview) is null &&
+        previewCache.Get(otherArticle,startPreview) is null,
+        "preview cache is isolated by authenticated user and article");
+    Assert(previewCache.Get(previewKey,startPreview.AddMinutes(2))==previewFile &&
+        previewCache.Get(previewKey,startPreview.AddMinutes(4))==previewFile,
+        "reopening a cached attachment extends its idle lifetime");
+    previewCache.Sweep(startPreview.AddMinutes(7));
+    Assert(previewCache.Get(previewKey,startPreview.AddMinutes(7)) is null,
+        "background cleanup removes an idle attachment after three minutes");
+    previewCache.Put(previewKey,previewFile,startPreview);
+    for(int minute=2;minute<30;minute+=2)
+        Assert(previewCache.Get(previewKey,startPreview.AddMinutes(minute)) is not null,
+            "open preview keepalive refreshes idle lifetime");
+    Assert(previewCache.Get(previewKey,startPreview.AddMinutes(30)) is null,
+        "absolute lifetime bounds cached scan results even during continuous access");
+}
+
+async Task<AttachmentScanVerdict> ProbeScannerAsync(string reply,bool terminate)
+{
+    using var deadline=new CancellationTokenSource(TimeSpan.FromSeconds(5));
+    var listener=new System.Net.Sockets.TcpListener(IPAddress.Loopback,0);
+    listener.Start();
+    try{
+        var port=((IPEndPoint)listener.LocalEndpoint).Port;
+        var scannerConfig=new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{
+            ["PLENARO_ATTACHMENT_SCANNER_HOST"]="127.0.0.1",
+            ["PLENARO_ATTACHMENT_SCANNER_PORT"]=port.ToString()
+        }).Build();
+        var scanning=new AttachmentScanner(scannerConfig).ScanAsync(samplePng,deadline.Token);
+        using var client=await listener.AcceptTcpClientAsync(deadline.Token);
+        await using(var wire=client.GetStream()){
+            var command=new byte[10];
+            await wire.ReadExactlyAsync(command,deadline.Token);
+            Assert(Encoding.ASCII.GetString(command)=="zINSTREAM\\0",
+                "scanner sends NUL-framed INSTREAM, not a server filesystem path");
+            var header=new byte[4];
+            await wire.ReadExactlyAsync(header,deadline.Token);
+            var length=System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(header);
+            Assert(length==samplePng.Length,"ClamD receives only the selected attachment");
+            var received=new byte[length];
+            await wire.ReadExactlyAsync(received,deadline.Token);
+            await wire.ReadExactlyAsync(header,deadline.Token);
+            Assert(received.SequenceEqual(samplePng)&&header.All(x=>x==0),
+                "ClamD INSTREAM uses network-order length and zero terminator");
+            await wire.WriteAsync(Encoding.ASCII.GetBytes(reply+(terminate?"\\0":"")),deadline.Token);
+        }
+        return await scanning;
+    }finally{listener.Stop();}
+}
+Assert(await ProbeScannerAsync("stream: OK",true)==AttachmentScanVerdict.Clean &&
+    await ProbeScannerAsync("stream: Test FOUND",true)==AttachmentScanVerdict.Blocked &&
+    await ProbeScannerAsync("stream: OK",false)==AttachmentScanVerdict.Unavailable,
+    "wire-level clean/found/incomplete scan results are distinguished");
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory
