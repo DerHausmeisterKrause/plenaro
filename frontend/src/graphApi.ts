@@ -44,3 +44,26 @@ export async function disconnectOutlook(): Promise<void> {
   });
   if (!response.ok) throw new Error('Outlook-Verbindung konnte nicht getrennt werden.');
 }
+
+export async function queueSegmentCalendar(kind:'task'|'ticket',id:string):Promise<void>{
+  const csrf=await fetch('/api/v1/auth/csrf',{credentials:'same-origin',cache:'no-store'});
+  if(!csrf.ok)throw new Error('Sicherheitstoken nicht verfügbar.');
+  const {token}=await csrf.json() as {token:string};
+  const response=await fetch('/api/v1/graph/segments/'+kind+'/'+encodeURIComponent(id)+'/sync',{
+    method:'POST',credentials:'same-origin',headers:{'X-CSRF-TOKEN':token}
+  });
+  if(!response.ok)throw new Error('Outlook-Synchronisierung konnte nicht vorgemerkt werden.');
+}
+export async function segmentCalendarStatus():Promise<{pending:number;errors:number}>{
+  const response=await fetch('/api/v1/graph/segments/status',{credentials:'same-origin',cache:'no-store'});
+  if(!response.ok)throw new Error('Synchronisierungsstatus nicht verfügbar.');
+  return await response.json() as {pending:number;errors:number};
+}
+export function segmentCalendarLabel(status?:string,error?:string):string{
+  switch(status){
+    case 'synced':return 'Outlook: synchronisiert';
+    case 'pending':case 'syncing':return 'Outlook: Synchronisierung ausstehend';
+    case 'error':return 'Outlook: '+(error||'Synchronisierung fehlgeschlagen');
+    default:return 'Outlook: noch nicht synchronisiert';
+  }
+}
