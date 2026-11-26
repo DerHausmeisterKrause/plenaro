@@ -1,3 +1,15 @@
+## 26.11.2026 – Phase 7/7: Persistenter Web-Arbeitsbereich
+
+- [x] Classic-Referenz `Services/WebShortcutBrowserSessionManager.cs` geprüft: stabile WebView-Instanzen statt Neuaufbau beim Reiterwechsel.
+- [x] Favoriten, Wiki und native Ticketsystem-Weboberfläche nach Erstaufruf als stabile, benutzerspezifische Iframes im DOM behalten; nur aktive Ansicht sichtbar. Maximal acht Favoriten plus Wiki und Ticketsystem; ältester Favorit wird bei Überschreitung entfernt.
+- [x] Normales Öffnen des Ticketsystem-Reiters setzt die zuletzt sichtbare Seite fort; explizite Ticketlinks navigieren weiterhin zum gewünschten Ticket. Kein Wiederverwenden abgelaufener Bootstrap-Tokens.
+- [x] Plenaro-Sitzung beim Wiederaufruf prüfen, bei Logout/Benutzerwechsel oder Öffnen der Einstellungen alle Frames verwerfen. Proxy-Sicherheitsgrenzen und Session-Timeouts unverändert. Keine Hintergrundanmeldung, keine persistent gespeicherten Seiteninhalte.
+- [x] Diagnose-Polling in inaktiven Favoriten pausiert. Native CGI-AJAX-/Asset-MIME-/Antwortzeit-Diagnose ohne URLs oder Inhalte ergänzt.
+- [x] React-Regressionen und Chromium-Test für Zustandserhalt ergänzt; keine neuen Betriebscontainer.
+- [ ] CI und Live-Abnahme. Tatsächlicher OTRS-Loading-Dropdown-Fehler bleibt ohne reale Browser-/AJAX-Diagnose unbestätigt.
+
+---
+
 ## 26.11.2026 – Phase 7/7: Dauerhafter Ticketansicht-Umschalter
 
 - [x] Vorhandene breite/normale Ticketdetailansicht als persönliche Browser-Einstellung je Benutzer speichern; kein Reset beim Tabwechsel.
