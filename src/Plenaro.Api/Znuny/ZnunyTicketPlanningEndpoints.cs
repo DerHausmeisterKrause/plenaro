@@ -9,7 +9,7 @@ using Plenaro.Api.Graph;
 namespace Plenaro.Api.Znuny;
 
 /// <summary>
-/// Local planning ONLY. No changes are sent to Znuny. Every read/write
+/// Local planning plus delegated Outlook synchronization. No changes are sent to Znuny. Every read/write
 /// rechecks the user's admin-approved agent ID against the current ticket
 /// owner/responsible, or the public unassigned/default-agent pool.
 /// </summary>
@@ -266,6 +266,40 @@ public static class ZnunyTicketPlanningEndpoints
             cmd.Parameters.Add("participants",NpgsqlDbType.Array|NpgsqlDbType.Text).Value=
                 input.Participants??Array.Empty<string>();
             if(await cmd.ExecuteScalarAsync(ct) is null)return Results.NotFound();
+            await SegmentCalendarSync.QueueAsync(db,tx,"ticket",id,user.Value,ct);
+            await tx.CommitAsync(ct);
+            return Results.NoContent();
+        });
+
+        group.MapPatch("/tickets/{ticketId}/segments/{id:guid}/schedule",async(string ticketId,Guid id,
+            Plenaro.Api.Tasks.TaskWorkEndpoints.SegmentRescheduleInput input,HttpContext http,
+            IAntiforgery anti,UserManager<ApplicationUser> users,IConfiguration config,CancellationToken ct)=>{
+            if(!await ValidCsrf(http,anti))return Results.BadRequest(new{error="CSRF-Token ungültig."});
+            var user=await OwnUser(http,users);
+            if(user is null)return Results.Unauthorized();
+            if(input.StartsAt>=input.EndsAt||input.EndsAt-input.StartsAt>TimeSpan.FromDays(7)||
+                input.StartsAt.Year<2000||input.EndsAt.Year>2100)
+                return Results.BadRequest(new{error="Ungültiger Zeitraum."});
+            await using var db=await Open(config,ct);
+            await using var tx=await db.BeginTransactionAsync(ct);
+            await LockOwnerAsync(db,tx,user.Value,ct);
+            if(!await CanWriteAsync(db,tx,user.Value,ticketId,id,ct))return Results.NotFound();
+            if(await OverlapsAsync(db,tx,user.Value,input.StartsAt,input.EndsAt,id,ct))
+                return Results.Conflict(new{error="Du hast bereits ein anderes Plenaro-Zeitsegment in diesem Zeitraum."});
+            await using var cmd=new NpgsqlCommand("""
+                UPDATE znuny_ticket_segments SET starts_at=@start,ends_at=@end
+                WHERE id=@id AND user_id=@user AND ticket_id=@ticket
+                    AND starts_at=@old_start AND ends_at=@old_end
+                RETURNING id
+                """,db,tx);
+            cmd.Parameters.AddWithValue("id",id);cmd.Parameters.AddWithValue("user",user.Value);
+            cmd.Parameters.AddWithValue("ticket",ticketId);
+            cmd.Parameters.Add("start",NpgsqlDbType.TimestampTz).Value=input.StartsAt.UtcDateTime;
+            cmd.Parameters.Add("end",NpgsqlDbType.TimestampTz).Value=input.EndsAt.UtcDateTime;
+            cmd.Parameters.Add("old_start",NpgsqlDbType.TimestampTz).Value=input.ExpectedStartsAt.UtcDateTime;
+            cmd.Parameters.Add("old_end",NpgsqlDbType.TimestampTz).Value=input.ExpectedEndsAt.UtcDateTime;
+            if(await cmd.ExecuteScalarAsync(ct) is null)
+                return Results.Conflict(new{error="Segment wurde zwischenzeitlich geändert. Bitte Kalender aktualisieren."});
             await SegmentCalendarSync.QueueAsync(db,tx,"ticket",id,user.Value,ct);
             await tx.CommitAsync(ct);
             return Results.NoContent();
