@@ -1,11 +1,12 @@
 import {useEffect,useState,type FormEvent} from 'react';
-import {Download,FileText,Maximize2,Minimize2,Paperclip,RefreshCw,Send} from 'lucide-react';
+import {Download,Eye,FileText,Maximize2,Minimize2,Paperclip,RefreshCw,Send} from 'lucide-react';
+import {AttachmentPreviewDialog,canPreviewAttachment} from './AttachmentPreviewDialog';
 import {emailFrameDocument,isHtmlMail,normalizeCid,referencedCids} from './emailBody';
 import {getZnunyPersonal,getZnunyServer} from './znunyApi';
 import {customerArticle,ensureCloseNotice,renderReplyTemplate} from './znunyReplyTemplate';
 import {
   readZnunyArticles,readZnunyInlineImage,sendZnunyReply,markZnunyArticleRead,
-  znunyAttachmentDownloadUrl,type ZnunyArticle,
+  znunyAttachmentDownloadUrl,type ZnunyArticle,type ZnunyAttachment,
 } from './znunySyncApi';
 
 // Znuny timestamps are normally ISO or YYYY-MM-DD HH:mm:ss. Compare
@@ -41,6 +42,7 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
   onClosed?:()=>void;onReadChange?:()=>void;
 }) {
   const [opened,setOpened]=useState(true);
+  const [preview,setPreview]=useState<{ticket:string;article:string;file:ZnunyAttachment}|null>(null);
   const [articles,setArticles]=useState<ZnunyArticle[]>([]);
   const [ticketNumber,setTicketNumber]=useState('');
   const [ticketTitle,setTicketTitle]=useState('');
@@ -70,7 +72,7 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
     }finally{setBusy(false);}
   }
   useEffect(()=>{
-    setArticles([]);setSelectedId('');setUnreadIds([]);setOpened(true);setEmailExpanded(false);
+    setPreview(null);setArticles([]);setSelectedId('');setUnreadIds([]);setOpened(true);setEmailExpanded(false);
     setTicketNumber('');setTicketTitle('');
     setLoaded(false);setError('');setNotice('');setReplying(false);setReply('');
     setCloseMode(false);setTemplateWarning('');
@@ -205,7 +207,7 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
       {articles.length>0&&<label>Nachricht
         <select aria-label="Ticket-Nachricht auswählen" className="znuny-message-listbox"
           size={4} value={selectedId}
-          onChange={e=>{setSelectedId(e.target.value);setReplying(false);setEmailExpanded(false);}}>
+          onChange={e=>{setPreview(null);setSelectedId(e.target.value);setReplying(false);setEmailExpanded(false);}}>
           {newestFirst(articles).map((a,i)=><option key={a.id||i} value={a.id}>
             {articles.length-i} | {germanArticleDate(a.created)} | {unreadIds.includes(a.id)?'★ Neu · ':''}{a.subject||'Ohne Betreff'}
           </option>)}
@@ -239,19 +241,29 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
           aria-label="E-Mail-Anhänge">
           <h4><Paperclip size={15}/>Anhänge ({selected.attachments?.length})</h4>
           <div className="znuny-attachment-list">
-            {selected.attachments?.map(file=><a key={file.id}
-              href={znunyAttachmentDownloadUrl(ticketId,selected.id,file.id)}
-              className="znuny-attachment-link" title="Anhang herunterladen">
-              <Download size={15}/>
-              <span className="znuny-attachment-name">{file.filename||'Anhang '+file.id}</span>
-              {file.size>0&&<span className="znuny-attachment-size">
-                {(file.size/1024).toLocaleString('de-DE',{maximumFractionDigits:1})} KB
-              </span>}
-            </a>)}
+            {selected.attachments?.map(file=>{
+              const label=<>
+                <span className="znuny-attachment-name">{file.filename||'Anhang '+file.id}</span>
+                {file.size>0&&<span className="znuny-attachment-size">
+                  {(file.size/1024).toLocaleString('de-DE',{maximumFractionDigits:1})} KB
+                </span>}
+              </>;
+              return canPreviewAttachment(file)?
+                <button type="button" key={file.id} className="znuny-attachment-link znuny-attachment-preview"
+                  title="Geprüfte Vorschau öffnen"
+                  onClick={()=>setPreview({ticket:ticketId,article:selected.id,file})}>
+                  <Eye size={15}/>{label}
+                </button>:
+                <a key={file.id} href={znunyAttachmentDownloadUrl(ticketId,selected.id,file.id)}
+                  className="znuny-attachment-link" title="Original herunterladen (kein Vorschau-Virenscan)">
+                  <Download size={15}/>{label}
+                </a>;
+            })}
           </div>
           <p className="classic-wpf-help">
-            Anhänge werden erst beim Anklicken geladen. Bitte unbekannte Dateien vor
-            dem Öffnen prüfen. Eingebettete kleine Bilder erscheinen direkt in HTML-E-Mails.
+            PDF- und Bilddateien öffnen sich nach erfolgreicher ClamAV-Prüfung in einer
+            Vorschau. Andere Dateitypen bleiben als Original-Download verfügbar (ohne
+            Vorschau-Virenscan). Eingebettete kleine E-Mail-Bilder bleiben unverändert.
           </p>
         </section>}
         {!closed&&!replying&&<button type="button" className="button button-secondary"
@@ -282,6 +294,10 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
       {!closed&&loaded&&articles.length===0&&<p className="classic-wpf-help">
         Keine Kundenartikel sichtbar. Beim Antworten versucht Plenaro zusätzlich,
         die gültige E-Mail-Adresse aus Znunys CustomerUserID zu verwenden.</p>}
+      {preview&&preview.ticket===ticketId&&preview.article===selected?.id&&
+        <AttachmentPreviewDialog key={preview.ticket+':'+preview.article+':'+preview.file.id}
+          endpoint={znunyAttachmentDownloadUrl(preview.ticket,preview.article,preview.file.id)+'/preview'}
+          attachment={preview.file} onClose={()=>setPreview(null)}/>}
     </div>
   </details>;
 }

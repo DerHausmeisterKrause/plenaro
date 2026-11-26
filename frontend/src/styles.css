@@ -1345,3 +1345,38 @@ h1,h2,h3,p { margin-top: 0; }
 }
 .znuny-message-listbox option { padding:5px 7px; }
 .znuny-message-listbox:focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
+
+/* Scanned attachment preview is a real modal; only approved local bytes
+   are displayed. No external document URLs are framed. */
+.znuny-attachment-preview {font:inherit;text-align:left;cursor:pointer;width:100%;}
+.attachment-preview-dialog {
+  box-sizing:border-box; width:min(1100px,94vw); max-width:94vw;
+  max-height:92vh; padding:0; border:1px solid var(--border);
+  border-radius:12px; background:var(--surface);color:var(--text);
+  box-shadow:0 20px 70px rgba(0,0,0,.4);overflow:auto;
+}
+.attachment-preview-dialog::backdrop {background:rgba(15,23,42,.68);}
+.attachment-preview-heading {
+  position:sticky;top:0;z-index:2;display:flex;align-items:center;
+  justify-content:space-between;gap:12px;padding:13px 18px;
+  background:var(--surface);border-bottom:1px solid var(--border);
+}
+.attachment-preview-heading strong {overflow-wrap:anywhere;min-width:0;}
+.attachment-preview-content {padding:16px;display:grid;gap:12px;min-width:0;}
+.attachment-preview-status {min-height:180px;display:grid;place-content:center;
+  justify-items:center;gap:12px;text-align:center;padding:24px;}
+.attachment-preview-status p {margin:0;max-width:560px;}
+.attachment-preview-status progress {width:min(360px,70vw);height:12px;accent-color:var(--blue);}
+.attachment-preview-status span,.attachment-preview-footer {font-size:12px;color:var(--muted);}
+.attachment-preview-footer {padding:12px 18px;border-top:1px solid var(--border);}
+.attachment-preview-verified {display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;}
+.attachment-preview-verified>svg {color:#16803c;}
+.attachment-preview-verified .classic-text-action {margin-left:auto;display:inline-flex;align-items:center;gap:5px;}
+.attachment-preview-image-wrap {display:grid;place-items:center;min-height:150px;overflow:auto;}
+.attachment-preview-image {max-width:100%;max-height:70vh;object-fit:contain;}
+.attachment-pdf {min-width:0;display:grid;gap:10px;}
+.attachment-pdf-toolbar {display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;}
+.attachment-pdf-page {overflow:auto;max-height:68vh;text-align:center;background:var(--surface-soft);padding:10px;}
+.attachment-pdf-page[hidden] {display:none;}
+.attachment-pdf-page canvas {display:inline-block;background:white;max-width:none;box-shadow:0 1px 5px #0003;}
+@media (max-width:600px){.attachment-preview-content{padding:10px;}.attachment-preview-dialog{width:96vw;max-width:96vw;}}

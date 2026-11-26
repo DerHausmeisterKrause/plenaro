@@ -91,6 +91,21 @@ public static class ZnunyTicketRemoteEndpoints
                     users,config,vault,reader,ct))
             .RequireRateLimiting("znuny-ticket-attachment-read");
 
+        group.MapGet("/tickets/{ticketId}/articles/{articleId}/attachments/{fileId}/preview",
+            async(string ticketId,string articleId,string fileId,HttpContext http,
+                UserManager<ApplicationUser> users,IConfiguration config,SecretVault vault,
+                ZnunyReader reader,AttachmentPreviewCache cache,AttachmentScanner scanner,CancellationToken ct)=>
+                await PreviewResult(ticketId,articleId,fileId,false,http,users,config,
+                    vault,reader,cache,scanner,ct))
+            .RequireRateLimiting("znuny-ticket-attachment-read");
+        group.MapGet("/tickets/{ticketId}/articles/{articleId}/attachments/{fileId}/preview/keepalive",
+            async(string ticketId,string articleId,string fileId,HttpContext http,
+                UserManager<ApplicationUser> users,IConfiguration config,SecretVault vault,
+                ZnunyReader reader,AttachmentPreviewCache cache,AttachmentScanner scanner,CancellationToken ct)=>
+                await PreviewResult(ticketId,articleId,fileId,true,http,users,config,
+                    vault,reader,cache,scanner,ct))
+            .RequireRateLimiting("znuny-ticket-attachment-read");
+
         group.MapGet("/tickets/{ticketId}/booking-fields",async(string ticketId,
             HttpContext http,UserManager<ApplicationUser> users,
             IConfiguration config,SecretVault vault,ZnunyReader reader,
@@ -670,6 +685,64 @@ public static class ZnunyTicketRemoteEndpoints
         if(string.IsNullOrWhiteSpace(chosen))return options.Count==0;
         return options.Any(x=>string.Equals(x.Key,chosen,StringComparison.Ordinal)) ||
             string.Equals(chosen,current,StringComparison.Ordinal) && current.Length>0;
+    }
+
+    private static async Task<IResult> PreviewResult(
+        string ticketId,string articleId,string fileId,bool keepalive,
+        HttpContext http,UserManager<ApplicationUser> users,IConfiguration config,
+        SecretVault vault,ZnunyReader reader,AttachmentPreviewCache cache,
+        AttachmentScanner scanner,CancellationToken ct)
+    {
+        http.Response.Headers.CacheControl="no-store, private";
+        http.Response.Headers["X-Content-Type-Options"]="nosniff";
+        http.Response.Headers["Referrer-Policy"]="no-referrer";
+        if(articleId.Length is <1 or >40 || fileId.Length is <1 or >30 ||
+            !articleId.All(char.IsAsciiDigit)||!fileId.All(char.IsAsciiDigit))
+            return Results.BadRequest(new{error="Ungültige Anhang-ID."});
+        // The group filter AND Context run on every access, including cache
+        // hits/keepalives; never expose another user's cached bytes.
+        var context=await Context(http,users,config,vault,ticketId,false,ct);
+        if(context.Error is {} denied)return denied;
+        var key=new AttachmentPreviewCache.Key(context.UserId!.Value,
+            context.AgentId!.Value,context.Server!.ApiUrl,ticketId,articleId,fileId);
+        IResult Respond(AttachmentPreviewCache.File file)
+        {
+            // Fetch in the trusted UI, never navigate to executable content.
+            // Direct navigation receives attachment disposition; PDF.js
+            // renders pixels only, without document actions or hyperlinks.
+            http.Response.Headers["Content-Security-Policy"]="sandbox; default-src 'none'";
+            return Results.File(file.Bytes,file.Mime,"plenaro-preview",enableRangeProcessing:false);
+        }
+        var cached=cache.Get(key,DateTimeOffset.UtcNow);
+        if(keepalive)return cached is null?Results.NotFound():Results.NoContent();
+        if(cached is not null)return Respond(cached);
+        if(!await cache.ScanSlots.WaitAsync(0,ct))
+            return Results.Json(new{error="Es laufen bereits Anhangprüfungen. Bitte erneut versuchen."},statusCode:429);
+        try{
+            cached=cache.Get(key,DateTimeOffset.UtcNow);
+            if(cached is not null)return Respond(cached);
+            var credentials=await ReadCredentials(context,vault,ct);
+            if(credentials is null)return MissingCredentials();
+            var counter=new ZnunyReader.Counter(3);
+            var session=await reader.SessionAsync(context.Server!,credentials.Value.Username,
+                credentials.Value.Password,counter,ct);
+            var file=await reader.GetAttachmentAsync(context.Server!,session,
+                ticketId,articleId,fileId,counter,ct);
+            if(file is null)return Results.NotFound();
+            var mime=AttachmentPreviewCache.PreviewMime(file.Bytes,file.ContentType);
+            if(mime is null)return Results.Json(new{error="Dateityp nicht für die Vorschau zugelassen oder Dateiformat ungültig."},statusCode:415);
+            var verdict=await scanner.ScanAsync(file.Bytes,ct);
+            if(verdict==AttachmentScanVerdict.Blocked)
+                return Results.Json(new{error="ClamAV hat den Anhang blockiert (Fund, verschlüsselte Datei oder Scanlimit). Keine Vorschau."},statusCode:422);
+            if(verdict!=AttachmentScanVerdict.Clean)
+                return Results.Json(new{error="Virenscan nicht verfügbar oder nicht vollständig. Die Vorschau bleibt gesperrt."},statusCode:503);
+            var clean=new AttachmentPreviewCache.File(file.Bytes,mime);
+            cache.Put(key,clean,DateTimeOffset.UtcNow);
+            return Respond(clean);
+        }catch(ZnunyReader.RemoteFailure e) when(e.Code is "response-too-large" or "attachment-too-large"){
+            return Results.Json(new{error="Der Anhang oder die Znuny-Antwort überschreitet das Größenlimit (5 MiB je Datei)."},statusCode:413);
+        }catch(ZnunyReader.RemoteFailure e){return RemoteReadError(e.Code);}
+        finally{cache.ScanSlots.Release();}
     }
 
     private static async Task<IResult> AttachmentResult(

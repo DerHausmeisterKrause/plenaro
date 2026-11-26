@@ -83,6 +83,9 @@ builder.Services.AddHttpClient("Plenaro.Znuny", client =>
 }).ConfigurePrimaryHttpMessageHandler(ZnunyConnectionTester.SecureHandler);
 builder.Services.AddScoped<ZnunyConnectionTester>();
 builder.Services.AddSingleton<ZnunyReader>();
+builder.Services.AddSingleton<AttachmentScanner>();
+builder.Services.AddSingleton<AttachmentPreviewCache>();
+builder.Services.AddHostedService(services=>services.GetRequiredService<AttachmentPreviewCache>());
 builder.Services.AddSingleton<ZnunyTicketVisibility>();
 builder.Services.AddSingleton<ZnunyNativeProxy>();
 builder.Services.AddSingleton<FavoriteProxy>();
@@ -477,7 +480,11 @@ app.Use(async (http,next)=>{
     await next();
 });
 app.UseDefaultFiles();
-app.UseStaticFiles();
+var staticTypes=new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+staticTypes.Mappings[".mjs"]="text/javascript";
+staticTypes.Mappings[".bcmap"]="application/octet-stream";
+staticTypes.Mappings[".pfb"]="application/octet-stream";
+app.UseStaticFiles(new StaticFileOptions{ContentTypeProvider=staticTypes});
 app.UseRouting();
 // ASP.NET Core RateLimiter must run AFTER authentication when its policies
 // partition by ClaimsPrincipal. Otherwise every browser behind the same

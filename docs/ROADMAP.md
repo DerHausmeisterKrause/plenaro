@@ -1,3 +1,14 @@
+## 26.11.2026 – Phase 7/7: Geprüfte Anhänge in der Ticketdetailansicht
+
+- [x] PNG/JPEG/GIF/WebP/PDF als Vorschau-Dialog mit Ladeindikator; lokal gerenderte PDF-Seiten ohne interaktive Dokumentaktionen.
+- [x] Lokaler ClamAV-Scanner (optionales Compose-Profil `attachment-scan`), INSTREAM nur für ausgewählte Datei, restriktiver Dateityp und blockierende Fehlerbehandlung.
+- [x] Benutzerspezifischer RAM-Cache, drei Minuten Inaktivität, Keepalive bei geöffneter Vorschau, 64 MiB/32 Einträge, absolute Scan-Gültigkeit 30 Minuten.
+- [x] Regressionstests und [Betriebsdokumentation](ATTACHMENT_PREVIEW.md); bestehendes 5-MiB-Dateilimit beibehalten.
+- [ ] CI-Ergebnis und produktive ClamAV-/PDF-/Bild-Abnahme.
+- [x] Keine Datenbankmigration oder öffentliche Portfreigabe. Ein zusätzlicher optionaler Scanner-Container; Signaturen persistent, Anhänge nicht.
+
+---
+
 ## 26.11.2026 – Phase 7/7: Nachrichtenliste – Nummerierung
 
 - [x] Chronologische Nummerierung mit ältester Nachricht Nr. 1 und deutschem Datum inkl. Sekunden; Anzeige weiterhin neueste zuerst.
