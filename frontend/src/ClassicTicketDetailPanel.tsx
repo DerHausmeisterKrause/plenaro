@@ -44,7 +44,7 @@ export function ClassicTicketDetailPanel({ticket,onChanged,detailsExpanded=false
     if(saving||loading)return;
     setSaving(true);setError('');setNotice('');
     try{
-      await saveTicketWorkspace(ticket.ticketId,fields);
+      await saveTicketWorkspace(ticket.ticketId,{description:fields.description,ticketUrl:fields.ticketUrl});
       setDirty(false);setNotice('Lokale Task-Daten gespeichert.');
       onChanged?.();
     }catch(e){setError(e instanceof Error?e.message:'Speichern fehlgeschlagen.');}
@@ -120,15 +120,15 @@ export function ClassicTicketDetailPanel({ticket,onChanged,detailsExpanded=false
       <label htmlFor="classic-wpf-ticket-url">Ticket URL</label>
       <div className="classic-wpf-url-row">
         <input id="classic-wpf-ticket-url" type="url" maxLength={2048}
-          value={fields.ticketUrl} disabled={loading}
-          onChange={e=>update('ticketUrl',e.target.value)}
-          placeholder="https://tickets.example.de/index.pl?..."/>
+          value={fields.directTicketUrl??''} readOnly
+          onFocus={e=>e.currentTarget.select()}
+          placeholder={loading?'Ticket-URL wird geladen …':'Ticket-Webadresse nicht konfiguriert'}/>
         <Link className="button button-secondary" to={'/ticket-system?ticket='+encodeURIComponent(ticket.ticketId)}>
           <ExternalLink size={14}/>Ticket öffnen
         </Link>
       </div>
-      <p className="classic-wpf-help">Die gespeicherte Ticket-URL ist nur eine Referenz. 
-        Znuny wird ausschließlich über den geschützten Plenaro-Webreiter geöffnet.</p>
+      <p className="classic-wpf-help">Direkte Znuny-Ticketadresse zum Markieren und Kopieren.
+        „Ticket öffnen“ verwendet weiterhin den geschützten Plenaro-Webreiter.</p>
 
       <ZnunyTicketAssignmentPanel ticket={ticket} onChanged={onChanged}/>
 
