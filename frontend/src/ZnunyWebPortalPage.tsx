@@ -77,13 +77,13 @@ export function ZnunyWebPortalPage(){
 
   const configured=status?.enabled===true;
   return <div className="page znuny-web-portal">
-    <div className="znuny-web-portal-toolbar content-card">
-      <div>
-        <span className="eyebrow"><Ticket size={14}/>Plenaro / Ticketsystem</span>
+    <div className="znuny-web-portal-toolbar content-card favorite-browser-toolbar">
+      <div className="favorite-browser-identity">
+        <Ticket size={15} aria-hidden="true"/>
         <h1>Ticketsystem-Weboberfläche</h1>
-        <p>Direkte HTML-Browseransicht über den geschützten Plenaro-Proxy.</p>
+        <span className="favorite-browser-context">Znuny</span>
       </div>
-      <div className="znuny-browser-toolbar">
+      <div className="znuny-browser-toolbar favorite-browser-actions">
         <button type="button" className="button button-secondary"
           disabled={!configured||loading}
           title="Ticketsystem-Sitzung neu verbinden"
