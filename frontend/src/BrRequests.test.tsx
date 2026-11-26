@@ -82,7 +82,7 @@ describe('BR marker confirmation and mail delivery',()=>{
   it('saves BR and sends once only after the user explicitly confirms',async()=>{
     const refreshed=vi.fn();
     render(<DayMarkersPanel initialDay="2026-11-16" onSaved={refreshed}/>);
-    fireEvent.click(await screen.findByLabelText('BR-Tag markieren'));
+    await clickLoadedMarker('BR-Tag markieren');
     fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
     expect(mocks.sendBrRequest).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button',{name:'Ja, beantragen'}));
@@ -96,7 +96,7 @@ describe('BR marker confirmation and mail delivery',()=>{
 
   it('triggers the requested yes/no confirmation for a newly marked HO day',async()=>{
     render(<DayMarkersPanel initialDay="2026-11-16"/>);
-    fireEvent.click(await screen.findByLabelText('HO – Homeoffice'));
+    await clickLoadedMarker('HO – Homeoffice');
     fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
     expect(screen.getByRole('dialog').textContent).toContain(
       'Willst du wirklich am 16.11.2026 Homeoffice beantragen?');
@@ -171,7 +171,7 @@ describe('BR marker confirmation and mail delivery',()=>{
     mocks.preflightHomeofficeMail.mockRejectedValue(
       new Error('Outlook Mail.Send wurde noch nicht freigegeben.'));
     render(<DayMarkersPanel initialDay="2026-11-16"/>);
-    fireEvent.click(await screen.findByLabelText('HO – Homeoffice'));
+    await clickLoadedMarker('HO – Homeoffice');
     fireEvent.click(screen.getByRole('button',{name:'Marker speichern'}));
     fireEvent.click(screen.getByRole('button',{name:'Ja, beantragen'}));
     expect(await screen.findByText(/Homeoffice wurde nicht beantragt/)).toBeTruthy();
