@@ -935,6 +935,35 @@ describe('Plenaro web shell', () => {
     expect(screen.getByRole('button',{name:'Erledigt'})).toHaveProperty('disabled',false);
   });
 
+  it('entfernt den redundanten Arbeitsplatz-Hinweis und vergrößert Ticketdetails per Umschalter',async()=>{
+    ticketFixture.mine=[{
+      ticketId:'77',ticketNumber:'2026#77',title:'Ticket für breite Detailansicht',
+      queue:'IT',state:'open',stateType:'open',ownerId:77,responsibleId:null,
+      createdAt:null,changedAt:null
+    }];
+    renderAt('/workspace');
+    expect(screen.queryByText(/Hier bearbeitest du deine Znuny-Tickets/)).toBeNull();
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    expect(screen.queryByRole('button',{name:'Ticketdetails vergrößern'})).toBeNull();
+    fireEvent.click(await screen.findByRole('button',{name:/Ticket für breite Detailansicht/}));
+    const detail=await screen.findByLabelText('Ticketdetails und Planung');
+    const split=detail.closest('.plenaro-today-columns');
+    expect(split?.classList.contains('is-ticket-expanded')).toBe(false);
+    const expand=screen.getByRole('button',{name:'Ticketdetails vergrößern'});
+    expect(expand.getAttribute('aria-controls')).toBe('plenaro-ticket-details');
+    expect(expand.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(expand);
+    expect(split?.classList.contains('is-ticket-expanded')).toBe(true);
+    const restore=screen.getByRole('button',{name:'Ticketdetails verkleinern'});
+    expect(restore.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(restore);
+    expect(split?.classList.contains('is-ticket-expanded')).toBe(false);
+    fireEvent.click(screen.getByRole('button',{name:'Ticketdetails vergrößern'}));
+    fireEvent.click(screen.getByRole('tab',{name:'Neue Aufgaben'}));
+    expect(screen.getByLabelText('Ticketdetails und Planung')
+      .closest('.plenaro-today-columns')?.classList.contains('is-ticket-expanded')).toBe(false);
+  });
+
   it('lädt echte Znuny-Nachrichten und bietet Antworten und Zuweisung an',async()=>{
     ticketFixture.mine=[{
       ticketId:'77',ticketNumber:'2026#77',title:'Ticket mit Details',

@@ -525,12 +525,9 @@ h1,h2,h3,p { margin-top: 0; }
 /* Screenshot-matched Plenaro Classic / Heute – theme-aware, desktop split. */
 .plenaro-today { max-width: none; }
 .plenaro-today-columns { display: grid; grid-template-columns: minmax(0, 1.58fr) minmax(340px, 1fr); gap: 14px; align-items: stretch; min-height: calc(100vh - 155px); }
+.plenaro-today-columns.is-ticket-expanded { grid-template-columns: minmax(0, .66fr) minmax(0, 1.94fr); }
 .plenaro-today-left,.plenaro-today-right { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .plenaro-today .content-card { border-radius: 12px; padding: 17px; }
-.plenaro-today-quick label { display: block; margin-bottom: 9px; font-size: 12px; font-weight: 750; }
-.plenaro-today-quick-row { display: flex; gap: 6px; }
-.plenaro-today-quick-row input { flex: 1; min-width: 0; background: var(--surface-soft); border: 1px solid var(--border); padding: 13px; border-radius: 8px; color: var(--text); }
-.plenaro-today-quick-row .button { padding: 12px 14px; }
 .plenaro-workday { display: flex; align-items: center; justify-content: space-between; gap: 15px; flex-wrap: wrap; }
 .plenaro-workday h2 { margin: 0 0 5px; font-size: 16px; }
 .plenaro-workday p { font-size: 11px; margin: 0 0 4px; color: var(--muted-strong); }
@@ -539,6 +536,7 @@ h1,h2,h3,p { margin-top: 0; }
 .plenaro-marker-pill.active { color: #fff; border-color: #4365ed; background: #4365ed; }
 .plenaro-today-list { flex: 1; min-height: 420px; display: flex; flex-direction: column; }
 .plenaro-tabs { display: flex; gap: 0; overflow-x: auto; padding-bottom: 12px; }
+.plenaro-today .plenaro-tabs { margin-bottom: 12px; padding: 12px 14px; }
 .plenaro-tabs button { background: var(--surface-soft); border: 1px solid var(--border); padding: 10px 16px; white-space: nowrap; color: var(--muted-strong); font-size: 12px; font-weight: 700; }
 .plenaro-tabs button:first-child { border-radius: 9px 0 0 9px; }
 .plenaro-tabs button:last-child { border-radius: 0 9px 9px 0; }
@@ -565,7 +563,11 @@ h1,h2,h3,p { margin-top: 0; }
 .plenaro-segments h3 { font-size: 15px; margin: 0; }
 .plenaro-segments .button { align-self: start; }
 @media (min-width: 1350px) { .sidebar { width: 200px; flex-basis: 200px; } .sidebar-top { padding-left: 16px; padding-right: 16px; } }
-@media (max-width: 1050px) { .plenaro-today-columns { grid-template-columns: minmax(0, 1fr); } .plenaro-today-list { min-height: 300px; } }
+@media (max-width: 1050px) {
+  .plenaro-today-columns,
+  .plenaro-today-columns.is-ticket-expanded { grid-template-columns: minmax(0, 1fr); }
+  .plenaro-today-list { min-height: 300px; }
+}
 @media (max-width: 650px) { .plenaro-today .content-card { padding: 12px; } .plenaro-marker-actions { width: 100%; } .plenaro-marker-pill { flex: 1; padding: 8px; } .plenaro-tabs button { padding: 9px 10px; } }
 
 /* Real task timer and local time-segment editor, matching the classic right rail. */
@@ -781,6 +783,14 @@ h1,h2,h3,p { margin-top: 0; }
 .classic-wpf-ticket-detail { display:flex; flex-direction:column; gap:12px; min-width:0; }
 .classic-wpf-ticket-detail .content-card { border-radius:12px; padding:15px; min-width:0; }
 .classic-wpf-task-card { display:flex; flex-direction:column; gap:9px; }
+.classic-wpf-ticket-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:32px; }
+.classic-wpf-ticket-expand { display:inline-flex; align-items:center; justify-content:center;
+  flex:0 0 34px; width:34px; height:34px; padding:0; border-radius:8px;
+  color:var(--muted-strong); background:var(--surface-soft);
+  border:1px solid var(--border); cursor:pointer; }
+.classic-wpf-ticket-expand:hover,.classic-wpf-ticket-expand[aria-pressed="true"] {
+  color:var(--blue); background:var(--blue-pale); border-color:var(--blue); }
+.classic-wpf-ticket-expand:focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
 .classic-wpf-task-card h2 { font-size:24px; font-weight:800; margin:2px 0 4px; overflow-wrap:anywhere; }
 .classic-wpf-task-card > label,.classic-wpf-assignment label,.classic-wpf-segment-form label,
 .classic-wpf-timer-manual label,.classic-wpf-external-booking label {
@@ -1213,3 +1223,6 @@ h1,h2,h3,p { margin-top: 0; }
 .favorites-debug-level { font-weight:700; }
 @media(max-width:700px){.favorites-debug-entry{grid-template-columns:65px 60px 32px 1fr;}
   .favorites-debug-entry span:last-child{grid-column:1 / -1;}}
+
+/* At stacked/mobile widths the split is already full-width; hide the no-op toggle. */
+@media (max-width: 1050px) { .classic-wpf-ticket-expand { display: none; } }

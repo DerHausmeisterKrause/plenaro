@@ -34,6 +34,7 @@ export function ClassicTodayPage() {
   const [access,setAccess]=useState<TicketAccess|null>(null);
   const [marker,setMarker]=useState<DayMarker|null>(null);
   const [selectedTicketId,setSelectedTicketId]=useState<string|null>(null);
+  const [detailsExpanded,setDetailsExpanded]=useState(false);
   const [selectedAgendaKey,setSelectedAgendaKey]=useState<string|null>(null);
   const [page,setPage]=useState(0);
   const [ticketSearch,setTicketSearch]=useState('');
@@ -136,6 +137,7 @@ export function ClassicTodayPage() {
 
   function changeTab(next:Tab) {
     setTab(next);setPage(0);setSelectedTicketId(null);setSelectedAgendaKey(null);
+    setDetailsExpanded(false);
     setTicketSearch('');setSearchDebounced('');
   }
   async function togglePin(ticket:CachedTicket){
@@ -213,12 +215,10 @@ export function ClassicTodayPage() {
         className={tab===item.key?'active':''} aria-selected={tab===item.key}
         onClick={()=>changeTab(item.key)}>{item.label}</button>)}
     </div>
-    {tab==='local'?<ClassicTasksPage/>:<div className="plenaro-today-columns">
+    {tab==='local'?<ClassicTasksPage/>:<div className={
+      'plenaro-today-columns'+(selectedTicket&&detailsExpanded?' is-ticket-expanded':'')
+    }>
       <section className="plenaro-today-left" aria-label="Arbeitsplatz-Ticketbereich">
-        <div className="content-card plenaro-today-quick">
-          <p>Hier bearbeitest du deine Znuny-Tickets und Termine.
-            Lokale Aufgaben findest du direkt im Reiter „Lokale Aufgaben“.</p>
-        </div>
         <div className="content-card plenaro-workday">
           <div>
             <h2>Arbeitstag heute</h2>
@@ -397,7 +397,8 @@ export function ClassicTodayPage() {
             </div>}
         </div>
       </section>
-      <aside className="plenaro-today-right" aria-label="Ticketdetails und Planung">
+      <aside id="plenaro-ticket-details" className="plenaro-today-right"
+        aria-label="Ticketdetails und Planung">
         {selectedAppointment?<section className="content-card plenaro-today-detail"
           aria-label="Outlook-Termindetails">
           <span className="eyebrow">TASK DETAILS / OUTLOOK</span>
@@ -412,6 +413,8 @@ export function ClassicTodayPage() {
           </div>
         </section>:selectedTicket?<ClassicTicketDetailPanel
           key={selectedTicket.ticketId} ticket={selectedTicket}
+          detailsExpanded={detailsExpanded}
+          onToggleDetailsExpanded={()=>setDetailsExpanded(v=>!v)}
           onChanged={()=>setRefresh(x=>x+1)}/>:
           <section className="content-card plenaro-today-detail" aria-label="Task Details">
             <span className="eyebrow">TASK DETAILS</span>
