@@ -4,10 +4,11 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { WeekDayMarkerControls } from './WeekDayMarkerControls';
 import { calendarNowLine } from './calendarNowLine';
 import { getMonthMarkers, type DayMarker } from './dayMarkersApi';
-import { graphStatus, readOutlookWeek, disconnectOutlook, type GraphStatus, type OutlookEvent } from './graphApi';
+import { graphStatus, readOutlookWeek, disconnectOutlook, queueSegmentCalendar, segmentCalendarLabel, segmentCalendarStatus, type GraphStatus, type OutlookEvent } from './graphApi';
 import { listTasks, localDate, type WorkTask } from './tasksApi';
 import { listWeekSegments, rescheduleTaskSegment, type TaskSegment } from './taskWorkApi';
 import { calendarMove, conflictingLocalSegments, halfHourFromPosition, intervalsOverlap } from './segmentPlanner';
+import {rescheduleTicketSegment} from './znunySyncApi';
 import { outlookAllDayOccursOnDay } from './todayAgenda';
 
 function startOfWeek(value: Date) {
@@ -38,6 +39,7 @@ export function WeekCalendarPage() {
   const [hasMore, setHasMore] = useState(false);
   const [graph, setGraph] = useState<GraphStatus | null>(null);
   const [graphError, setGraphError] = useState('');
+  const [calendarSync,setCalendarSync]=useState<{pending:number;errors:number}|null>(null);
   const [localError, setLocalError] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -118,6 +120,17 @@ export function WeekCalendarPage() {
     return () => { active = false; };
   }, [graph?.connected, weekStart, until, refresh]);
 
+  useEffect(()=>{
+    let active=true;
+    void segmentCalendarStatus().then(s=>{if(active)setCalendarSync(s);}).catch(()=>{});
+    return()=>{active=false;};
+  },[refresh]);
+  useEffect(()=>{
+    if(!calendarSync?.pending)return;
+    const timer=window.setTimeout(()=>setRefresh(n=>n+1),8000);
+    return()=>window.clearTimeout(timer);
+  },[calendarSync,refresh]);
+
   const graphResult = params.get('graph');
   useEffect(() => {
     if (graphResult === 'connected') setRefresh(n => n + 1);
@@ -152,23 +165,24 @@ export function WeekCalendarPage() {
       setMoveError('Dieser Zeitraum ist lokal durch ein anderes eigenes Zeitsegment belegt.');
       return;
     }
-    // Microsoft Graph is read-only and may be incomplete (first 100 events).
+    // Outlook may be incomplete (first 100 events); exclude this segment's own synced appointment.
     // Overlapping personal Outlook events are advisory, never participant free/busy.
     const busyOutlook = graph?.connected && outlook.some(event =>
-      ['busy', 'oof', 'tentative'].includes(event.showAs.toLowerCase()) &&
+      event.id!==segment.outlookEventId && ['busy', 'oof', 'tentative'].includes(event.showAs.toLowerCase()) &&
       intervalsOverlap(input.startsAt, input.endsAt, event.start, event.end));
-    if (busyOutlook && !window.confirm('In deinem Outlook-Kalender liegt ein möglicherweise belegter Termin. Nur lokal trotzdem verschieben?'))
+    if (busyOutlook && !window.confirm('In deinem Outlook-Kalender liegt ein möglicherweise belegter Termin. Trotzdem verschieben und Outlook-Termin aktualisieren?'))
       return;
     setMoving(true);
     try {
-      await rescheduleTaskSegment(segment.taskId, segment.id, input);
+      if(segment.kind==='ticket')await rescheduleTicketSegment(segment.taskId,segment.id,input);
+      else await rescheduleTaskSegment(segment.taskId, segment.id, input);
       // Only update the local segment after the server confirmed the change.
       // A follow-up reload also drops segments moved outside the selected week.
       setSegments(previous => previous.map(s => s.id === segment.id
         ? { ...s, startsAt: input.startsAt, endsAt: input.endsAt } : s));
       setSelectedDay(day); setSelectedSegmentId(segment.id);
       setMoveDay(day); setMoveClock(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
-      setMoveNotice('Zeitsegment verschoben und gespeichert.');
+      setMoveNotice('Zeitsegment verschoben und gespeichert. Outlook-Aktualisierung vorgemerkt.');
       setRefresh(n => n + 1);
     } catch (e) {
       setMoveError(e instanceof Error ? e.message : 'Verschieben fehlgeschlagen.');
@@ -199,11 +213,21 @@ export function WeekCalendarPage() {
     finally { setBusy(false); }
   }
 
+  async function syncSegment(segment:TaskSegment){
+    if(busy||!window.confirm('Diesen Termin in Outlook synchronisieren? Eingetragene Teilnehmer erhalten gegebenenfalls eine Einladung.'))return;
+    setBusy(true);setMoveError('');
+    try{await queueSegmentCalendar(segment.kind??'task',segment.id);
+      setMoveNotice('Outlook-Synchronisierung vorgemerkt.');setRefresh(n=>n+1);}
+    catch(e){setMoveError(e instanceof Error?e.message:'Synchronisierung fehlgeschlagen.');}
+    finally{setBusy(false);}
+  }
+
   const today = localDate();
   const localCount = tasks.filter(t => t.plannedFor && days.some(d => localDate(d) === t.plannedFor)).length;
-  const eventsOn = (date: string) => outlook.filter(e =>
+  const linkedEvents=new Set(segments.map(s=>s.outlookEventId).filter(Boolean));
+  const eventsOn = (date: string) => outlook.filter(e => !linkedEvents.has(e.id) && (
     e.isAllDay ? outlookAllDayOccursOnDay(e,date)
-      : e.start && localDate(new Date(e.start)) === date);
+      : e.start && localDate(new Date(e.start)) === date));
   const selectedTasks = tasks.filter(t => t.plannedFor === selectedDay);
   const selectedMarker = markers.find(m => m.day === selectedDay);
   const selectedEvents = eventsOn(selectedDay);
@@ -219,7 +243,7 @@ export function WeekCalendarPage() {
   const proposedLocalConflicts = proposedMove
     ? conflictingLocalSegments(segments, proposedMove.startsAt, proposedMove.endsAt, selectedSegmentId ?? undefined) : [];
   const proposedOutlookConflicts = proposedMove && graph?.connected
-    ? outlook.filter(event => ['busy', 'oof', 'tentative'].includes(event.showAs.toLowerCase()) &&
+    ? outlook.filter(event => event.id!==selectedSegment?.outlookEventId && ['busy', 'oof', 'tentative'].includes(event.showAs.toLowerCase()) &&
       intervalsOverlap(proposedMove.startsAt, proposedMove.endsAt, event.start, event.end)) : [];
   const byHour = (date: string, hour: number) => eventsOn(date).filter(e => !e.isAllDay && hourOf(e.start) === hour);
 
@@ -227,7 +251,7 @@ export function WeekCalendarPage() {
     <div className="page-heading classic-page-heading">
       <div><span className="eyebrow">PLENARO / WOCHENPLANUNG</span>
         <h1>Meine Woche</h1>
-        <p>Dein lokaler Plenaro-Kalender. Outlook kann zusätzliche Termine anzeigen, ist aber niemals erforderlich.</p>
+        <p>Dein Plenaro-Kalender mit Aufgaben- und Ticketsegmenten. Bei verbundener Microsoft-365-Anmeldung werden Segmenttermine in Outlook synchronisiert.</p>
       </div>
       <div className="classic-week-controls">
         <button type="button" className="button button-secondary" aria-label="Vorherige Woche"
@@ -250,6 +274,8 @@ export function WeekCalendarPage() {
         <Link to="/settings"><Link2 size={15}/>Microsoft-Konto optional verknüpfen</Link>
         : <span>Ohne Microsoft nutzbar</span>}
     </div>
+    {calendarSync&&calendarSync.pending>0&&<p role="status" className="um-hint">Outlook: {calendarSync.pending} Änderung(en) ausstehend.</p>}
+    {calendarSync&&calendarSync.errors>0&&<p role="alert" className="um-feedback failure">Outlook: {calendarSync.errors} Synchronisierungsfehler (einschließlich möglicher Löschungen). Kalender und Microsoft-365-Schreibberechtigung prüfen; fehlerhafte Aufträge werden erneut geprüft.</p>}
     {localError && <p role="alert" className="um-feedback failure">{localError}</p>}
     {moveError && <p role="alert" className="um-feedback failure">{moveError}</p>}
     {moveNotice && <p role="status" className="um-feedback success">{moveNotice}</p>}
@@ -362,6 +388,9 @@ export function WeekCalendarPage() {
         {selectedSegments.length ? selectedSegments.map(segment =>
           <div className="classic-day-entry" key={segment.id}>
             <strong>{segment.taskTitle}</strong>
+            {segment.kind==='ticket'&&<Link to={'/workspace/ticket/'+encodeURIComponent(segment.taskId)}>Ticket öffnen</Link>}
+            <small>{segmentCalendarLabel(segment.calendarStatus,segment.calendarError)}</small>
+            {(!segment.calendarStatus||['not-synced','error'].includes(segment.calendarStatus))&&<button type="button" className="classic-text-action" disabled={busy} onClick={()=>void syncSegment(segment)}>Outlook synchronisieren</button>}
             <small>{formatClock(segment.startsAt)}–{formatClock(segment.endsAt)}</small>
             {segment.note && <small>{segment.note}</small>}
             {segment.participants.length > 0 && <small>{segment.participants.join(', ')}</small>}
