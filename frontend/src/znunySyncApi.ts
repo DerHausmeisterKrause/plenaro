@@ -28,6 +28,7 @@ export type TicketAccess = {
 export type TicketSegment = {
   id: string; startsAt: string; endsAt: string; note: string;
   participants: string[];
+  calendarStatus?:string;calendarError?:string;outlookEventId?:string|null;
 };
 export type TicketWorkspace = { description:string; ticketUrl:string; directTicketUrl?:string };
 export type TicketTimeSummary = {
@@ -70,7 +71,7 @@ async function request<T>(url: string): Promise<T> {
   }
   return await result.json() as T;
 }
-async function mutate(url:string,method:'PUT'|'DELETE'|'POST',body?:unknown):Promise<Response>{
+async function mutate(url:string,method:'PUT'|'DELETE'|'POST'|'PATCH',body?:unknown):Promise<Response>{
   const csrf=await request<{token:string}>('/api/v1/auth/csrf');
   const response=await fetch(url,{
     method,credentials:'same-origin',
@@ -159,6 +160,12 @@ export const updateTicketSegment=async(ticketId:string,segmentId:string,input:{
 })=>{
   await mutate('/api/v1/znuny/tickets/'+encodeURIComponent(ticketId)+
     '/segments/'+encodeURIComponent(segmentId),'PUT',input);
+};
+export const rescheduleTicketSegment=async(ticketId:string,segmentId:string,input:{
+  startsAt:string;endsAt:string;expectedStartsAt:string;expectedEndsAt:string;
+})=>{
+  await mutate('/api/v1/znuny/tickets/'+encodeURIComponent(ticketId)+
+    '/segments/'+encodeURIComponent(segmentId)+'/schedule','PATCH',input);
 };
 const workspaceBase=(ticketId:string)=>
   '/api/v1/znuny/tickets/'+encodeURIComponent(ticketId);
