@@ -1,3 +1,28 @@
+## 26.11.2026 – Phase 7/7: Kompakte Favoritenansicht, Diagnose nur bei Admin-Opt-in
+
+- [x] Vorhandene Favoritenansicht und Admin-Diagnose geprüft; Referenz WPF `DerHausmeisterKrause/project_tool/Services/WebShortcutBrowserSessionManager.cs` konsultiert (eigenständige Browseransicht ohne dauerhafte Debugkonsole).
+- [x] `FavoriteDebugConsole` rendert **überhaupt kein Element**, solange die serverseitige persönliche Admin-Einstellung nicht ausdrücklich `enabled: true` meldet. Kein „Debugmodus deaktiviert“-Platzhalter oder Lade-Kasten; reguläre Benutzer bleiben wie zuvor vollständig ausgeschlossen.
+- [x] Bei aktiviertem Admin-Debug bleiben Ereignisanzeige, Aktualisieren, Filter, Leeren und serverseitige Zugriffskontrolle unverändert. Kein Eingriff in Proxy-Sitzungen, gespeicherte Anmeldedaten oder Debug-Berechtigungen.
+- [x] Mehrzeiligen „Plenaro / Favoriten“-Kopf samt redundantem Beschreibungstext durch eine dezente einzeilige Favoritenleiste ersetzt. Name, „Neu verbinden“, „Originalseite öffnen“ und „Favoriten verwalten“ bleiben vorhanden.
+- [x] Eng auf `.favorite-browser-page` begrenzte Styles: geringere Höhe, kompaktere Buttons, responsive Umbrüche. Größerer sichtbarer iframe-Bereich ohne Änderung seiner Sicherheitsattribute.
+- [x] Regressionstests für Administrator mit deaktivierter Diagnose, Administrator mit aktiver Diagnose, Nichtadministrator und kompakte Kopfleiste samt Aktionen.
+- [ ] GitHub CI vollständig erfolgreich prüfen und PR nach `main` mergen.
+- [ ] Live-Abnahme im Browser: ohne Admin-Debug keine Karte, nach Aktivierung Konsole sichtbar, Höhe der Webanwendung und mobile Breite prüfen.
+- [x] Keine neuen Dockercontainer, DNS-Einträge, Hosts, Ports, Migrationen oder Compose-Profile.
+
+### Deployment nach Merge
+
+```bash
+cd /opt/plenaro
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build --no-deps web
+docker compose restart nginx
+docker compose ps
+```
+
+---
+
 ## 26.11.2026 – Phase 7/7: Arbeitsplatz-Hinweis entfernen und Ticketdetails aufklappen
 
 - [x] Bestehende Web-Ansicht `frontend/src/ClassicTodayPage.tsx` und `ClassicTicketDetailPanel.tsx` mit dem Desktop-Vorgänger `DerHausmeisterKrause/project_tool/Views/TodayView.xaml` und dem dokumentierten klassischen Zwei-Spalten-Konzept verglichen.

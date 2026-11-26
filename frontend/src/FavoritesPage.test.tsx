@@ -67,6 +67,39 @@ describe('Favorite iframe bootstrap',()=>{
     expect(debugMocks.readFavoriteDebugEvents).not.toHaveBeenCalled();
   });
 
+  it('hides the entire debug card for admins unless enabled in settings',async()=>{
+    debugMocks.readFavoriteDebugEvents.mockResolvedValue({
+      enabled:false,events:[{
+        id:1,at:'2026-11-24T08:00:00Z',level:'error',
+        code:'upstream-unavailable',method:'GET',resource:'script',status:502
+      }]
+    });
+    renderStrictFavorite(true);
+    expect(await screen.findByTitle('Wiki')).toBeTruthy();
+    await waitFor(()=>expect(debugMocks.readFavoriteDebugEvents)
+      .toHaveBeenCalledWith(favorite.id,0));
+    expect(screen.queryByRole('region',{name:'Favoriten-Diagnose'})).toBeNull();
+    expect(screen.queryByText(/Debugmodus deaktiviert/)).toBeNull();
+    expect(screen.queryByText(/Diagnoseeinstellungen werden geladen/)).toBeNull();
+    expect(screen.queryByText(/Zielserver nicht erreichbar/)).toBeNull();
+    expect(screen.getByRole('button',{name:'Neu verbinden'})).toBeTruthy();
+  });
+
+  it('uses a compact favorite header without the redundant multiline description',async()=>{
+    renderStrictFavorite();
+    expect(await screen.findByTitle('Wiki')).toBeTruthy();
+    const toolbar=document.querySelector('.favorite-browser-toolbar');
+    expect(toolbar).not.toBeNull();
+    expect(toolbar?.querySelector('.favorite-browser-identity h1')?.textContent)
+      .toBe('Wiki');
+    expect(toolbar?.querySelector('.favorite-browser-actions')).not.toBeNull();
+    expect(screen.queryByText('Plenaro / Favoriten')).toBeNull();
+    expect(screen.queryByText('Geschützte Webanwendung mit eigener Browsersitzung.'))
+      .toBeNull();
+    expect(screen.getByRole('link',{name:'Originalseite öffnen'})).toBeTruthy();
+    expect(screen.getByRole('link',{name:'Favoriten verwalten'})).toBeTruthy();
+  });
+
   it('shows safe proxy HTTP errors only for admin users',async()=>{
     renderStrictFavorite(true);
     expect(await screen.findByRole('region',{name:'Favoriten-Diagnose'})).toBeTruthy();
