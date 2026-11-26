@@ -178,8 +178,9 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
   </section>;
 }
 
-export function FavoritePage({admin=false}:{admin?:boolean}){
-  const {id}=useParams();
+export function FavoritePage({admin=false,favoriteId,visible=true}:{admin?:boolean;favoriteId?:string;visible?:boolean}){
+  const route=useParams();
+  const id=favoriteId??route.id;
   const [favorite,setFavorite]=useState<Favorite|null>(null);
   const [url,setUrl]=useState('');
   const [error,setError]=useState('');
@@ -259,7 +260,7 @@ export function FavoritePage({admin=false}:{admin?:boolean}){
       <a className="button button-primary" href={direct} target="_blank" rel="noopener noreferrer">
         <ExternalLink size={16}/>Dokument in Microsoft 365 öffnen</a>
     </section>}
-    {admin&&id&&!direct&&<FavoriteDebugConsole favoriteId={id}/>} 
+    {visible&&admin&&id&&!direct&&<FavoriteDebugConsole favoriteId={id}/>} 
     {error&&<div className="content-card znuny-portal-error" role="alert">
       <strong>Favorit konnte nicht geöffnet werden</strong><p>{error}</p></div>}
     {loading&&!error&&<div role="status" className="znuny-native-loading">
