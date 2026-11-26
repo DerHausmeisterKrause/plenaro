@@ -34,7 +34,7 @@ curl -f http://127.0.0.1/health/ready
 
 Die Seite ist standardmäßig direkt unter **http://HOST-IP/** erreichbar, ohne `:8080`. Bei optional aktiviertem HTTPS unter **https://HOST-IP/**; Anfragen an HTTP werden dann automatisch nach HTTPS umgeleitet. Ein optionaler FQDN kann über `PLENARO_SERVER_NAME` angegeben werden, sofern der DNS-Eintrag auf die Server-IP zeigt.
 
-**Bereits installierte Version:** Vor der Umstellung die bisherigen Container mit `docker compose down --remove-orphans` stoppen (ohne `-v`!), dann `git pull --ff-only` und `docker compose up -d --build --wait --remove-orphans`. Wer zuvor den Caddy-Overlay gestartet hat, beendet vor dem Update dessen Stack mit `docker compose -f compose.yaml -f compose.secure.yaml down`.
+**Nur für historische Umstellungen von Caddy auf NGINX:** Vor der Umstellung die bisherigen Container mit `docker compose down --remove-orphans` stoppen (ohne `-v`!), dann `git pull --ff-only` und `docker compose up -d --build --wait --remove-orphans`. Wer zuvor den Caddy-Overlay gestartet hat, beendet vor dem Update dessen Stack mit `docker compose -f compose.yaml -f compose.secure.yaml down`.
 
 Die HTTP-/HTTPS-Wahl sowie Hostpfade für Zertifikat und Schlüssel werden vollständig in der `.env` konfiguriert. Beispiele stehen in [NGINX, HTTPS und Secret-Vault](docs/HTTPS_AND_VAULT.md). Keine Internetfreigabe ohne Sicherheitsabnahme.
 
@@ -207,11 +207,13 @@ Unter **Planung (Segmente)** lassen sich je Aufgabe Uhrzeit, Datum, Kurzbeschrei
 
 Alle Endpunkte erfordern Anmeldung, Benutzer-Eigentum und bei Mutationen CSRF. Datenbankmigration `0011_task_timer_segments.sql` ergänzt ein Korrekturjournal, Segmentteilnehmer und einen eindeutigen Index für einen laufenden Aufgabentimer pro Benutzer. Keine bestehenden Tabellen werden gelöscht.
 
-Bei einem Update:
+Bei einem Update einer bereits laufenden Installation:
 ```bash
-git pull --ff-only
-docker compose up -d --build --wait
+bash update.sh
 ```
+Beim erstmaligen Wechsel auf den neuen Updater einmal `git pull --ff-only && bash update.sh` ausführen.
+Der Updater holt den GitHub-Stand, aktualisiert Docker-Images und baut Web/aktivierte Worker frisch,
+sichert PostgreSQL und übernimmt den Stack mit Healthchecks. Siehe [Update und Backup](docs/UPDATE.md).
 
 ## Monatsberichte und CSV-Export (Phase 5)
 
