@@ -1,3 +1,29 @@
+## 26.11.2026 – Phase 7/7: Kompakter Arbeitstag, KW, Scrollweitergabe, „Heute“ im Kalender
+
+- [x] Alte WPF-Tages-/Wochenansicht `project_tool/Views/TodayView.xaml` / `WeekView.xaml` und aktuelle React-Komponenten als Referenz geprüft.
+- [x] „Arbeitstag heute“-Karte vereinfacht: Überschrift links (16 px wie bisher), Datum rechts (11 px wie bisher) ergänzt um **ISO-8601-Kalenderwoche**; bei Jahreswechseln (KW 52/53/1) UTC-stabile Berechnung.
+- [x] Doppelte Normal/UL/AM/HO/BR-Schaltflächen, Planungs-Hinweis und optionalen Homeoffice-Nachtrags-Button aus der Arbeitsplatz-Karte entfernt; Tagesmarker inklusive Bestätigung, Mail- und Outlook-Prüfung bleiben in der Wochenplanung direkt rechts bearbeitbar. Die Arbeitsplatzseite lädt hierfür keine Marker mehr.
+- [x] In der Aufgabenlistenkarte `overscroll-behavior-y: contain` zu `auto` geändert: Ist die Liste kurz/ohne eigenen Scrollbalken oder am Rand, kann das Mausrad wieder die äußere Seite scrollen; bei vielen Tickets scrollt die Liste weiterhin intern.
+- [x] Im Wochenkalender den weißen Punkt/Marker auf der aktuellen-Zeit-Linie entfernt, die weiße Linie selbst und ihre Zeitaktualisierung beibehalten.
+- [x] Heutigen Kalendertag in der Kopfzeile zusätzlich zur bestehenden Farbmarkierung deutlich mit „Heute“ gekennzeichnet (nur innerhalb der angezeigten Woche).
+- [x] Regressionstests für Kalenderwochen (inkl. Jahresübergang), kompakten Arbeitsplatz, Scrollweitergabe per CSS-Vertrag und „Heute“-Kennzeichnung ohne Zeitlinienpunkt.
+- [ ] GitHub CI vollständig erfolgreich prüfen und PR nach `main` mergen.
+- [ ] Live-Abnahme: Arbeitstagskarte, Maus-Scrollen über kurzen Listen, „Heute“-Badge und Weiße-Linie-Optik kontrollieren.
+- [x] Keine Backend-/Datenbankänderung, neue Container, DNS-/Nginx-Einstellungen oder Compose-Profile.
+
+### Server-Deployment nach Merge
+
+```bash
+cd /opt/plenaro
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build --no-deps web
+docker compose restart nginx
+docker compose ps
+```
+
+---
+
 ## 26.11.2026 – Phase 7/7: Listen-Scrollposition, Inline-Tagesmarker und weiße Jetzt-Linie
 
 - [x] Desktop-Referenz `DerHausmeisterKrause/project_tool/Views/WeekView.xaml` geprüft: `NowIndicatorCanvas` zeigt eine 2-px-weiße Linie über dem Zeitraster und einen weißen Marker auf dem aktuellen Tag; `DayMarkerSegment` bietet direkte Buttons für Normal/UL/AM sowie HO/BR. `TodayView.xaml` verwendet ScrollViewer für die Liste.

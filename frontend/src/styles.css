@@ -483,6 +483,11 @@ h1,h2,h3,p { margin-top: 0; }
 .classic-calendar-header strong { font-size: 12px; }
 .classic-calendar-header > span { font-size: 10px; color: var(--muted-strong); }
 .classic-calendar-header.today { background: var(--blue-pale); }
+.classic-calendar-header .classic-calendar-today-badge {
+  display:inline-flex; align-items:center; font-size:10px; font-weight:750;
+  border-radius:5px; padding:2px 6px; background:var(--blue);
+  color:#fff; line-height:1.3;
+}
 .classic-calendar-header.selected { box-shadow: inset 0 -3px 0 var(--blue); }
 .classic-calendar-header .classic-calendar-markers { background: var(--green-pale); color: var(--green); font-weight: 750; border-radius: 4px; padding: 3px 6px; }
 .classic-calendar-all-day { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--blue) !important; }
@@ -498,17 +503,12 @@ h1,h2,h3,p { margin-top: 0; }
 .classic-calendar-aside h3 { font-size: 12px; margin: 14px 0 0; padding-top: 13px; border-top: 1px solid var(--border); }
 .classic-calendar-aside .button { width: fit-content; }
 .classic-day-marker-value { font-size: 12px; color: var(--green); font-weight: 700; }
-/* Original WPF WeekView: full-width 2px white now-line and white day dot.
-   Overlay is not interactive; it cannot interfere with drag and drop. */
+/* WPF-inspired full-width white now-line, without a dot on the time indicator.
+   The overlay is not interactive and cannot interfere with drag/drop. */
 .classic-calendar-now-line {
   position:absolute; left:66px; right:0; height:2px;
   pointer-events:none; z-index:12; background:rgba(255,255,255,.9);
   box-shadow:0 0 0 1px rgba(13,20,34,.55),0 0 5px rgba(13,20,34,.5);
-}
-.classic-calendar-now-marker {
-  position:absolute; top:50%; width:9px; height:9px;
-  border-radius:50%; background:#fff; border:1px solid rgba(13,20,34,.55);
-  transform:translate(-50%,-50%); box-shadow:0 0 4px rgba(13,20,34,.6);
 }
 .classic-week-marker-editor { display:grid; gap:9px; min-width:0; }
 .classic-week-marker-options { display:flex; flex-wrap:wrap; gap:5px; }
@@ -552,9 +552,10 @@ h1,h2,h3,p { margin-top: 0; }
 .plenaro-today-left,.plenaro-today-right { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .plenaro-today .content-card { border-radius: 12px; padding: 17px; }
 .plenaro-workday { display: flex; align-items: center; justify-content: space-between; gap: 15px; flex-wrap: wrap; }
-.plenaro-workday h2 { margin: 0 0 5px; font-size: 16px; }
-.plenaro-workday p { font-size: 11px; margin: 0 0 4px; color: var(--muted-strong); }
-.plenaro-marker-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.plenaro-workday h2 { margin: 0; font-size: 16px; }
+.plenaro-workday p { font-size: 11px; margin: 0; color: var(--muted-strong); }
+.plenaro-workday .plenaro-workday-date { margin-left:auto; text-align:right; }
+
 .plenaro-marker-pill { border: 1px solid var(--border); border-radius: 9px; background: var(--surface-soft); padding: 8px 14px; font-size: 11px; font-weight: 700; color: var(--muted-strong); cursor: pointer; }
 .plenaro-marker-pill.active { color: #fff; border-color: #4365ed; background: #4365ed; }
 .plenaro-today-list { flex: 1 1 auto; min-width: 0; min-height: 420px; display: flex; flex-direction: column; }
@@ -568,7 +569,9 @@ h1,h2,h3,p { margin-top: 0; }
   min-height: 0;
   max-height: none;
   overflow-y: auto;
-  overscroll-behavior-y: contain;
+  /* Allow wheel scrolling to continue on the page when the list is short
+     or the inner scrollport reaches its end. */
+  overscroll-behavior-y: auto;
 }
 .plenaro-tabs { display: flex; gap: 0; overflow-x: auto; padding-bottom: 12px; }
 .plenaro-today .plenaro-tabs { margin-bottom: 12px; padding: 12px 14px; }
@@ -610,7 +613,7 @@ h1,h2,h3,p { margin-top: 0; }
     max-height: 66vh;
   }
 }
-@media (max-width: 650px) { .plenaro-today .content-card { padding: 12px; } .plenaro-marker-actions { width: 100%; } .plenaro-marker-pill { flex: 1; padding: 8px; } .plenaro-tabs button { padding: 9px 10px; } }
+@media (max-width: 650px) { .plenaro-today .content-card { padding: 12px; } .plenaro-marker-pill { flex: 1; padding: 8px; } .plenaro-tabs button { padding: 9px 10px; } }
 
 /* Real task timer and local time-segment editor, matching the classic right rail. */
 .plenaro-timer-booked { text-align: center; }
