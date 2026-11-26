@@ -22,7 +22,7 @@ const labels: {key:Tab;label:string}[] = [
   {key:'local',label:'Lokale Aufgaben'},
 ];
 
-export function ClassicTodayPage() {
+export function ClassicTodayPage({userId}:{userId:string}) {
   const location=useLocation();
   const [day,setDay]=useState(()=>localDate());
   const [tab,setTab]=useState<Tab>(()=>new URLSearchParams(location.search).has('task')?'local':'today');
@@ -31,7 +31,18 @@ export function ClassicTodayPage() {
   const [outlook,setOutlook]=useState<OutlookEvent[]>([]);
   const [access,setAccess]=useState<TicketAccess|null>(null);
   const [selectedTicketId,setSelectedTicketId]=useState<string|null>(null);
-  const [detailsExpanded,setDetailsExpanded]=useState(false);
+  // One browser-local layout preference per signed-in user, not per ticket.
+  const viewKey='plenaro-ticket-details-expanded:'+userId;
+  const [detailsExpanded,setDetailsExpanded]=useState(()=>{
+    try{return window.localStorage.getItem(viewKey)==='true';}
+    catch{return false;}
+  });
+  function toggleDetailsExpanded(){
+    const next=!detailsExpanded;
+    setDetailsExpanded(next);
+    try{window.localStorage.setItem(viewKey,String(next));}
+    catch{/* The toggle still works for this mounted page. */}
+  }
   const rowsRef=useRef<HTMLDivElement|null>(null);
   const rowsScrollTop=useRef(0);
   const [selectedAgendaKey,setSelectedAgendaKey]=useState<string|null>(null);
@@ -137,7 +148,6 @@ export function ClassicTodayPage() {
 
   function changeTab(next:Tab) {
     setTab(next);setPage(0);setSelectedTicketId(null);setSelectedAgendaKey(null);
-    setDetailsExpanded(false);
     rowsScrollTop.current=0;
     if(rowsRef.current)rowsRef.current.scrollTop=0;
     setTicketSearch('');setSearchDebounced('');
@@ -337,7 +347,7 @@ export function ClassicTodayPage() {
         </section>:selectedTicket?<ClassicTicketDetailPanel
           key={selectedTicket.ticketId} ticket={selectedTicket}
           detailsExpanded={detailsExpanded}
-          onToggleDetailsExpanded={()=>setDetailsExpanded(v=>!v)}
+          onToggleDetailsExpanded={toggleDetailsExpanded}
           onChanged={()=>setRefresh(x=>x+1)}/>:
           <section className="content-card plenaro-today-detail" aria-label="Task Details">
             <span className="eyebrow">TASK DETAILS</span>

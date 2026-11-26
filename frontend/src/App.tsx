@@ -393,7 +393,7 @@ export function AppContent() {
             <Route path="/reports" element={<PrivateArea user={user}><ReportsPage/></PrivateArea>} />
             <Route path="/today" element={<Navigate to="/workspace" replace />} />
              <Route path="/workspace/ticket/:ticketId" element={<PrivateArea user={user}><DirectTicketPage/></PrivateArea>} />
-            <Route path="/workspace" element={<PrivateArea user={user}><ClassicTodayPage/></PrivateArea>} />
+            <Route path="/workspace" element={<PrivateArea user={user}><ClassicTodayPage key={user?.id??''} userId={user?.id??''}/></PrivateArea>} />
             <Route path="/settings" element={<PrivateArea user={user}><SettingsPage user={user} onPersonalSaved={value => { setPrefs(value); applyTheme(value.theme); setThemeError(''); }} onWorkspaceSaved={value => setInstanceName(value.instanceName)} onFavoritesChanged={() => setFavoriteVersion(x=>x+1)}/></PrivateArea>} />
             <Route path="/system" element={<SystemPage web={web} database={database}/>} />
             <Route path="*" element={<NotFound />} />

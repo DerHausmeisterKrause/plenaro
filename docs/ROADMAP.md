@@ -1,3 +1,13 @@
+## 26.11.2026 – Phase 7/7: Dauerhafter Ticketansicht-Umschalter
+
+- [x] Vorhandene breite/normale Ticketdetailansicht als persönliche Browser-Einstellung je Benutzer speichern; kein Reset beim Tabwechsel.
+- [x] Gewählte Ansicht gilt für alle Tickets im Arbeitsplatz (Heute, Aktuelle, Neue und Erledigte Aufgaben), auch nach Neuladen und erneutem Öffnen.
+- [x] Outlook-Termine/Leerzustand, separate bereits breite Ticketansicht und responsive mobile Darstellung unverändert.
+- [x] Regressionstests für Ticket-/Tabwechsel und Neuladen in beiden Modi ergänzt; keine Datenbankmigration.
+- [ ] CI und produktive Sichtprüfung.
+
+---
+
 ## 26.11.2026 – Phase 7/7: Kopierbare direkte Ticket-URL
 
 - [x] WPF-Referenz `Services/TicketSystemService.cs` geprüft: direkter AgentTicketZoom-Link mit interner Ticket-ID.
