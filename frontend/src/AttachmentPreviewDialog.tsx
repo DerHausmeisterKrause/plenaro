@@ -26,11 +26,11 @@ export function AttachmentPreviewDialog({endpoint,attachment,onClose}:{
     if(!element)return;
     const previous=document.activeElement;
     if(typeof element.showModal==='function')element.showModal();
-    else element.setAttribute('open','');
+    if(!element.open)element.setAttribute('open','');
     closeButton.current?.focus();
     return()=>{
       if(typeof element.close==='function')element.close();
-      else element.removeAttribute('open');
+      if(element.open)element.removeAttribute('open');
       if(previous instanceof HTMLElement&&previous.isConnected)previous.focus();
     };
   },[]);
