@@ -209,6 +209,6 @@ export function FavoriteDebugConsole({favoriteId}:{favoriteId:string}){
           aber nicht die
           JavaScript-Konsole einer fremden Webseite oder durch den Browser
           vor dem Proxy blockierte externe Anfragen.</p>
-      </>}
+      </>
   </section>;
 }
