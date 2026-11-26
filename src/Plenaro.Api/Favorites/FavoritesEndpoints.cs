@@ -611,7 +611,7 @@ public static class FavoritesEndpoints
         IConfiguration config,out string origin,out string path,out string error)
     {
         origin="";path="";
-        error="Bitte eine gültige HTTPS-Webadresse mit DNS-Host eingeben.";
+        error="Bitte eine gültige HTTPS-Webadresse mit DNS-Name oder zulässiger IP-Adresse eingeben.";
         if(input.Name is null||input.Name.Trim().Length is <2 or >120||
            input.Url is null||input.Url.Length is < 9 or >2048||
            input.Username is null||input.Username.Length>180||
@@ -620,15 +620,7 @@ public static class FavoritesEndpoints
            (input.ClearPassword&&!string.IsNullOrEmpty(input.Password))||
            (input.AutoLogin&&string.IsNullOrWhiteSpace(input.Username)))
             return false;
-        if(!Uri.TryCreate(input.Url.Trim(),UriKind.Absolute,out var url)||
-           url.Scheme!=Uri.UriSchemeHttps||url.HostNameType!=UriHostNameType.Dns||
-           !string.IsNullOrEmpty(url.UserInfo)||url.Fragment.Length>0)
-            return false;
-        origin=url.GetLeftPart(UriPartial.Authority)+"/";
-        path=url.PathAndQuery;
-        if(path.Length is <1 or >2048||path.StartsWith("//")||
-           path.Contains('\\')||path.Contains("://")||
-           path.Any(char.IsControl))return false;
+        if(!FavoriteUrlPolicy.TryPersonalUrl(input.Url,out origin,out path))return false;
         // Preserve the existing self-proxy, DNS and reserved-host checks.
         // User-provided DNS still gets checked again at TCP connect time.
         return ValidApp(new AppInput(input.Name,slug,origin,true,false,null),
@@ -639,10 +631,7 @@ public static class FavoritesEndpoints
         error="Favorit enthält ungültige Angaben.";
         if(value.Name is null||value.Name.Trim().Length is <1 or >120||
             value.Username is null||value.Username.Length>180||
-            value.Path is null||value.Path.Length is <1 or >2048||
-            !value.Path.StartsWith('/')||value.Path.StartsWith("//")||
-            value.Path.Contains('\\')||value.Path.Any(char.IsControl)||
-            value.Path.Contains('#')||value.Path.Contains("://")||
+            !FavoriteUrlPolicy.ValidPath(value.Path)||
             value.SortOrder is <0 or >10000||
             (value.Password is { Length: >4096 } ||
              (value.ClearPassword && !string.IsNullOrEmpty(value.Password))))return false;
@@ -664,7 +653,7 @@ public static class FavoritesEndpoints
             upstream.Scheme!=Uri.UriSchemeHttps||
             upstream.UserInfo.Length>0||upstream.Query.Length>0||
             upstream.Fragment.Length>0||upstream.AbsolutePath!="/"||
-            upstream.HostNameType!=UriHostNameType.Dns)return false;
+            !FavoriteUrlPolicy.AllowedHost(upstream))return false;
         var domain=config["PLENARO_FAVORITES_BASE_DOMAIN"]?.Trim().TrimEnd('.');
         var template=config["PLENARO_FAVORITES_HOST_TEMPLATE"];
         var shared=FavoritePathRouting.SharedOrigin(
