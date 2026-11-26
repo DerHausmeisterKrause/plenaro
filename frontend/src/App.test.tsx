@@ -333,6 +333,7 @@ beforeEach(() => {
     configurable:true,value:vi.fn()
   });
   window.localStorage.clear();
+  window.sessionStorage.clear();
 });
 afterEach(() => {
   cleanup();
@@ -527,7 +528,7 @@ describe('Plenaro web shell', () => {
     const button = await screen.findByRole('button', { name: /Benachrichtigungen öffnen, 0 ungelesen/ });
     fireEvent.click(button);
     expect(await screen.findByRole('region', { name: 'Benachrichtigungen' })).toBeTruthy();
-    expect(screen.getByText('Keine ungelesenen Erinnerungen.')).toBeTruthy();
+    expect(screen.getByText('Keine ungelesenen Benachrichtigungen.')).toBeTruthy();
   });
 
   it('öffnet die direkt verlinkte Aufgabe aus einer ungelesenen Erinnerung', async () => {
@@ -566,6 +567,48 @@ describe('Plenaro web shell', () => {
     await waitFor(()=>expect(unreadArticleIdsFixture).toEqual(['14']));
     fireEvent.click(await screen.findByRole('button',{name:'Benachrichtigungen öffnen, 1 ungelesen'}));
     expect(await screen.findByText('1 ungelesen · Ticket öffnen')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Ticket-Nachricht auswählen'),{target:{value:'14'}});
+    expect(await screen.findByRole('button',{name:'Benachrichtigungen öffnen, 0 ungelesen'})).toBeTruthy();
+    expect(screen.getByText('Keine ungelesenen Benachrichtigungen.')).toBeTruthy();
+  });
+
+  it('fragt vor Browserfreigabe nach und fordert die Berechtigung erst bei Ja an',async()=>{
+    const requestPermission=vi.fn(async()=> 'granted');
+    const notification=class {
+      static permission='default';
+      static requestPermission=async()=>{
+        notification.permission=await requestPermission();
+        return notification.permission;
+      };
+    };
+    vi.stubGlobal('isSecureContext',true);
+    vi.stubGlobal('Notification',notification);
+    renderAt('/');
+    const dialog=await screen.findByRole('dialog',{name:'Benachrichtigungen aktivieren?'});
+    expect(requestPermission).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button',{name:'Ja'}));
+    await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button',{name:'Benachrichtigungen öffnen, 0 ungelesen'}));
+    expect(screen.getByRole('button',{name:'Browserhinweise deaktivieren'})).toBeTruthy();
+  });
+
+  it('Nein unterdrückt die Freigabe und den Dialog für diese Browsersitzung',async()=>{
+    const requestPermission=vi.fn();
+    vi.stubGlobal('isSecureContext',true);
+    vi.stubGlobal('Notification',class {
+      static permission='default';
+      static requestPermission=requestPermission;
+    });
+    const first=renderAt('/');
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button',{name:'Nein'}));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(requestPermission).not.toHaveBeenCalled();
+    first.unmount();
+    renderAt('/');
+    await screen.findByRole('button',{name:'Benachrichtigungen öffnen, 0 ungelesen'});
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(requestPermission).not.toHaveBeenCalled();
   });
 
   it('bietet persönliche Reminder-Einstellungen mit Standardvorlauf', async () => {
