@@ -27,6 +27,7 @@ services:
     environment:
       ASPNETCORE_HTTP_PORTS: "8080"
       ASPNETCORE_ENVIRONMENT: Production
+      PLENARO_ATTACHMENT_SCANNER_HOST: clamav
       ConnectionStrings__Plenaro: "Host=database;Port=5432;Database=${POSTGRES_DB:-plenaro};Username=${POSTGRES_USER:-plenaro};Password=${POSTGRES_PASSWORD:?Setze POSTGRES_PASSWORD in der .env};Pooling=true"
       Security__RequireHttps: "${PLENARO_HTTPS_ENABLED:-false}"
       Security__TrustedProxyIp: "172.29.213.10"
@@ -58,6 +59,7 @@ services:
     networks:
       - backend
       - edge
+      - attachment-scan
     security_opt:
       - no-new-privileges:true
     healthcheck:
@@ -66,6 +68,35 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  # Local, on-demand attachment scanning. No host port or access to the
+  # database/web storage; only the antivirus signatures persist.
+  clamav:
+    profiles: ["attachment-scan"]
+    image: clamav/clamav:stable-debian
+    restart: unless-stopped
+    environment:
+      CLAMAV_NO_MILTERD: "true"
+      FRESHCLAM_CHECKS: "12"
+      CLAMD_CONF_MaxThreads: "2"
+      CLAMD_CONF_MaxQueue: "8"
+      CLAMD_CONF_StreamMaxLength: "6M"
+      CLAMD_CONF_MaxFileSize: "10M"
+      CLAMD_CONF_MaxScanSize: "100M"
+      CLAMD_CONF_AlertExceedsMax: "yes"
+      CLAMD_CONF_AlertEncrypted: "yes"
+      CLAMD_CONF_FailIfCvdOlderThan: "7"
+      CLAMD_CONF_ConcurrentDatabaseReload: "no"
+      CLAMD_CONF_EnableShutdownCommand: "no"
+      CLAMD_CONF_TemporaryDirectory: /tmp
+    volumes:
+      - clamav_signatures:/var/lib/clamav
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=128m,mode=1777
+    networks:
+      - attachment-scan
+    security_opt:
+      - no-new-privileges:true
 
   # Optional headless login ONLY for JavaScript-based personal favorites
   # (e.g. ATOSS/ZK). No public port, DNS alias or separate browser URL.
@@ -151,6 +182,10 @@ services:
       start_period: 10s
 
 networks:
+  attachment-scan:
+    # Scanner needs outbound access for FreshClam signature updates.
+    # The only application peer is the web service; no host ports published.
+    driver: bridge
   backend:
     internal: true
   edge:
@@ -159,5 +194,6 @@ networks:
         - subnet: 172.29.213.0/24
 
 volumes:
+  clamav_signatures:
   postgres_data:
     name: plenaro_postgres_data
