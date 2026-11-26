@@ -524,9 +524,12 @@ public sealed partial class ZnunyNativeProxy
                     return;
                 }
                 var changed=Rewrite(decoded,session.Upstream,publicOrigin);
-                if(ctx.Response.ContentType?.StartsWith("text/html",
+                if(response.IsSuccessStatusCode &&
+                   response.Content.Headers.ContentDisposition is null &&
+                   target.AbsolutePath.Equals(session.Entry.AbsolutePath,StringComparison.OrdinalIgnoreCase) &&
+                   (ctx.Response.ContentType?.StartsWith("text/html",
                     StringComparison.OrdinalIgnoreCase)==true||
-                   type?.MediaType=="application/xhtml+xml")
+                    type?.MediaType=="application/xhtml+xml"))
                     changed=NativeReplySelects(changed);
                 var output=encoding.GetBytes(changed);
                 await ctx.Response.Body.WriteAsync(output,ct);
