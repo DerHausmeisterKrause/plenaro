@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState, type DragEvent, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Cloud, GripVertical, Link2, RefreshCw, Save, Unplug } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { DayMarkersPanel } from './DayMarkersPanel';
+import { WeekDayMarkerControls } from './WeekDayMarkerControls';
+import { calendarNowLine } from './calendarNowLine';
 import { getMonthMarkers, type DayMarker } from './dayMarkersApi';
 import { graphStatus, readOutlookWeek, disconnectOutlook, type GraphStatus, type OutlookEvent } from './graphApi';
 import { listTasks, localDate, type WorkTask } from './tasksApi';
@@ -41,7 +42,9 @@ export function WeekCalendarPage() {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
-  const [showMarkers, setShowMarkers] = useState(false);
+  const [clock,setClock]=useState(()=>new Date());
+  const calendarScrollRef=useRef<HTMLDivElement|null>(null);
+  const calendarScrollPosition=useRef({top:0,left:0});
   const [selectedDay, setSelectedDay] = useState(() => localDate());
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
   const [moveDay, setMoveDay] = useState('');
@@ -53,6 +56,20 @@ export function WeekCalendarPage() {
   const [moveNotice, setMoveNotice] = useState('');
   const days = useMemo(() => Array.from({ length: 5 }, (_, i) => plusDays(weekStart, i)), [weekStart]);
   const until = useMemo(() => plusDays(weekStart, 5), [weekStart]);
+  const nowLine=calendarNowLine(clock,days);
+
+  // Mirror the original WPF WeekView now-line; update without reloading events.
+  useEffect(()=>{
+    const timer=window.setInterval(()=>setClock(new Date()),30_000);
+    return()=>window.clearInterval(timer);
+  },[]);
+
+  // Calendar data refresh must not jump the user's visible time window.
+  useLayoutEffect(()=>{
+    if(!calendarScrollRef.current)return;
+    calendarScrollRef.current.scrollTop=calendarScrollPosition.current.top;
+    calendarScrollRef.current.scrollLeft=calendarScrollPosition.current.left;
+  },[tasks,segments,outlook,markers]);
 
   useEffect(() => {
     setSelectedDay(previous => days.some(d => localDate(d) === previous) ? previous : localDate(days[0]));
@@ -243,7 +260,12 @@ export function WeekCalendarPage() {
 
     <div className="classic-calendar-layout">
       <section className="classic-calendar-main" aria-label="Wochenkalender">
-        <div className="classic-calendar-scroll">
+        <div className="classic-calendar-scroll" ref={calendarScrollRef}
+          onScroll={event=>{
+            calendarScrollPosition.current={
+              top:event.currentTarget.scrollTop,left:event.currentTarget.scrollLeft
+            };
+          }}>
           <div className="classic-calendar-grid">
             <div className="classic-calendar-corner">Zeit</div>
             {days.map(d => {
@@ -310,6 +332,14 @@ export function WeekCalendarPage() {
                   {hover === `${slotKey}-30` && <span className="classic-drop-indicator" aria-hidden="true">:30</span>}
                 </div>;
               })}
+              {nowLine?.hour===hour&&<div
+                className="classic-calendar-now-line"
+                role="img"
+                aria-label={'Aktuelle Uhrzeit '+new Intl.DateTimeFormat('de-DE',{hour:'2-digit',minute:'2-digit'}).format(clock)}
+                style={{top:nowLine.topPercent+'%'}}>
+                <span className="classic-calendar-now-marker"
+                  style={{left:'calc((100% - 66px) / 5 * '+(nowLine.dayIndex+0.5)+')'}}/>
+              </div>}
             </div>)}
           </div>
         </div>
@@ -321,13 +351,10 @@ export function WeekCalendarPage() {
         <span className="eyebrow">AUSGEWÄHLTER TAG</span>
         <h2>{new Intl.DateTimeFormat('de-DE', { dateStyle: 'full' }).format(new Date(selectedDay + 'T12:00:00'))}</h2>
         <h3>Tagesmarker</h3>
-        {selectedMarker ? <p className="classic-day-marker-value">
-          {selectedMarker.dayType === 'Normal' ? 'Normal' : selectedMarker.dayType}
-          {selectedMarker.isBr ? ' · BR' : ''}{selectedMarker.isHo ? ' · HO' : ''}
-        </p> : <p className="um-hint">Normal · Kein Marker</p>}
-        <button type="button" className="button button-secondary" onClick={() => setShowMarkers(v => !v)}>
-          {showMarkers ? 'Markereditor schließen' : 'UL / AM / BR bearbeiten'}
-        </button>
+        <WeekDayMarkerControls key={selectedDay} day={selectedDay}
+          marker={selectedMarker}
+          onSaved={next=>setMarkers(previous=>
+            [...previous.filter(item=>item.day!==next.day),next])}/>
         <h3>Geplante Aufgaben</h3>
         {selectedTasks.length ? selectedTasks.map(t => <div className="classic-day-entry" key={t.id}>
           <strong>{t.title}</strong><small>{t.status === 'completed' ? 'Erledigt' : 'Offen'} · Priorität {t.priority ?? '–'}</small>
@@ -382,12 +409,5 @@ export function WeekCalendarPage() {
         </>}
       </aside>
     </div>
-    {showMarkers && <div className="classic-marker-editor">
-      <DayMarkersPanel key={`${weekStart.toISOString()}`} initialDay={selectedDay}
-        onSaved={()=>setRefresh(v=>v+1)}/>
-      <button type="button" className="button button-secondary" onClick={() => setRefresh(n => n + 1)}>
-        Marker im Kalender aktualisieren
-      </button>
-    </div>}
   </div>;
 }

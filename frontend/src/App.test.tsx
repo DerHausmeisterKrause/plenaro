@@ -776,6 +776,113 @@ describe('Plenaro web shell', () => {
     expect(screen.queryByText('Microsoft Graph ist noch nicht eingerichtet')).toBeNull();
   });
 
+  it('bearbeitet den Tagesmarker direkt rechts ohne eigenen Markereditor',async()=>{
+    renderAt('/week');
+    expect(await screen.findByRole('heading',{name:'Meine Woche'})).toBeTruthy();
+    expect(screen.queryByRole('button',{name:'UL / AM / BR bearbeiten'})).toBeNull();
+    expect(document.querySelector('.classic-marker-editor')).toBeNull();
+    const monday=new Date();
+    monday.setDate(monday.getDate()-((monday.getDay()+6)%7));
+    const day=localDate(monday);
+    const firstHeader=document.querySelector('.classic-calendar-header') as HTMLButtonElement;
+    fireEvent.click(firstHeader);
+    const group=screen.getByRole('group',{name:'Tagesart'});
+    fireEvent.click(within(group).getByRole('button',{name:'UL'}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
+      String(url)==='/api/v1/day-markers/'+day &&
+      (opts as RequestInit)?.method==='PUT' &&
+      JSON.parse(String((opts as RequestInit).body)).dayType==='UL'
+    )).toBe(true));
+    await waitFor(()=>expect(within(group).getByRole('button',{name:'UL'})
+      .getAttribute('aria-pressed')).toBe('true'));
+    const controls=screen.getByLabelText('Tagesmarker direkt bearbeiten');
+    expect(within(controls).getByRole('button',{name:'AM'})).toBeTruthy();
+    expect(within(controls).getByRole('button',{name:'HO'})).toBeTruthy();
+    expect(within(controls).getByRole('button',{name:'BR'})).toBeTruthy();
+  });
+
+  it('fragt vor einem neuen HO-Marker im Wochenkalender nach und erhält die Mail-/Kalenderabfolge',async()=>{
+    renderAt('/week');
+    expect(await screen.findByRole('heading',{name:'Meine Woche'})).toBeTruthy();
+    const monday=new Date();
+    monday.setDate(monday.getDate()-((monday.getDay()+6)%7));
+    const day=localDate(monday);
+    fireEvent.click(document.querySelector('.classic-calendar-header') as HTMLButtonElement);
+    const controls=screen.getByLabelText('Tagesmarker direkt bearbeiten');
+    fireEvent.click(within(controls).getByRole('button',{name:'HO'}));
+    expect(screen.getByRole('dialog',{name:'Tagesmarker beantragen'})).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'Nein'}));
+    expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
+      String(url)==='/api/v1/day-markers/'+day &&
+      (opts as RequestInit)?.method==='PUT')).toBe(false);
+    fireEvent.click(within(controls).getByRole('button',{name:'HO'}));
+    fireEvent.click(screen.getByRole('button',{name:'Ja, beantragen'}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
+      String(url)==='/api/v1/day-markers/'+day &&
+      (opts as RequestInit)?.method==='PUT' &&
+      JSON.parse(String((opts as RequestInit).body)).isHo===true)).toBe(true));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url])=>
+      String(url)==='/api/v1/br-requests/'+day+'/send')).toBe(true));
+    const requests=vi.mocked(fetch).mock.calls.map(([url])=>String(url));
+    expect(requests.indexOf('/api/v1/br-requests/preflight'))
+      .toBeLessThan(requests.indexOf('/api/v1/day-markers/'+day));
+    expect(requests.indexOf('/api/v1/day-markers/'+day))
+      .toBeLessThan(requests.indexOf('/api/v1/br-requests/'+day+'/send'));
+  });
+
+  it('erhält die Scrollposition der Wochenplanung beim Aktualisieren',async()=>{
+    renderAt('/week');
+    expect(await screen.findByRole('heading',{name:'Meine Woche'})).toBeTruthy();
+    const scroll=document.querySelector('.classic-calendar-scroll') as HTMLDivElement;
+    scroll.scrollTop=212;scroll.scrollLeft=88;
+    fireEvent.scroll(scroll);
+    const before=vi.mocked(fetch).mock.calls.filter(([url])=>
+      String(url)==='/api/v1/tasks/').length;
+    fireEvent.click(screen.getByRole('button',{name:'Kalender aktualisieren'}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.filter(([url])=>
+      String(url)==='/api/v1/tasks/').length).toBeGreaterThan(before));
+    expect(scroll.scrollTop).toBe(212);
+    expect(scroll.scrollLeft).toBe(88);
+  });
+
+  it('behält beim Nachladen von Znuny-Tickets die Scrollposition und den Listencontainer',async()=>{
+    ticketFixture.mine=Array.from({length:12},(_,i)=>({
+      ticketId:String(200+i),ticketNumber:String(200+i),
+      title:'Eintrag '+i,queue:'IT',state:'open',stateType:'open',
+      ownerId:77,responsibleId:null,createdAt:null,changedAt:null
+    }));
+    renderAt('/workspace');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    expect(await screen.findByRole('button',{name:/Eintrag 0/})).toBeTruthy();
+    const scroll=document.querySelector('.plenaro-today-list .plenaro-rows') as HTMLDivElement;
+    scroll.scrollTop=250;
+    fireEvent.scroll(scroll);
+    const before=vi.mocked(fetch).mock.calls.filter(([url])=>
+      String(url).includes('/api/v1/znuny/tickets?view=mine')).length;
+    fireEvent.click(screen.getByRole('button',{name:'Ansicht aktualisieren'}));
+    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.filter(([url])=>
+      String(url).includes('/api/v1/znuny/tickets?view=mine')).length)
+      .toBeGreaterThan(before));
+    expect(document.querySelector('.plenaro-today-list .plenaro-rows')).toBe(scroll);
+    expect(scroll.scrollTop).toBe(250);
+  });
+
+  it('behält beim Nachladen lokaler Aufgaben den Scrolloffset',async()=>{
+    allTasksFixture=Array.from({length:8},(_,i)=>({
+      id:'task-'+i,title:'Lokale Aufgabe '+i,description:'',
+      status:'planned' as const,priority:3,tags:[],plannedFor:null,
+      createdAt:'2026-11-26T06:00:00Z',updatedAt:'2026-11-26T06:00:00Z',
+      completedAt:null
+    }));
+    renderAt('/workspace');
+    fireEvent.click(await screen.findByRole('tab',{name:'Lokale Aufgaben'}));
+    expect((await screen.findAllByText('Lokale Aufgabe 0')).length).toBeGreaterThan(0);
+    const scroll=document.querySelector('.classic-list-scroll') as HTMLDivElement;
+    scroll.scrollTop=135;fireEvent.scroll(scroll);
+    fireEvent.click(screen.getByRole('button',{name:'Aufgaben aktualisieren'}));
+    await waitFor(()=>expect(scroll.scrollTop).toBe(135));
+  });
+
   it('verschiebt ein Segment mit Drag-and-drop und erhält Notizen durch den gezielten PATCH', async () => {
     const today = new Date();
     const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate());

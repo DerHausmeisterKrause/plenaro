@@ -1,3 +1,29 @@
+## 26.11.2026 – Phase 7/7: Listen-Scrollposition, Inline-Tagesmarker und weiße Jetzt-Linie
+
+- [x] Desktop-Referenz `DerHausmeisterKrause/project_tool/Views/WeekView.xaml` geprüft: `NowIndicatorCanvas` zeigt eine 2-px-weiße Linie über dem Zeitraster und einen weißen Marker auf dem aktuellen Tag; `DayMarkerSegment` bietet direkte Buttons für Normal/UL/AM sowie HO/BR. `TodayView.xaml` verwendet ScrollViewer für die Liste.
+- [x] Znuny-Ticketlisten in `ClassicTodayPage` bleiben während regelmäßiger oder manueller Aktualisierungen im DOM; statt Ausblenden der bestehenden Liste zeigt Plenaro eine kleine „Aktualisiere …“-Meldung. Gespeicherter `scrollTop` wird nach neuen Daten wiederhergestellt, bei bewusstem Tabwechsel zurückgesetzt.
+- [x] Lokale Aufgaben in `ClassicTasksPage` behalten ihren Scrolloffset auch nach Aktualisierung, Speichern und Statuswechsel. Der Wochenkalender bewahrt `scrollTop` und `scrollLeft` bei Daten-Neuladen.
+- [x] In der Wochenplanung den separaten, großflächigen aufklappbaren Tagesmarkereditor samt zusätzlichem Aktualisieren-Button entfernt. Rechts im Tagesdetail stehen direkte, statusanzeigende Buttons für Normal/UL/AM und HO/BR; Änderungen werden für den ausgewählten Tag sofort gespeichert und ohne Reload im Kalenderkopf angezeigt.
+- [x] Bestehende HO-/BR-Sicherheitsabläufe beibehalten: neue HO-/BR-Anträge erfordern explizite Bestätigung; vor Speicherung erfolgt Preflight für Outlook-/Mail-Voraussetzungen; neue HO-Anträge prüfen/erstellen den ganztägigen Outlook-Termin und lösen die Mail aus; BR ohne HO versendet nur E-Mail. Bestehende HO-Termine lassen sich weiterhin nachtragen/prüfen. Keine doppelten Sendungen bei vorhandenen akzeptierten Mailstatus.
+- [x] WPF-ähnliche weiße 2-px-Jetzt-Linie mit Tag-Punkt durch das 06–18-Uhr-Zeitraster integriert; nur in der angezeigten aktuellen Arbeitswoche sichtbar, Position nach lokaler Browserzeit, Aktualisierung ohne Kalender-Reload alle 30 Sekunden, ohne Einfluss auf Drag-and-drop.
+- [x] Frontend-Regressionstests für Inline-Marker, HO-Bestätigung und API-Aufrufreihenfolge, Scrollpositionen von Ticketliste/lokalen Aufgaben/Wochenkalender sowie reine Jetzt-Linien-Zeitberechnung.
+- [ ] Vollständige GitHub-CI prüfen, PR mergen und Dokumentationsstatus abhaken.
+- [ ] Live-Sichtprüfung: Scrollposition bei tatsächlichem automatischen Sync, neue Marker im rechten Tagespanel und weiße Jetzt-Linie auf der produktiven Wochenansicht.
+- [x] Keine Datenbankmigration, keine neuen Container, Ports, DNS-Namen oder Browserdienste.
+
+### Deployment nach grüner CI/Merge
+
+```bash
+cd /opt/plenaro
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build --no-deps web
+docker compose restart nginx
+docker compose ps
+```
+
+---
+
 ## 26.11.2026 – Phase 7/7: Aufgabenliste an dynamische Kartenhöhe anpassen
 
 - [x] Arbeitsplatz-/Ticket-Split im aktuellen Web-Frontend und WPF-Referenz `DerHausmeisterKrause/project_tool/Views/TodayView.xaml` auf Listenscrollen geprüft. WPF nutzt einen eigenen `ScrollViewer` für die Agenda; im Web-Layout wuchs die Karte mit den rechten Ticketdetails, während `.plenaro-rows` bei `66vh` endete.

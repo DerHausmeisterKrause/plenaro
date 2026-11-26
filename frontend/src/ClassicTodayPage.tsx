@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CalendarDays, Clock3, ExternalLink, MapPin, Pin, RefreshCw, Search, SlidersHorizontal, Star, Ticket } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { ClassicTasksPage } from './ClassicTasksPage';
@@ -35,6 +35,8 @@ export function ClassicTodayPage() {
   const [marker,setMarker]=useState<DayMarker|null>(null);
   const [selectedTicketId,setSelectedTicketId]=useState<string|null>(null);
   const [detailsExpanded,setDetailsExpanded]=useState(false);
+  const rowsRef=useRef<HTMLDivElement|null>(null);
+  const rowsScrollTop=useRef(0);
   const [selectedAgendaKey,setSelectedAgendaKey]=useState<string|null>(null);
   const [page,setPage]=useState(0);
   const [ticketSearch,setTicketSearch]=useState('');
@@ -127,6 +129,12 @@ export function ClassicTodayPage() {
   },[day]);
 
   const agenda=buildTodayAgenda(day,ticketAgenda,outlook);
+
+  // Refetches may reorder rows or briefly display a loading status. Restore
+  // the exact visible scroll offset instead of jumping to the first ticket.
+  useLayoutEffect(()=>{
+    if(rowsRef.current)rowsRef.current.scrollTop=rowsScrollTop.current;
+  },[tickets,agenda,tab,loading,listLoading]);
   const selectedAppointment=tab==='today'
     ?agenda.find(a=>a.kind==='outlook'&&a.key===selectedAgendaKey)
     :undefined;
@@ -138,6 +146,8 @@ export function ClassicTodayPage() {
   function changeTab(next:Tab) {
     setTab(next);setPage(0);setSelectedTicketId(null);setSelectedAgendaKey(null);
     setDetailsExpanded(false);
+    rowsScrollTop.current=0;
+    if(rowsRef.current)rowsRef.current.scrollTop=0;
     setTicketSearch('');setSearchDebounced('');
   }
   async function togglePin(ticket:CachedTicket){
@@ -336,11 +346,13 @@ export function ClassicTodayPage() {
           {tab==='new'&&access?.approved&&access.candidateUserId==null&&
             <p className="um-hint" role="status">Für die Anzeige neuer Ticketkandidaten
               muss ein Administrator deine Kandidaten-Benutzer-ID hinterlegen.</p>}
-          {(tab==='today'?loading:listLoading)?<p role="status" className="um-hint">
-            {tab==='today'?'Lade Tagesagenda …':'Lade Tickets …'}</p>:
-          tab==='today'?(agenda.length===0
+          {(tab==='today'?loading:listLoading)&&<p role="status" className="um-hint">
+            {tab==='today'?'Aktualisiere Tagesagenda …':'Aktualisiere Tickets …'}</p>}
+          {tab==='today'?(agenda.length===0
             ?<p className="plenaro-empty-list">Heute keine Outlook-Termine oder geplanten Ticketsegmente.</p>
-            :<div className="plenaro-rows" aria-label="Tagesagenda">
+            :<div className="plenaro-rows" aria-label="Tagesagenda"
+              ref={rowsRef}
+              onScroll={event=>{rowsScrollTop.current=event.currentTarget.scrollTop;}}>
               {agenda.map(item=><button key={item.key} type="button"
                 className={`plenaro-task-row plenaro-agenda-row${selectedAgendaKey===item.key?' selected':''}`}
                 onClick={()=>{setSelectedAgendaKey(item.key);setSelectedTicketId(item.ticketId);}}>
@@ -365,7 +377,9 @@ export function ClassicTodayPage() {
             <p>{tab==='new'?'Keine Tickets passend zum Pool- und Suchfilter gefunden.':
               'In dieser Ansicht sind keine Tickets vorhanden.'}</p>
           </div>:
-          <div className="plenaro-rows">{tickets.map(ticket=>
+          <div className="plenaro-rows" ref={rowsRef}
+            onScroll={event=>{rowsScrollTop.current=event.currentTarget.scrollTop;}}>
+            {tickets.map(ticket=>
             <div key={ticket.ticketId} className={`ticket-pin-row${ticket.isPinned&&tab==='active'?' is-pinned':''}`}>
               <button type="button"
                 className={`plenaro-task-row${selectedTicketId===ticket.ticketId?' selected':''}`}
