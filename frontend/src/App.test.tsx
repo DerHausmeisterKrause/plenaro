@@ -1196,7 +1196,7 @@ describe('Plenaro web shell', () => {
     const card=document.querySelector('.plenaro-workday');
     expect(card).not.toBeNull();
     expect(card?.querySelector('.plenaro-workday-date')?.textContent)
-      .toMatch(/KW\\s+\\d{1,2}/);
+      .toMatch(/KW\s+\d{1,2}/);
     expect(screen.queryByText('Tagesmarker für deine persönliche Planung')).toBeNull();
     expect(card?.querySelector('.plenaro-marker-actions')).toBeNull();
     for(const action of ['Normal','UL','AM','HO','BR'])
