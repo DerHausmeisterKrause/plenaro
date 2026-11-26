@@ -534,7 +534,19 @@ h1,h2,h3,p { margin-top: 0; }
 .plenaro-marker-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .plenaro-marker-pill { border: 1px solid var(--border); border-radius: 9px; background: var(--surface-soft); padding: 8px 14px; font-size: 11px; font-weight: 700; color: var(--muted-strong); cursor: pointer; }
 .plenaro-marker-pill.active { color: #fff; border-color: #4365ed; background: #4365ed; }
-.plenaro-today-list { flex: 1; min-height: 420px; display: flex; flex-direction: column; }
+.plenaro-today-list { flex: 1 1 auto; min-width: 0; min-height: 420px; display: flex; flex-direction: column; }
+/* The grid row grows with the open ticket details on the right. The task
+   list must consume all remaining card height, not stop at an arbitrary 66vh.
+   A zero-height flex basis keeps hundreds of ticket rows from stretching
+   the entire desktop grid; only the list itself scrolls. */
+.plenaro-today-list > .plenaro-rows {
+  flex: 1 1 0px;
+  height: 0;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
 .plenaro-tabs { display: flex; gap: 0; overflow-x: auto; padding-bottom: 12px; }
 .plenaro-today .plenaro-tabs { margin-bottom: 12px; padding: 12px 14px; }
 .plenaro-tabs button { background: var(--surface-soft); border: 1px solid var(--border); padding: 10px 16px; white-space: nowrap; color: var(--muted-strong); font-size: 12px; font-weight: 700; }
@@ -567,6 +579,13 @@ h1,h2,h3,p { margin-top: 0; }
   .plenaro-today-columns,
   .plenaro-today-columns.is-ticket-expanded { grid-template-columns: minmax(0, 1fr); }
   .plenaro-today-list { min-height: 300px; }
+  /* Stacked layout has no neighbouring detail column to match: restore
+     the original viewport-capped list height instead of a forced full-page scroll. */
+  .plenaro-today-list > .plenaro-rows {
+    flex: 0 1 auto;
+    height: auto;
+    max-height: 66vh;
+  }
 }
 @media (max-width: 650px) { .plenaro-today .content-card { padding: 12px; } .plenaro-marker-actions { width: 100%; } .plenaro-marker-pill { flex: 1; padding: 8px; } .plenaro-tabs button { padding: 9px 10px; } }
 

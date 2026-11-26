@@ -1,3 +1,27 @@
+## 26.11.2026 – Phase 7/7: Aufgabenliste an dynamische Kartenhöhe anpassen
+
+- [x] Arbeitsplatz-/Ticket-Split im aktuellen Web-Frontend und WPF-Referenz `DerHausmeisterKrause/project_tool/Views/TodayView.xaml` auf Listenscrollen geprüft. WPF nutzt einen eigenen `ScrollViewer` für die Agenda; im Web-Layout wuchs die Karte mit den rechten Ticketdetails, während `.plenaro-rows` bei `66vh` endete.
+- [x] Desktop: `.plenaro-today-list > .plenaro-rows` füllt per Flex-Growth und nullbasierter flexibler Höhe den gesamten verfügbaren Bereich **innerhalb** der Aufgaben-Karte. Das künstliche `66vh`-Limit entfällt für den Desktop; Listeninhalt scrollt in der Karte statt das Zwei-Spalten-Layout auf die gesamte Listenlänge aufzublähen.
+- [x] Änderungen an der rechten Ticketdetailansicht oder beim Auf-/Zuklappen werden durch CSS-Grid/Flex automatisch berücksichtigt, ohne ResizeObserver, Polling oder DOM-Messungen.
+- [x] Mobil bis 1050 px bleibt das bisherige einspaltige Layout mit `max-height:66vh` für die Liste; Pagination, Tagesmarker, Filter und Ticket-Auswahl bleiben unverändert.
+- [x] CSS-Vertragstest `frontend/src/workspaceListLayout.test.ts` überprüft Flex-Füllung, Scrollbarkeit, Entfernung des Desktop-Limits und mobile Wiederherstellung.
+- [ ] PR, vollständige GitHub-CI und Merge nach `main` abschließen.
+- [ ] Produktive Sichtprüfung: Liste reicht bis zum unteren Kartenrand, passt sich geöffneten langen Tickets und Expand-/Restore-Modus an, unabhängig von der Anzahl der Einträge.
+- [x] Keine Backend-/Datenbankänderung, zusätzliche Container, DNS-Namen oder Compose-Anpassungen.
+
+### Produktiv-Deployment nach Merge
+
+```bash
+cd /opt/plenaro
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build --no-deps web
+docker compose restart nginx
+docker compose ps
+```
+
+---
+
 ## 26.11.2026 – Phase 7/7: Kompakte Favoritenansicht, Diagnose nur bei Admin-Opt-in
 
 - [x] Vorhandene Favoritenansicht und Admin-Diagnose geprüft; Referenz WPF `DerHausmeisterKrause/project_tool/Services/WebShortcutBrowserSessionManager.cs` konsultiert (eigenständige Browseransicht ohne dauerhafte Debugkonsole).
