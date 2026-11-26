@@ -14,13 +14,13 @@ vi.mock('./favoriteDebugApi',()=>debugMocks);
 
 const mocks=vi.hoisted(()=>({
   loadFavorites:vi.fn(),
-  startFavorite:vi.fn(),
+  startFavorite:vi.fn(),setFavoriteMode:vi.fn(),
   createPersonalFavorite:vi.fn(),updatePersonalFavorite:vi.fn(),
   removePersonalFavorite:vi.fn(),sortPersonalFavorites:vi.fn(),
 }));
 vi.mock('./favoritesApi',()=>({
   loadFavorites:mocks.loadFavorites,
-  startFavorite:mocks.startFavorite,
+  startFavorite:mocks.startFavorite,setFavoriteMode:mocks.setFavoriteMode,
   createPersonalFavorite:mocks.createPersonalFavorite,
   updatePersonalFavorite:mocks.updatePersonalFavorite,
   removePersonalFavorite:mocks.removePersonalFavorite,
@@ -68,6 +68,35 @@ describe('Favorite iframe bootstrap',()=>{
     expect(mocks.startFavorite).toHaveBeenCalledTimes(1);
     expect(mocks.startFavorite).toHaveBeenCalledWith(favorite.id);
     expect(screen.getByRole('link',{name:'Originalseite öffnen'}).getAttribute('href')).toBe(url);
+  });
+  it('uses the direct sandboxed iframe without starting a proxy session',async()=>{
+    mocks.loadFavorites.mockResolvedValue([{...favorite,openMode:'direct'}]);
+    renderStrictFavorite();
+    const frame=await screen.findByTitle('Wiki');
+    expect(frame.getAttribute('src')).toBe(favorite.url);
+    expect(frame.getAttribute('sandbox')).not.toContain('allow-same-origin');
+    expect(mocks.startFavorite).not.toHaveBeenCalled();
+  });
+  it('opens a user-selected external favorite only through a browser link',async()=>{
+    mocks.loadFavorites.mockResolvedValue([{...favorite,openMode:'external'}]);
+    renderStrictFavorite();
+    const link=await screen.findByRole('link',{name:'Im Browser öffnen'});
+    expect(link.getAttribute('href')).toBe(favorite.url);
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(mocks.startFavorite).not.toHaveBeenCalled();
+    expect(document.querySelector('iframe')).toBeNull();
+  });
+  it('allows switching the persisted mode even after a failed proxy start',async()=>{
+    mocks.startFavorite.mockRejectedValueOnce(new Error('Nicht erreichbar'));
+    mocks.setFavoriteMode.mockImplementation(async()=>{
+      mocks.loadFavorites.mockResolvedValue([{...favorite,openMode:'external'}]);
+    });
+    renderStrictFavorite();
+    await screen.findByText('Nicht erreichbar');
+    fireEvent.change(screen.getByLabelText('Öffnungsmodus'),{target:{value:'external'}});
+    expect(await screen.findByRole('link',{name:'Im Browser öffnen'})).toBeTruthy();
+    expect(mocks.setFavoriteMode).toHaveBeenCalledWith(favorite.id,'external');
+    expect(mocks.startFavorite).toHaveBeenCalledTimes(1);
   });
   it('shows network failure and allows reconnect',async()=>{
     mocks.startFavorite.mockRejectedValueOnce(new Error('Firewall-Freigabe und Routing prüfen.'));
