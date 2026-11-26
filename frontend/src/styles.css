@@ -1087,6 +1087,43 @@ h1,h2,h3,p { margin-top: 0; }
   .znuny-web-portal.page{padding:7px 8px 9px}
 }
 
+/* Minimal favorite toolbar: maximize space for the actual embedded page.
+   Only the favorite view changes; the Znuny portal keeps its own header. */
+.favorite-browser-page .favorite-browser-toolbar {
+  min-height:44px; padding:6px 10px; gap:10px; border-radius:9px;
+}
+.favorite-browser-identity {
+  display:flex; align-items:center; gap:7px; min-width:0;
+}
+.favorite-browser-identity > svg {
+  color:var(--muted-strong); flex-shrink:0;
+}
+.favorite-browser-toolbar .favorite-browser-identity h1 {
+  font-size:15px; line-height:1.3; margin:0;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  max-width:min(40vw,360px);
+}
+.favorite-browser-context {
+  color:var(--muted-strong); font-size:10px; white-space:nowrap;
+}
+.favorite-browser-toolbar .favorite-browser-actions {
+  gap:6px; justify-content:flex-end;
+}
+.favorite-browser-toolbar .favorite-browser-actions .button {
+  min-height:30px; padding:5px 9px; font-size:11px;
+}
+@media (max-width:720px) {
+  .favorite-browser-page .favorite-browser-toolbar {
+    flex-direction:column; align-items:stretch; gap:7px;
+  }
+  .favorite-browser-toolbar .favorite-browser-actions {
+    justify-content:flex-start;
+  }
+  .favorite-browser-toolbar .favorite-browser-identity h1 {
+    max-width:65vw;
+  }
+}
+
 /* Personal web favorites reuse the native full-window HTML view. */
 .favorites-panel{display:grid;gap:14px;margin-bottom:18px}
 .favorites-panel p{margin:0;color:var(--muted-strong)}
