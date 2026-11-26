@@ -197,7 +197,7 @@ public static class ZnunySyncEndpoints
         {
             var account=await users.GetUserAsync(http.User);
             if(account is null || account.IsDisabled)return Results.Unauthorized();
-            if(view is not (null or "mine" or "new" or "completed"))
+            if(view is not (null or "mine" or "new" or "completed" or "unread"))
                 return Results.BadRequest(new{error="Ungültige Ansicht."});
             if(queue is {Length:>200} || state is {Length:>100})
                 return Results.BadRequest(new{error="Filter zu lang."});
@@ -213,13 +213,28 @@ public static class ZnunySyncEndpoints
             // segments do NOT depend on a working GenericInterface search.
             // Only the unassigned candidate pool requires queue authorization.
             var myTickets=(await visibility.PersonalTicketsAsync(account.Id,ct)).ToArray();
-            var newQueues=view=="new"?
+            await using var db=await Open(config,ct);
+            // Only probe remote candidate queues when a non-personal unread
+            // ticket exists; ordinary notification polls stay local.
+            var needsCandidateQueues=view=="new";
+            if(view=="unread")
+            {
+                await using var check=new NpgsqlCommand("""
+                    SELECT EXISTS(SELECT 1 FROM znuny_ticket_article_read_state a
+                    WHERE a.user_id=@user AND a.read_at IS NULL
+                      AND NOT(a.ticket_id=ANY(@mine)))
+                    """,db);
+                check.Parameters.AddWithValue("user",account.Id);
+                check.Parameters.Add("mine",NpgsqlDbType.Array|NpgsqlDbType.Varchar).Value=myTickets;
+                needsCandidateQueues=await check.ExecuteScalarAsync(ct) is true;
+            }
+            var newQueues=needsCandidateQueues?
                 (await visibility.NewQueuesAsync(account.Id,ct)).ToArray():
                 Array.Empty<string>();
             if(view=="new" && newQueues.Length==0 ||
-               view!="new" && myTickets.Length==0)
+               view=="unread" && myTickets.Length==0 && newQueues.Length==0 ||
+               view is not ("new" or "unread") && myTickets.Length==0)
                 return Results.Ok(Array.Empty<object>());
-            await using var db=await Open(config,ct);
             var sortColumn=sort switch {
                 "created"=>"t.created_at",
                 "title"=>"t.title",
@@ -234,7 +249,12 @@ public static class ZnunySyncEndpoints
                     (pin.ticket_id IS NOT NULL) AS is_pinned,
                     (SELECT count(*)::integer FROM znuny_ticket_article_read_state a
                      WHERE a.user_id=@user AND a.ticket_id=t.ticket_id
-                       AND a.read_at IS NULL) AS unread_article_count
+                       AND a.read_at IS NULL) AS unread_article_count,
+                    CASE WHEN @view='unread' THEN ARRAY(
+                        SELECT a.article_id FROM znuny_ticket_article_read_state a
+                        WHERE a.user_id=@user AND a.ticket_id=t.ticket_id
+                          AND a.read_at IS NULL ORDER BY a.article_id)
+                    ELSE ARRAY[]::varchar[] END AS unread_article_ids
                 FROM znuny_cached_tickets t
                 INNER JOIN znuny_approved_agent_bindings b ON b.user_id=@user
                 LEFT JOIN znuny_user_settings p ON p.user_id=b.user_id
@@ -244,20 +264,27 @@ public static class ZnunySyncEndpoints
                 LEFT JOIN znuny_ticket_workspaces w ON w.ticket_id=t.ticket_id
                     AND w.user_id=@user
                 WHERE (
-                    (@view='new' AND p.candidate_user_id IS NOT NULL AND
+                    (@view IN ('new','unread') AND p.candidate_user_id IS NOT NULL AND
+                      lower(t.state_type)<>'closed' AND
                       (t.owner_agent_id IS NULL OR t.owner_agent_id IN (0,p.candidate_user_id)) AND
                       (t.responsible_agent_id IS NULL OR t.responsible_agent_id IN (0,p.candidate_user_id)) AND
                       t.queue=ANY(@newQueues) AND NOT(t.ticket_id=ANY(@myTickets)))
                     OR (@view<>'new' AND t.ticket_id=ANY(@myTickets))
                 )
-                AND ((@view='completed' AND lower(t.state_type)='closed')
+                AND (@view='unread' OR
+                     (@view='completed' AND lower(t.state_type)='closed')
                   OR (@view<>'completed' AND lower(t.state_type)<>'closed'))
+                AND (@view<>'unread' OR EXISTS(
+                    SELECT 1 FROM znuny_ticket_article_read_state a
+                    WHERE a.user_id=@user AND a.ticket_id=t.ticket_id AND a.read_at IS NULL))
                 AND (@queue='' OR t.queue=@queue)
                 AND (@state='' OR t.state=@state)
                 -- WPF-style candidate inclusion/exclusion. Split comma,
                 -- semicolon and whitespace-delimited phrases; token matching
                 -- is case-insensitive and ignores regex/wildcard metacharacters.
-                AND (@view<>'new' OR COALESCE(p.show_all_candidate_pool,false) OR
+                AND (@view NOT IN ('new','unread') OR
+                    (@view='unread' AND t.ticket_id=ANY(@myTickets)) OR
+                    COALESCE(p.show_all_candidate_pool,false) OR
                   (
                     EXISTS(
                       SELECT 1 FROM regexp_split_to_table(
@@ -287,7 +314,8 @@ public static class ZnunySyncEndpoints
                                   THEN 0 ELSE 1 END,
                          CASE WHEN @view='mine' THEN pin.pinned_at END DESC NULLS LAST,
                          {sortColumn} {sortDirection} NULLS LAST,t.ticket_id DESC
-                LIMIT @max OFFSET @skip
+                LIMIT CASE WHEN @view='unread' THEN NULL ELSE @max END
+                OFFSET CASE WHEN @view='unread' THEN 0 ELSE @skip END
                 """,db);
             cmd.Parameters.AddWithValue("user",account.Id);
             cmd.Parameters.Add("myTickets",NpgsqlTypes.NpgsqlDbType.Array |
@@ -317,12 +345,46 @@ public static class ZnunySyncEndpoints
                     responsibleId=r.IsDBNull(7)?(int?)null:r.GetInt32(7),
                     createdAt=Date(8),changedAt=Date(9),
                     isPinned=r.GetBoolean(10),
-                    unreadArticleCount=r.GetInt32(11)
+                    unreadArticleCount=r.GetInt32(11),
+                    unreadArticleIds=r.GetFieldValue<string[]>(12)
                 });
             }
-            await ZnunyArticleReadTracker.InitializeFromHeadsAsync(
-                db,account.Id,ticketIds,ct);
+            if(view!="unread")
+                await ZnunyArticleReadTracker.InitializeFromHeadsAsync(
+                    db,account.Id,ticketIds,ct);
             return Results.Ok(tickets);
+        });
+
+        // Direct ticket links use the same ticketId authorization filter
+        // as articles and other ticket routes, including after reading.
+        reader.MapGet("/tickets/{ticketId}/summary",async(string ticketId,HttpContext http,
+            UserManager<ApplicationUser> users,IConfiguration config,CancellationToken ct)=>{
+            var account=await users.GetUserAsync(http.User);
+            if(account is null || account.IsDisabled)return Results.Unauthorized();
+            await using var db=await Open(config,ct);
+            await using var cmd=new NpgsqlCommand("""
+                SELECT t.ticket_id,t.ticket_number,t.title,t.queue,t.state,t.state_type,
+                    t.owner_agent_id,t.responsible_agent_id,t.created_at,t.changed_at,
+                    (SELECT count(*)::integer FROM znuny_ticket_article_read_state a
+                     WHERE a.user_id=@user AND a.ticket_id=t.ticket_id
+                       AND a.read_at IS NULL)
+                FROM znuny_cached_tickets t
+                JOIN znuny_approved_agent_bindings b ON b.user_id=@user
+                WHERE t.ticket_id=@ticket
+                """,db);
+            cmd.Parameters.AddWithValue("user",account.Id);
+            cmd.Parameters.AddWithValue("ticket",ticketId);
+            await using var r=await cmd.ExecuteReaderAsync(ct);
+            if(!await r.ReadAsync(ct))return Results.NotFound();
+            DateTimeOffset? Date(int col)=>r.IsDBNull(col)?null:
+                new DateTimeOffset(r.GetDateTime(col),TimeSpan.Zero);
+            return Results.Ok(new {
+                ticketId=r.GetString(0),ticketNumber=r.GetString(1),
+                title=r.GetString(2),queue=r.GetString(3),state=r.GetString(4),
+                stateType=r.GetString(5),ownerId=r.IsDBNull(6)?(int?)null:r.GetInt32(6),
+                responsibleId=r.IsDBNull(7)?(int?)null:r.GetInt32(7),
+                createdAt=Date(8),changedAt=Date(9),unreadArticleCount=r.GetInt32(10)
+            });
         });
 
         // Per-user pinning affects only the current ticket list, never OTRS.

@@ -167,6 +167,15 @@ beforeEach(() => {
     if (path === '/api/v1/znuny/tickets/status') return {
       ok:true,status:200,json:async()=>({...candidateAccess}),
     };
+    if (path==='/api/v1/znuny/tickets?view=unread') return {
+      ok:true,status:200,json:async()=>Object.values(ticketFixture).flat()
+        .filter(t=>!!t.unreadArticleCount).map(t=>({...t,
+          unreadArticleIds:t.ticketId==='77'?[...unreadArticleIdsFixture]:['99']})),
+    };
+    if (path.startsWith('/api/v1/znuny/tickets/')&&path.endsWith('/summary')) {
+      const ticket=Object.values(ticketFixture).flat().find(t=>t.ticketId===path.split('/').at(-2));
+      return {ok:!!ticket,status:ticket?200:404,json:async()=>ticket??{}};
+    }
     if (path.startsWith('/api/v1/znuny/tickets?')) return {
       ok:true,status:200,json:async()=>ticketFixture[
         new URL('http://localhost'+path).searchParams.get('view') as keyof typeof ticketFixture ?? 'mine']??[],
@@ -324,6 +333,7 @@ beforeEach(() => {
     configurable:true,value:vi.fn()
   });
   window.localStorage.clear();
+  window.sessionStorage.clear();
 });
 afterEach(() => {
   cleanup();
@@ -518,7 +528,7 @@ describe('Plenaro web shell', () => {
     const button = await screen.findByRole('button', { name: /Benachrichtigungen öffnen, 0 ungelesen/ });
     fireEvent.click(button);
     expect(await screen.findByRole('region', { name: 'Benachrichtigungen' })).toBeTruthy();
-    expect(screen.getByText('Keine ungelesenen Erinnerungen.')).toBeTruthy();
+    expect(screen.getByText('Keine ungelesenen Benachrichtigungen.')).toBeTruthy();
   });
 
   it('öffnet die direkt verlinkte Aufgabe aus einer ungelesenen Erinnerung', async () => {
@@ -535,6 +545,70 @@ describe('Plenaro web shell', () => {
     expect(screen.getByText('Aufgabe aus Reminder')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Aufgabe öffnen' }).getAttribute('href'))
       .toBe('/workspace?task=2f145e76-1853-4b88-a1be-6fbc0bdc42b7');
+  });
+
+  it('zählt Tickets statt Artikel in der Glocke, öffnet das Ticket und aktualisiert nach dem Lesen',async()=>{
+    ticketFixture.mine=[{ticketId:'77',ticketNumber:'2026#77',title:'Ticket mit neuen Nachrichten',
+      queue:'IT',state:'open',stateType:'open',ownerId:77,responsibleId:null,
+      createdAt:null,changedAt:null,unreadArticleCount:2}];
+    customerArticlesFixture=['13','14'].map(id=>({
+      id,subject:'Neue Nachricht '+id,body:'Nachricht '+id,
+      from:'Kunde <kunde@example.org>',to:'support@example.org',replyTo:'',
+      senderType:'customer',channel:'Email',created:'2026-11-24 09:00:00'
+    }));
+    unreadArticleIdsFixture=['13','14'];
+    renderAt('/');
+    fireEvent.click(await screen.findByRole('button',{name:'Benachrichtigungen öffnen, 1 ungelesen'}));
+    const link=screen.getByRole('link',{name:/Neue Nachricht im Ticket #2026#77/});
+    expect(link.getAttribute('href')).toBe('/workspace/ticket/77');
+    expect(within(link).getByText(/2 ungelesen/)).toBeTruthy();
+    fireEvent.click(link);
+    expect(await screen.findByRole('heading',{name:'Ticket mit neuen Nachrichten'})).toBeTruthy();
+    await waitFor(()=>expect(unreadArticleIdsFixture).toEqual(['14']));
+    fireEvent.click(await screen.findByRole('button',{name:'Benachrichtigungen öffnen, 1 ungelesen'}));
+    expect(await screen.findByText('1 ungelesen · Ticket öffnen')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Ticket-Nachricht auswählen'),{target:{value:'14'}});
+    expect(await screen.findByRole('button',{name:'Benachrichtigungen öffnen, 0 ungelesen'})).toBeTruthy();
+    expect(screen.getByText('Keine ungelesenen Benachrichtigungen.')).toBeTruthy();
+  });
+
+  it('fragt vor Browserfreigabe nach und fordert die Berechtigung erst bei Ja an',async()=>{
+    const requestPermission=vi.fn(async()=> 'granted');
+    const notification=class {
+      static permission='default';
+      static requestPermission=async()=>{
+        notification.permission=await requestPermission();
+        return notification.permission;
+      };
+    };
+    vi.stubGlobal('isSecureContext',true);
+    vi.stubGlobal('Notification',notification);
+    renderAt('/');
+    const dialog=await screen.findByRole('dialog',{name:'Benachrichtigungen aktivieren?'});
+    expect(requestPermission).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button',{name:'Ja'}));
+    await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull());
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button',{name:'Benachrichtigungen öffnen, 0 ungelesen'}));
+    expect(screen.getByRole('button',{name:'Browserhinweise deaktivieren'})).toBeTruthy();
+  });
+
+  it('Nein unterdrückt die Freigabe und den Dialog für diese Browsersitzung',async()=>{
+    const requestPermission=vi.fn();
+    vi.stubGlobal('isSecureContext',true);
+    vi.stubGlobal('Notification',class {
+      static permission='default';
+      static requestPermission=requestPermission;
+    });
+    const first=renderAt('/');
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button',{name:'Nein'}));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(requestPermission).not.toHaveBeenCalled();
+    first.unmount();
+    renderAt('/');
+    await screen.findByRole('button',{name:'Benachrichtigungen öffnen, 0 ungelesen'});
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(requestPermission).not.toHaveBeenCalled();
   });
 
   it('bietet persönliche Reminder-Einstellungen mit Standardvorlauf', async () => {

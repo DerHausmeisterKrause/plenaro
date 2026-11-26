@@ -1326,3 +1326,12 @@ h1,h2,h3,p { margin-top: 0; }
 
 /* At stacked/mobile widths the split is already full-width; hide the no-op toggle. */
 @media (max-width: 1050px) { .classic-wpf-ticket-expand { display: none; } }
+
+/* Ticket notifications and first-session permission prompt. */
+.plenaro-ticket-notification { color: var(--text); text-decoration: none; }
+.plenaro-ticket-notification:hover, .plenaro-ticket-notification:focus-visible { border-color: var(--blue); }
+.plenaro-notification-prompt-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 20px; background: rgba(15,23,42,.58); }
+.plenaro-notification-prompt { width: min(440px,100%); background: var(--surface); color: var(--text); padding: 24px; display: grid; gap: 14px; box-shadow: var(--shadow); }
+.plenaro-notification-prompt h2, .plenaro-notification-prompt p { margin: 0; }
+.plenaro-notification-prompt .plenaro-notification-actions { justify-content: flex-end; }
+.plenaro-notification-count { min-width: 17px; width: max-content; }
