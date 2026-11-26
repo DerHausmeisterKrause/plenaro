@@ -121,7 +121,7 @@ describe('Favorite iframe bootstrap',()=>{
   it('shows safe proxy HTTP errors only for admin users',async()=>{
     renderStrictFavorite(true);
     expect(await screen.findByRole('region',{name:'Favoriten-Diagnose'})).toBeTruthy();
-    expect(await screen.findByText(/Zielserver nicht erreichbar, Verbindung oder TLS prüfen/)).toBeTruthy();
+    expect(await screen.findByText(/Zielserver nicht erreichbar – Netzwerk und Firewall prüfen/)).toBeTruthy();
     expect(screen.getByText('502')).toBeTruthy();
     expect(debugMocks.readFavoriteDebugEvents).toHaveBeenCalledWith(favorite.id,0);
   });
