@@ -1,5 +1,5 @@
-import {useEffect,useState} from 'react';
-import {Link,useSearchParams} from 'react-router-dom';
+import {useEffect,useRef,useState} from 'react';
+import {Link} from 'react-router-dom';
 import {ExternalLink,RefreshCw,ShieldCheck,Ticket,WifiOff} from 'lucide-react';
 
 type NativeStatus={enabled:boolean;mode?:string;reason?:string};
@@ -9,9 +9,8 @@ type NativeStatus={enabled:boolean;mode?:string;reason?:string};
  * No Selenium, remote desktop, screenshots or WebDriver code executes here.
  * Authentication and upstream cookies stay in Plenaro's per-user proxy.
  */
-export function ZnunyWebPortalPage(){
-  const [params]=useSearchParams();
-  const ticket=params.get('ticket');
+export function ZnunyWebPortalPage({retainedTicket=null,navigationKey}:{retainedTicket?:string|null;navigationKey?:string}={}){
+  const ticket=retainedTicket;
   const validTicket=ticket===null||/^\d{1,40}$/.test(ticket);
   const [status,setStatus]=useState<NativeStatus|null>(null);
   const [url,setUrl]=useState('');
@@ -20,6 +19,7 @@ export function ZnunyWebPortalPage(){
   const [loading,setLoading]=useState(true);
   const [revision,setRevision]=useState(0);
   const [interactive,setInteractive]=useState(false);
+  const startup=useRef<{key:string;revision:number;promise:Promise<{url:string;openUrl?:string;requiresInteractiveLogin?:boolean}>}|null>(null);
 
   // Check configuration before attempting login. Without a separate HTTPS
   // origin fail closed: never run legacy HTML with Plenaro's own privileges.
@@ -47,8 +47,10 @@ export function ZnunyWebPortalPage(){
     if(!status?.enabled)return;
     let active=true;
     setLoading(true);setUrl('');setOpenUrl('');setError('');setInteractive(false);
-    void(async()=>{
-      try{
+    const key=JSON.stringify([ticket,navigationKey,revision]);
+    if(startup.current?.key!==key){
+      const reset=revision>(startup.current?.revision??0);
+      const promise=(async()=>{
         if(!validTicket)throw new Error('Ungültige Ticket-ID.');
         const tokenResponse=await fetch('/api/v1/auth/csrf',{
           credentials:'same-origin',cache:'no-store'});
@@ -57,7 +59,7 @@ export function ZnunyWebPortalPage(){
         const response=await fetch('/api/v1/znuny/native/start',{
           method:'POST',credentials:'same-origin',cache:'no-store',
           headers:{'X-CSRF-TOKEN':token.token,'Content-Type':'application/json'},
-          body:JSON.stringify({ticketId:ticket,reset:revision>0})
+          body:JSON.stringify({ticketId:ticket,reset})
         });
         const body=await response.json().catch(()=>({})) as {url?:string;openUrl?:string;error?:string;code?:string;requiresInteractiveLogin?:boolean};
         if(!response.ok||!body.url)
@@ -65,7 +67,13 @@ export function ZnunyWebPortalPage(){
         const external=new URL(body.url);
         if(external.protocol!=='https:'||external.origin===window.location.origin)
           throw new Error('Ungültige Ticketsystem-Proxy-Adresse.');
+        return {...body,url:external.toString()};
+      })();
+      startup.current={key,revision,promise};
+    }
+    void startup.current.promise.then(body=>{
         if(active){
+          const external=new URL(body.url);
           setInteractive(body.requiresInteractiveLogin===true);setUrl(external.toString());
           if(body.openUrl){
             const destination=new URL(body.openUrl);
@@ -75,15 +83,14 @@ export function ZnunyWebPortalPage(){
               setOpenUrl(destination.href);
           }
         }
-      }catch(e){
+      }).catch(e=>{
         if(active){
           setError(e instanceof Error?e.message:'Native Ticketsystem-Ansicht nicht erreichbar.');
           setLoading(false);
         }
-      }
-    })();
+      });
     return()=>{active=false;};
-  },[status,validTicket,ticket,revision]);
+  },[status,validTicket,ticket,navigationKey,revision]);
 
   const configured=status?.enabled===true;
   return <div className="page znuny-web-portal">

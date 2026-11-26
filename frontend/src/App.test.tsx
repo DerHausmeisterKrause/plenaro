@@ -675,6 +675,20 @@ describe('Plenaro web shell', () => {
       String(url).includes('/api/v1/znuny/browser/'))).toBe(false);
   });
 
+  it('resumes the real native portal without replaying its one-time bootstrap',async()=>{
+    nativeProxyEnabled=true;
+    renderAt('/ticket-system?ticket=77');
+    const frame=await screen.findByTitle('Ticketsystem – isolierte, native Weboberfläche');
+    fireEvent.load(frame);
+    fireEvent.click(screen.getByRole('link',{name:'Plenaro – Arbeitsplatz'}));
+    expect(frame.closest('.retained-web-page')?.hasAttribute('hidden')).toBe(true);
+    fireEvent.click(within(screen.getByRole('navigation',{name:'Hauptnavigation'}))
+      .getByRole('link',{name:'Ticketsystem'}));
+    await waitFor(()=>expect(frame.closest('.retained-web-page')?.hasAttribute('hidden')).toBe(false));
+    expect(screen.getByTitle('Ticketsystem – isolierte, native Weboberfläche')).toBe(frame);
+    expect(vi.mocked(fetch).mock.calls.filter(([url])=>url==='/api/v1/znuny/native/start')).toHaveLength(1);
+  });
+
   it('zeigt das eingebettete Ticketsystem mit derselben kompakten Leiste wie die Favoriten',async()=>{
     nativeProxyEnabled=true;
     renderAt('/ticket-system');
