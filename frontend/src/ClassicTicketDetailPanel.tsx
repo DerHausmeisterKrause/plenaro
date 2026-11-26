@@ -119,7 +119,7 @@ export function ClassicTicketDetailPanel({ticket,onChanged,detailsExpanded=false
 
       <label htmlFor="classic-wpf-ticket-url">Ticket URL</label>
       <div className="classic-wpf-url-row">
-        <input id="classic-wpf-ticket-url" type="url" maxLength={2048}
+        <input id="classic-wpf-ticket-url" type="text" maxLength={2048}
           value={fields.directTicketUrl??''} readOnly
           onFocus={e=>e.currentTarget.select()}
           placeholder={loading?'Ticket-URL wird geladen …':'Ticket-Webadresse nicht konfiguriert'}/>
