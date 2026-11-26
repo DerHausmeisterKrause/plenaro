@@ -8,6 +8,24 @@ import {
   znunyAttachmentDownloadUrl,type ZnunyArticle,
 } from './znunySyncApi';
 
+// Znuny timestamps are normally ISO or YYYY-MM-DD HH:mm:ss. Compare
+// calendar timestamps consistently; numeric article IDs break ties.
+function newestFirst(articles:ZnunyArticle[]){
+  const time=(value:string)=>Date.parse(value.replace(' ','T'));
+  return [...articles].sort((a,b)=>{
+    const ta=time(a.created),tb=time(b.created);
+    if(Number.isFinite(ta)&&Number.isFinite(tb)&&ta!==tb)return tb-ta;
+    if(/^\d+$/.test(a.id)&&/^\d+$/.test(b.id))
+      return b.id.length-a.id.length||b.id.localeCompare(a.id);
+    return b.id.localeCompare(a.id);
+  });
+}
+function selectedArticleId(articles:ZnunyArticle[],unread:string[],previous=''){
+  if(articles.some(a=>a.id===previous))return previous;
+  const ordered=newestFirst(articles);
+  return ordered.find(a=>unread.includes(a.id))?.id??ordered[0]?.id??'';
+}
+
 export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onClosed,onReadChange}:{
   ticketId:string;closed:boolean;closeRequest?:number;
   onClosed?:()=>void;onReadChange?:()=>void;
@@ -35,9 +53,7 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
       setArticles(data.articles);
       setUnreadIds(data.unreadArticleIds??[]);
       setTicketNumber(data.ticketNumber);setTicketTitle(data.title);
-      setSelectedId(id=>data.articles.some(item=>item.id===id)?id:
-        data.articles.find(item=>(data.unreadArticleIds??[]).includes(item.id))?.id??
-        data.articles[data.articles.length-1]?.id??'');
+      setSelectedId(id=>selectedArticleId(data.articles,data.unreadArticleIds??[],id));
       setLoaded(true);
     }catch(e){
       setError(e instanceof Error?e.message:'Ticket-Nachrichten nicht verfügbar.');
@@ -59,9 +75,7 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
       void readZnunyArticles(ticketId).then(data=>{
         setArticles(data.articles);
         setUnreadIds(data.unreadArticleIds??[]);
-        setSelectedId(id=>data.articles.some(item=>item.id===id)?id:
-          data.articles.find(item=>(data.unreadArticleIds??[]).includes(item.id))?.id??
-          data.articles[data.articles.length-1]?.id??'');
+        setSelectedId(id=>selectedArticleId(data.articles,data.unreadArticleIds??[],id));
       }).catch(()=>{ /* existing articles remain readable */ });
     },60_000);
     return()=>window.clearInterval(interval);
@@ -153,7 +167,7 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
         const data=await readZnunyArticles(ticketId);
         setArticles(data.articles);
         setUnreadIds(data.unreadArticleIds??[]);
-        setSelectedId(data.articles[data.articles.length-1]?.id??'');
+        setSelectedId(newestFirst(data.articles)[0]?.id??'');
       }catch{
         setNotice('Antwort bestätigt. Der Nachrichtenverlauf konnte nicht aktualisiert werden.');
       }
@@ -179,10 +193,11 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
       {loaded&&articles.length===0&&<p className="classic-wpf-help">
         Keine Artikel vorhanden oder von der API zurückgegeben.</p>}
       {articles.length>0&&<label>Nachricht
-        <select aria-label="Ticket-Nachricht auswählen" value={selectedId}
+        <select aria-label="Ticket-Nachricht auswählen" className="znuny-message-listbox"
+          size={4} value={selectedId}
           onChange={e=>{setSelectedId(e.target.value);setReplying(false);setEmailExpanded(false);}}>
-          {articles.map((a,i)=><option key={a.id||i} value={a.id}>
-            {unreadIds.includes(a.id)?'★ Neu · ':''}{i+1} · {a.created||'Datum unbekannt'} · {a.subject||'Ohne Betreff'}
+          {newestFirst(articles).map((a,i)=><option key={a.id||i} value={a.id}>
+            {unreadIds.includes(a.id)?'★ Neu · ':''}{a.created||'Datum unbekannt'} · {a.subject||'Ohne Betreff'}
           </option>)}
         </select>
       </label>}
