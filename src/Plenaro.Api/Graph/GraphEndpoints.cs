@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using Npgsql;
 using Plenaro.Api.Identity;
 using Plenaro.Api.Secrets;
 
@@ -61,6 +62,57 @@ public static class GraphEndpoints
             if (user is null || user.IsDisabled) return Results.Unauthorized();
             await vault.DeleteAsync("user", user.Id, GraphCalendarService.RefreshSecretName, ct);
             return Results.NoContent();
+        });
+
+        // Explicitly queue an existing segment after upgrading or reconnecting.
+        group.MapPost("/segments/{kind}/{id:guid}/sync",async(string kind,Guid id,
+            HttpContext context,IAntiforgery antiforgery,UserManager<ApplicationUser> users,
+            IConfiguration config,CancellationToken ct)=>{
+            if(!await CsrfValid(context,antiforgery))return Results.BadRequest(new{error="Ungültiger Sicherheitstoken."});
+            var user=await users.GetUserAsync(context.User);
+            if(user is null||user.IsDisabled)return Results.Unauthorized();
+            if(kind is not ("task" or "ticket"))return Results.NotFound();
+            await using var db=new NpgsqlConnection(config.GetConnectionString("Plenaro"));
+            await db.OpenAsync(ct);
+            await using var tx=await db.BeginTransactionAsync(ct);
+            var sql=kind=="task"
+                ?"SELECT id FROM task_segments WHERE id=@id AND owner_user_id=@user FOR UPDATE"
+                :"""
+                SELECT s.id FROM znuny_ticket_segments s
+                JOIN znuny_approved_agent_bindings b ON b.user_id=s.user_id
+                JOIN znuny_cached_tickets t ON t.ticket_id=s.ticket_id
+                WHERE s.id=@id AND s.user_id=@user AND lower(t.state_type)<>'closed'
+                FOR UPDATE OF s
+                """;
+            await using var check=new NpgsqlCommand(sql,db,tx);
+            check.Parameters.AddWithValue("id",id);check.Parameters.AddWithValue("user",user.Id);
+            if(await check.ExecuteScalarAsync(ct) is null)return Results.NotFound();
+            await SegmentCalendarSync.QueueAsync(db,tx,kind,id,user.Id,ct);
+            await tx.CommitAsync(ct);
+            return Results.NoContent();
+        });
+
+        // Also expose deletion failures whose local segment no longer exists.
+        group.MapGet("/segments/status",async(HttpContext context,UserManager<ApplicationUser> users,
+            IConfiguration config,CancellationToken ct)=>{
+            var user=await users.GetUserAsync(context.User);
+            if(user is null||user.IsDisabled)return Results.Unauthorized();
+            await using var db=new NpgsqlConnection(config.GetConnectionString("Plenaro"));
+            await db.OpenAsync(ct);
+            await using var cmd=new NpgsqlCommand("""
+                SELECT status,count(*)::int FROM segment_calendar_sync
+                WHERE user_id=@user AND status IN ('pending','syncing','error')
+                GROUP BY status
+                """,db);
+            cmd.Parameters.AddWithValue("user",user.Id);
+            int pending=0,errors=0;
+            await using var reader=await cmd.ExecuteReaderAsync(ct);
+            while(await reader.ReadAsync(ct)){
+                if(reader.GetString(0)=="error")errors+=reader.GetInt32(1);
+                else pending+=reader.GetInt32(1);
+            }
+            context.Response.Headers.CacheControl="no-store";
+            return Results.Ok(new{pending,errors});
         });
 
         group.MapGet("/calendar", async (string? start, string? end, HttpContext context,
