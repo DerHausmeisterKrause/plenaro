@@ -198,6 +198,10 @@ public sealed class SegmentCalendarSync(IServiceScopeFactory scopes,
         var marker=Marker(job.Kind,job.User,job.Id);
         var id=await FindAsync(client,token,job.EventId,marker,ct);
         if(id is null){
+            if(data is null&&job.EventId is not null){
+                // A confirmed linked event is already absent (including a prior successful delete).
+                await FinishAsync(db,job,null,"removed","",ct);return;
+            }
             if(job.Attempted||job.EventId is not null)
                 throw new SyncFailure("Outlook-Termin nicht eindeutig auffindbar. Kein weiterer Erstellungsversuch; bitte Kalender prüfen.");
             if(data is null){await FinishAsync(db,job,null,"removed","",ct);return;}
