@@ -789,7 +789,7 @@ describe('Plenaro web shell', () => {
     expect(await screen.findByText(/Persönlicher Znuny-Zugang ist lesbar/)).toBeTruthy();
     // Stored ticket URLs are references, not browser egress to Znuny.
     expect(screen.queryByRole('link',{name:'Gespeicherte externe URL'})).toBeNull();
-    expect(screen.getByText(/nur eine Referenz/)).toBeTruthy();
+    expect(screen.getByText(/Direkte Znuny-Ticketadresse zum Markieren und Kopieren/)).toBeTruthy();
     expect(screen.queryByLabelText('Ticket-Queue filtern')).toBeNull();
     expect(screen.queryByLabelText('Ticketstatus filtern')).toBeNull();
   });
