@@ -1,3 +1,12 @@
+## 26.11.2026 – Phase 7/7: Bildvorschau-Korrektur
+
+- [x] Rasterbilder direkt aus geprüften Bytes per Canvas darstellen, keine blob:-Bildnavigation; Scan und Cache unverändert.
+- [x] Dekodierfehler separat mit MIME und Dateigröße anzeigen; GIF als Standbild.
+- [x] UI-Regression und Chromium-Canvas-Test ergänzt.
+- [ ] CI und produktive PNG-/PDF-Abnahme; tatsächliche Ursache des bisherigen Bildladefehlers ohne Browsertrace nicht eindeutig bestätigt.
+
+---
+
 ## 26.11.2026 – Phase 7/7: Geprüfte Anhänge in der Ticketdetailansicht
 
 - [x] PNG/JPEG/GIF/WebP/PDF als Vorschau-Dialog mit Ladeindikator; lokal gerenderte PDF-Seiten ohne interaktive Dokumentaktionen.
