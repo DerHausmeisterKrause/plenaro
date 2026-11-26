@@ -1,3 +1,16 @@
+## 26.11.2026 – Phase 7/7: SharePoint-/Excel-Favoriten und Znuny-Antwortauswahl
+
+- [x] Fehler `upstream-redirect` nachvollzogen: generischer Favoritenproxy blockiert fremde Origins absichtlich. Microsoft dokumentiert reguläre Cross-Origin-iFrame-Blockaden: https://learn.microsoft.com/de-de/troubleshoot/sharepoint/security/cross-domain-iframe-requests-are-blocked .
+- [x] Echte SharePoint-/OneDrive-HTTPS-Dokumentlinks öffnen aus der Seitenleiste im Browser-Tab mit unveränderter Dokumentadresse und Microsoft-Anmeldung. Keine fremden Redirects, Cookies oder Passwörter werden über den Favoritenproxy weitergegeben. Andere Favoriten bleiben eingebettet.
+- [x] WPF-WebView2-Referenz und Znuny 7.3.8 `AgentTicketCompose.pm`, `ArticleActionMenu.tt`, `Core.Agent.TicketZoom.js` geprüft. Antwort-/Allen-antworten-Listen werden bereits serverseitig als native Optionen erzeugt; im Proxy nur deren Modernize-Darstellung deaktiviert. Auswahlwerte und Original-Handler bleiben erhalten.
+- [x] AJAX von Dokumentnavigation unterscheiden, Content-Type bei leeren POSTs erhalten, gezielte CSRF-Header und gleichen Origin-Referer weiterreichen. Fehlerdiagnose nur Status/Exception-Typ ohne URL/Anfrageinhalte.
+- [x] Optionaler Button „Separat öffnen“ verwendet dieselbe geschützte native Proxy-Sitzung, ohne erneuten Bootstrap-Token oder direkte interne Adresse.
+- [x] Frontend-/Backend-Regressionstests ergänzt.
+- [ ] CI-Ergebnis und produktiver Test: konkrete SharePoint-Adresse, Microsoft-Anmeldung, OTRS-Antwortdropdown und echter Versand auf Testticket. Die genaue Ursache des hängenden Dropdowns kann ohne produktiven Netzwerktrace nicht abschließend bestätigt werden.
+- [x] Keine Migration, keine neuen Container, Aliase oder Nginx-Änderungen.
+
+---
+
 ## 26.11.2026 – Phase 7/7: Ticket-Benachrichtigungen in der Glocke
 
 - [x] WPF-Referenz `Services/NotificationService.cs` und vorhandene Web-Stern-/Reminder-Logik geprüft.
