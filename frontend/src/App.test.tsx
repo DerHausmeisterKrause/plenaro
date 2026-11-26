@@ -353,6 +353,27 @@ describe('Plenaro web shell', () => {
     expect(await screen.findByRole('region',{name:'Aufgabenliste'})).toBeTruthy();
   });
 
+  it('richtet Suche und Filter in allen Arbeitsplatz-Ticketreitern auf einer Zeile aus',async()=>{
+    renderAt('/workspace');
+    for(const name of ['Aktuelle Aufgaben','Neue Aufgaben','Erledigte Aufgaben']){
+      fireEvent.click(await screen.findByRole('tab',{name}));
+      const search=screen.getByRole('textbox',{name:'Tickets suchen'});
+      const toolbar=search.closest('.znuny-list-toolbar');
+      expect(toolbar).not.toBeNull();
+      const toggle=screen.getByRole('button',{name:'Filter und Sortierung'});
+      expect(toolbar?.contains(toggle)).toBe(true);
+      expect(toggle.classList.contains('znuny-filter-button')).toBe(true);
+      expect(toolbar?.querySelectorAll('button')).toHaveLength(1);
+    }
+    const toggle=screen.getByRole('button',{name:'Filter und Sortierung'});
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const fields=document.getElementById('workspace-ticket-filters');
+    expect(fields).not.toBeNull();
+    expect(within(fields as HTMLElement).getByLabelText('Tickets sortieren nach'))
+      .toBeTruthy();
+  });
+
   it('zeigt gelbe Sterne nur für ungelesene Znuny-Artikel und quittiert sie einzeln',async()=>{
     ticketFixture.mine=[{ticketId:'77',ticketNumber:'2026#77',
       title:'Ticket mit zwei neuen Nachrichten',queue:'IT',state:'open',
@@ -566,6 +587,25 @@ describe('Plenaro web shell', () => {
     expect(screen.queryByLabelText('Text in das ausgewählte Znuny-Feld einfügen')).toBeNull();
     expect(vi.mocked(fetch).mock.calls.some(([url])=>
       String(url).includes('/api/v1/znuny/browser/'))).toBe(false);
+  });
+
+  it('zeigt das eingebettete Ticketsystem mit derselben kompakten Leiste wie die Favoriten',async()=>{
+    nativeProxyEnabled=true;
+    renderAt('/ticket-system');
+    expect(await screen.findByTitle(
+      'Ticketsystem – isolierte, native Weboberfläche')).toBeTruthy();
+    const toolbar=document.querySelector('.znuny-web-portal-toolbar.favorite-browser-toolbar');
+    expect(toolbar).not.toBeNull();
+    expect(toolbar?.querySelector('.favorite-browser-identity h1')?.textContent)
+      .toBe('Ticketsystem-Weboberfläche');
+    expect(toolbar?.querySelector('.favorite-browser-context')?.textContent)
+      .toBe('Znuny');
+    expect(toolbar?.querySelector('.favorite-browser-actions')).not.toBeNull();
+    expect(within(toolbar as HTMLElement).getByRole('button',{name:'Neu verbinden'}))
+      .toBeTruthy();
+    expect(screen.queryByText('Plenaro / Ticketsystem')).toBeNull();
+    expect(screen.queryByText(
+      'Direkte HTML-Browseransicht über den geschützten Plenaro-Proxy.')).toBeNull();
   });
 
   it('ermöglicht normale HTML-Anmeldung bei einem individuellen Loginformular',async()=>{
