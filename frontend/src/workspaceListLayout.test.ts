@@ -15,6 +15,9 @@ describe('Workplace task-list height',()=>{
     expect(desktop![1]).toMatch(/min-height:\s*0\s*;/);
     expect(desktop![1]).toMatch(/max-height:\s*none\s*;/);
     expect(desktop![1]).toMatch(/overflow-y:\s*auto\s*;/);
+    // When the list is shorter than its card, wheel events must reach the
+    // outer page instead of being trapped by overscroll containment.
+    expect(desktop![1]).toMatch(/overscroll-behavior-y:\s*auto\s*;/);
     expect(styles).toMatch(/\.plenaro-today-columns\s*\{[^}]*align-items:\s*stretch/);
     expect(styles).toMatch(/\.plenaro-today-list\s*\{[^}]*flex:\s*1\s+1\s+auto/);
   });
