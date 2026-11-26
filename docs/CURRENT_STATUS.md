@@ -1,3 +1,26 @@
+## 26.11.2026 – Phase 7/7: Ticket-Benachrichtigungen in der Glocke
+
+- [x] WPF-Referenz `Services/NotificationService.cs` und vorhandene Web-Stern-/Reminder-Logik geprüft.
+- [x] Glocke zählt jedes sichtbare Ticket mit ungelesenen Artikeln genau einmal, zusätzlich zu bestehenden Aufgabenerinnerungen; keine neue Lesezustandsdatenbank.
+- [x] Autorisierte Ungelesen-Liste ohne Seitenlimit, direkter Link zum nativen Ticketdetail und sofortiger Neuabruf nach erfolgreicher Artikelquittierung; andere ungelesene Artikel bleiben bestehen.
+- [x] Ja/Nein-Dialog beim ersten Öffnen einer Browsersitzung, wenn Browserhinweise nicht aktiv sind. Browserberechtigung erst nach Ja; Nein gilt für die Sitzung. Native Browserhinweise und kurzer Ton, soweit Browser/OS es zulassen.
+- [x] UI-Regressionstests für Zähler, Direktlink, einzelne Artikelquittierung und Berechtigungsdialog ergänzt.
+- [ ] CI-Ergebnis und produktive Abnahme (zwei Benutzer, neue Nachrichten, Browserfreigabe und Ton bei offenem Plenaro).
+- [x] Keine Datenbankmigration, keine zusätzlichen Container oder Nginx-Konfigurationsänderungen.
+
+Deployment nach Merge:
+
+```bash
+cd /opt/plenaro
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build --no-deps web
+docker compose restart nginx
+docker compose ps
+```
+
+---
+
 ## 26.11.2026 – Phase 7/7: Kompakte Ticketfilter und einheitliche Browser-Kopfzeilen
 
 - [x] WPF-Referenz `DerHausmeisterKrause/project_tool/Views/TodayView.xaml` (Suche/Sortierung) und bestehende Web-Komponenten geprüft; kein Backendverhalten geändert.
