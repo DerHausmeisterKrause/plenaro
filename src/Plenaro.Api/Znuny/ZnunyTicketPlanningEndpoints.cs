@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Npgsql;
 using NpgsqlTypes;
 using Plenaro.Api.Identity;
+using Plenaro.Api.Graph;
 
 namespace Plenaro.Api.Znuny;
 
@@ -61,7 +62,9 @@ public static class ZnunyTicketPlanningEndpoints
                     s.starts_at,s.ends_at,s.note,
                     (SELECT count(*)::integer FROM znuny_ticket_article_read_state a
                      WHERE a.user_id=@user AND a.ticket_id=s.ticket_id
-                       AND a.read_at IS NULL) AS unread_article_count
+                       AND a.read_at IS NULL) AS unread_article_count,
+                    (SELECT c.event_id FROM segment_calendar_sync c WHERE c.kind='ticket'
+                        AND c.segment_id=s.id AND c.user_id=@user) AS outlook_event_id
                 FROM znuny_ticket_segments s
                 JOIN znuny_cached_tickets t ON t.ticket_id=s.ticket_id
                 JOIN znuny_approved_agent_bindings b ON b.user_id=@user
@@ -95,7 +98,7 @@ public static class ZnunyTicketPlanningEndpoints
                     startsAt=new DateTimeOffset(r.GetDateTime(9),TimeSpan.Zero),
                     endsAt=new DateTimeOffset(r.GetDateTime(10),TimeSpan.Zero),
                     note=r.GetString(11),
-                    unreadArticleCount=r.GetInt32(12)
+                    unreadArticleCount=r.GetInt32(12),outlookEventId=r.IsDBNull(13)?null:r.GetString(13)
                 });
             }
             await ZnunyArticleReadTracker.InitializeFromHeadsAsync(
@@ -110,8 +113,10 @@ public static class ZnunyTicketPlanningEndpoints
             if(user is null)return Results.Unauthorized();
             await using var db=await Open(config,ct);
             await using var cmd=new NpgsqlCommand("""
-                SELECT s.id,s.starts_at,s.ends_at,s.note,s.participants
+                SELECT s.id,s.starts_at,s.ends_at,s.note,s.participants,
+                    COALESCE(c.status,'not-synced'),COALESCE(c.last_error,''),c.event_id
                 FROM znuny_ticket_segments s
+                LEFT JOIN segment_calendar_sync c ON c.kind='ticket' AND c.segment_id=s.id AND c.user_id=s.user_id
                 JOIN znuny_cached_tickets t ON t.ticket_id=s.ticket_id
                 JOIN znuny_approved_agent_bindings b ON b.user_id=s.user_id AND b.user_id=@user
                 LEFT JOIN znuny_user_settings p ON p.user_id=b.user_id
@@ -132,7 +137,9 @@ public static class ZnunyTicketPlanningEndpoints
                 rows.Add(new {id=r.GetGuid(0),
                     startsAt=new DateTimeOffset(r.GetDateTime(1),TimeSpan.Zero),
                     endsAt=new DateTimeOffset(r.GetDateTime(2),TimeSpan.Zero),
-                    note=r.GetString(3),participants=r.GetFieldValue<string[]>(4)});
+                    note=r.GetString(3),participants=r.GetFieldValue<string[]>(4),
+                    calendarStatus=r.GetString(5),calendarError=r.GetString(6),
+                    outlookEventId=r.IsDBNull(7)?null:r.GetString(7)});
             return Results.Ok(rows);
         });
 
@@ -216,6 +223,7 @@ public static class ZnunyTicketPlanningEndpoints
             cmd.Parameters.Add("participants",NpgsqlDbType.Array|NpgsqlDbType.Text).Value=
                 input.Participants??Array.Empty<string>();
             if(await cmd.ExecuteNonQueryAsync(ct)!=1)return Results.NotFound();
+            await SegmentCalendarSync.QueueAsync(db,tx,"ticket",id,user.Value,ct);
             await tx.CommitAsync(ct);
             return Results.Created($"/api/v1/znuny/tickets/{Uri.EscapeDataString(ticketId)}/segments/{id}",new{id});
         });
@@ -258,6 +266,7 @@ public static class ZnunyTicketPlanningEndpoints
             cmd.Parameters.Add("participants",NpgsqlDbType.Array|NpgsqlDbType.Text).Value=
                 input.Participants??Array.Empty<string>();
             if(await cmd.ExecuteScalarAsync(ct) is null)return Results.NotFound();
+            await SegmentCalendarSync.QueueAsync(db,tx,"ticket",id,user.Value,ct);
             await tx.CommitAsync(ct);
             return Results.NoContent();
         });
