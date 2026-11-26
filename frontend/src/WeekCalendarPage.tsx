@@ -277,6 +277,7 @@ export function WeekCalendarPage() {
                 aria-label={`${fmtDay(d)} auswählen`} aria-pressed={selectedDay === date}
                 onClick={() => setSelectedDay(date)}>
                 <strong>{fmtDay(d)}</strong>
+                {date===today&&<span className="classic-calendar-today-badge">Heute</span>}
                 <span>{dayTasks.length ? `${dayTasks.length} Aufgaben` : '–'}</span>
                 {marker && (marker.dayType !== 'Normal' || marker.isBr || marker.isHo) &&
                   <span className="classic-calendar-markers">{marker.dayType !== 'Normal' ? marker.dayType : ''} {marker.isBr ? 'BR' : ''} {marker.isHo ? 'HO' : ''}</span>}
@@ -336,10 +337,7 @@ export function WeekCalendarPage() {
                 className="classic-calendar-now-line"
                 role="img"
                 aria-label={'Aktuelle Uhrzeit '+new Intl.DateTimeFormat('de-DE',{hour:'2-digit',minute:'2-digit'}).format(clock)}
-                style={{top:nowLine.topPercent+'%'}}>
-                <span className="classic-calendar-now-marker"
-                  style={{left:'calc((100% - 66px) / 5 * '+(nowLine.dayIndex+0.5)+')'}}/>
-              </div>}
+                style={{top:nowLine.topPercent+'%'}}/>}
             </div>)}
           </div>
         </div>
