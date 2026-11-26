@@ -29,7 +29,7 @@ export type TicketSegment = {
   id: string; startsAt: string; endsAt: string; note: string;
   participants: string[];
 };
-export type TicketWorkspace = { description:string; ticketUrl:string };
+export type TicketWorkspace = { description:string; ticketUrl:string; directTicketUrl?:string };
 export type TicketTimeSummary = {
   bookedSeconds:number;runningSeconds:number;runningSince:string|null;
   adjustedMinutes:number;sessionCount:number;
