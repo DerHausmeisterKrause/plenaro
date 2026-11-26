@@ -1380,3 +1380,7 @@ h1,h2,h3,p { margin-top: 0; }
 .attachment-pdf-page[hidden] {display:none;}
 .attachment-pdf-page canvas {display:inline-block;background:white;max-width:none;box-shadow:0 1px 5px #0003;}
 @media (max-width:600px){.attachment-preview-content{padding:10px;}.attachment-preview-dialog{width:96vw;max-width:96vw;}}
+
+/* Keep the original iframe DOM nodes mounted while hiding inactive web pages. */
+.retained-web-page[hidden] { display: none !important; }
+.retained-web-page { min-width: 0; }
