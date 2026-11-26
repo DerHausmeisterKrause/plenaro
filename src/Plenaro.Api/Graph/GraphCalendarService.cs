@@ -58,7 +58,7 @@ public sealed class GraphCalendarService(
             "&$top=100";
         using var req = new HttpRequestMessage(HttpMethod.Get, uri);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", access);
-        req.Headers.TryAddWithoutValidation("Prefer", "outlook.timezone=\"UTC\"");
+        req.Headers.TryAddWithoutValidation("Prefer", "outlook.timezone=\"UTC\", IdType=\"ImmutableId\"");
         HttpResponseMessage response;
         try { response = await clients.CreateClient("Plenaro.Graph").SendAsync(req, ct); }
         catch (HttpRequestException) { throw new GraphConnectionException("microsoft-unavailable"); }
