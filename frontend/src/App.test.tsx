@@ -194,6 +194,7 @@ beforeEach(() => {
     }:{
       ok:true,status:200,json:async()=>({
         url:'https://tickets.example.org/_plenaro/znuny-bootstrap?token=ci-placeholder',
+        openUrl:'https://tickets.example.org/index.pl?Action=AgentTicketZoom;TicketID=77',
         requiresInteractiveLogin:nativeInteractiveLogin
       })
     };
@@ -655,6 +656,11 @@ describe('Plenaro web shell', () => {
     // preventing normal compose form submissions and opener communication.
     expect(iframe.getAttribute('sandbox')).toContain('allow-popups-to-escape-sandbox');
     expect(iframe.getAttribute('sandbox')).not.toContain('allow-top-navigation');
+    fireEvent.load(iframe);
+    const separate=await screen.findByRole('link',{name:'Separat öffnen'});
+    expect(separate.getAttribute('href')).toBe('https://tickets.example.org/index.pl?Action=AgentTicketZoom;TicketID=77');
+    expect(separate.getAttribute('target')).toBe('_blank');
+    expect(separate.getAttribute('rel')).toContain('noopener');
     expect(screen.getByRole('heading',{name:'Ticketsystem-Weboberfläche'})).toBeTruthy();
     expect(screen.queryByRole('button',{name:/Kompatibler Modus/})).toBeNull();
     expect(screen.queryByAltText(/Browserbild/)).toBeNull();
