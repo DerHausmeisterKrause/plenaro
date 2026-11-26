@@ -24,7 +24,7 @@ function setup(path='/favorites/a'){
     <RetainedWebWorkspace userId="user-a" admin={false} onInvalidSession={onInvalid}/>
   </MemoryRouter>);
 }
-const click=(name:string)=>fireEvent.click(screen.getByRole('link',{name,exact:true}));
+const click=(name:string)=>fireEvent.click(screen.getByRole('link',{name}));
 const visible=(frame:HTMLElement)=>!frame.closest('.retained-web-page')?.hasAttribute('hidden');
 beforeEach(()=>{vi.clearAllMocks();mocks.currentUser.mockResolvedValue({id:'user-a',roles:[]});});
 afterEach(cleanup);
