@@ -1924,7 +1924,8 @@ const string replySelectHtml="""
     <select name="ResponseID" id="ResponseID42" class="Modernize Small">
     <option value="0">-</option><option value="8">Template</option>
     </select></form>
-    <form id="ReplyAll42"><input name="Action" value="AgentTicketCompose">
+    <form id="LegacyReplyAll"><input name="Action" value="AgentTicketCompose">
+    <input name="TicketID" value="123"><input name="ArticleID" value="42">
     <select id="ResponseIDAll42" class='Small Modernize' name="ResponseID">
     <option value="9">Template 2</option></select></form>
     <form id="other"><input name="Action" value="AgentTicketCompose">
@@ -1943,6 +1944,22 @@ Assert(nativeSelectHtml.Contains("id=\"ResponseID42\" class=\"Small\"") &&
 Assert(NativeSelects("<form id='Reply42'><select name='ResponseID' class='Modernize'></select></form>")==
     "<form id='Reply42'><select name='ResponseID' class='Modernize'></select></form>",
     "unrelated or incomplete forms are not rewritten");
+
+var replyJsonMethod=proxyType.GetMethod("NativeReplyJson",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+var replyJson=System.Text.Json.JsonSerializer.Serialize(new{html=replySelectHtml,number=42});
+var adaptedJson=(string)replyJsonMethod.Invoke(null,new object[]{replyJson})!;
+using(var parsedReplyJson=System.Text.Json.JsonDocument.Parse(adaptedJson)){
+    Assert(parsedReplyJson.RootElement.GetProperty("html").GetString()==nativeSelectHtml &&
+        parsedReplyJson.RootElement.GetProperty("number").GetInt32()==42,
+        "escaped JSON HTML fragments retain other fields and native reply options");
+}
+var mixedHttp=(string)rewriter.Invoke(null,new object[]{
+    "http://ticketsystem.example.test/otrs/index.pl?Action=AgentTicketCompose",
+    upstream,new Uri("https://tickets.example.test")
+})!;
+Assert(mixedHttp=="https://tickets.example.test/otrs/index.pl?Action=AgentTicketCompose",
+    "upstream HTTP CGI links become HTTPS proxy links instead of browser mixed content");
 
 // Verify the actual opaque-content reader, not only its MIME predicates.
 var opaqueReader=proxyType.GetMethod("ReadOpaqueNavigationAsync",
