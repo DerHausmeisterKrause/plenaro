@@ -13,7 +13,6 @@ import { SettingsPage } from './SettingsPage';
 import { WeekCalendarPage } from './WeekCalendarPage';
 import {RetainedWebWorkspace} from './RetainedWebWorkspace';
 import {loadFavorites,type Favorite} from './favoritesApi';
-import {microsoftDocumentUrl} from './favoriteNavigation';
 import { ClassicTodayPage } from './ClassicTodayPage';
 import { DirectTicketPage } from './DirectTicketPage';
 import { ReportsPage } from './ReportsPage';
@@ -81,16 +80,11 @@ function Sidebar({ onNavigate, favorites }: { onNavigate: () => void; favorites:
         </nav>
         <span className="nav-caption second">FAVORITEN</span>
         <nav className="nav-list" aria-label="Persönliche Favoriten">
-          {favorites.filter(x=>x.enabled).map(item=>{
-            const direct=microsoftDocumentUrl(item.url);
-            return direct?<a key={item.id} href={direct} target="_blank" rel="noopener noreferrer"
-              className="nav-link" onClick={onNavigate} title="Im Microsoft-Browserfenster öffnen">
-              <Star size={19}/><span>{item.name}</span><ExternalLink size={14} aria-hidden="true"/>
-            </a>:<NavLink key={item.id} to={'/favorites/'+item.id} onClick={onNavigate}
-              className={({isActive})=>'nav-link'+(isActive?' active':'')}>
-              <Star size={19}/><span>{item.name}</span>
-            </NavLink>;
-          })}
+          {favorites.filter(x=>x.enabled).map(item=><NavLink key={item.id}
+            to={'/favorites/'+item.id} onClick={onNavigate}
+            className={({isActive})=>'nav-link'+(isActive?' active':'')}>
+            <Star size={19}/><span>{item.name}</span>
+          </NavLink>)}
         </nav>
         <span className="nav-caption second">TOOLS & VERWALTUNG</span>
         <nav className="nav-list" aria-label="Werkzeuge und Verwaltung">

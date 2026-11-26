@@ -81,7 +81,11 @@ const descriptions:Record<string,string>={
   'autofill-password-missing':'Autofill-Passwort nicht verfügbar',
   'autofill-vault-unconfigured':'Sicherer Passwortspeicher nicht verfügbar',
   'private-address-blocked':'Unzulässige Serveradresse blockiert',
-  'upstream-unavailable':'Zielserver nicht erreichbar, Verbindung oder TLS prüfen',
+  'upstream-unavailable':'Zielserver nicht erreichbar – Netzwerk und Firewall prüfen',
+  'upstream-unreachable':'Kein Netzwerkpfad zum Zielserver – Routing und Firewall prüfen',
+  'upstream-refused':'TCP-Verbindung abgelehnt – Port und Firewall prüfen',
+  'upstream-dns':'DNS-Auflösung fehlgeschlagen',
+  'upstream-tls':'TLS- oder Zertifikatsprüfung fehlgeschlagen',
   'upstream-timeout':'Zielserver hat nicht rechtzeitig geantwortet',
   'upstream-resource-limit':'Antwort übersteigt das Proxy-Größenlimit',
 };

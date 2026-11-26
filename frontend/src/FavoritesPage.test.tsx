@@ -2,7 +2,6 @@ import {StrictMode} from 'react';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {MemoryRouter,Route,Routes} from 'react-router-dom';
-import {microsoftDocumentUrl} from './favoriteNavigation';
 import {FavoritePage,FavoriteSettingsPanel} from './FavoritesPage';
 import {FavoriteDebugSettingsPanel} from './FavoriteDebugPanel';
 import type {Favorite} from './favoritesApi';
@@ -61,32 +60,22 @@ beforeEach(()=>{
 afterEach(cleanup);
 
 describe('Favorite iframe bootstrap',()=>{
-  it('uses the original SharePoint Excel URL and does not start a proxy session',async()=>{
+  it('treats SharePoint Excel as a normal proxied favorite',async()=>{
     const url='https://tenant.sharepoint.com/:x:/r/sites/team/Shared%20Documents/plan.xlsx?web=1';
     mocks.loadFavorites.mockResolvedValue([{...favorite,name:'Excel',url}]);
     renderStrictFavorite();
-    const link=await screen.findByRole('link',{name:'Dokument in Microsoft 365 öffnen'});
-    expect(link.getAttribute('href')).toBe(url);
-    expect(link.getAttribute('target')).toBe('_blank');
-    expect(link.getAttribute('rel')).toContain('noopener');
-    expect(mocks.startFavorite).not.toHaveBeenCalled();
-    expect(document.querySelector('iframe')).toBeNull();
+    expect(await screen.findByTitle('Excel')).toBeTruthy();
+    expect(mocks.startFavorite).toHaveBeenCalledTimes(1);
+    expect(mocks.startFavorite).toHaveBeenCalledWith(favorite.id);
+    expect(screen.getByRole('link',{name:'Originalseite öffnen'}).getAttribute('href')).toBe(url);
   });
-  it('does not classify lookalike or non-HTTPS hosts as Microsoft documents',()=>{
-    for(const url of [
-      'https://sharepoint.com.attacker.example/','https://fake-sharepoint.com/',
-      'http://tenant.sharepoint.com/',
-      'https://example:example@tenant.example.org/','https://tenant.sharepoint.com:8443/'
-    ])expect(microsoftDocumentUrl(url)).toBeNull();
-    expect(microsoftDocumentUrl(undefined)).toBeNull();
-    expect(microsoftDocumentUrl(null)).toBeNull();
-    expect(microsoftDocumentUrl('')).toBeNull();
-    const credentialUrl=new URL('https://tenant.sharepoint.com/');
-    credentialUrl.username='example';credentialUrl.password='example';
-    expect(microsoftDocumentUrl(credentialUrl.href)).toBeNull();
-    expect(microsoftDocumentUrl('https://1drv.ms/x/example')).toBe('https://1drv.ms/x/example');
-    expect(microsoftDocumentUrl('https://tenant.sharepoint.com/sites/team')).toBe(
-      'https://tenant.sharepoint.com/sites/team');
+  it('shows network failure and allows reconnect',async()=>{
+    mocks.startFavorite.mockRejectedValueOnce(new Error('Firewall-Freigabe und Routing prüfen.'));
+    renderStrictFavorite();
+    expect(await screen.findByText('Firewall-Freigabe und Routing prüfen.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'Neu verbinden'}));
+    expect(await screen.findByTitle('Wiki')).toBeTruthy();
+    expect(mocks.startFavorite).toHaveBeenCalledTimes(2);
   });
 
   it('hides diagnostic panels and makes no debug request for non-admin users',async()=>{
@@ -132,7 +121,7 @@ describe('Favorite iframe bootstrap',()=>{
   it('shows safe proxy HTTP errors only for admin users',async()=>{
     renderStrictFavorite(true);
     expect(await screen.findByRole('region',{name:'Favoriten-Diagnose'})).toBeTruthy();
-    expect(await screen.findByText(/Zielserver nicht erreichbar, Verbindung oder TLS prüfen/)).toBeTruthy();
+    expect(await screen.findByText(/Zielserver nicht erreichbar – Netzwerk und Firewall prüfen/)).toBeTruthy();
     expect(screen.getByText('502')).toBeTruthy();
     expect(debugMocks.readFavoriteDebugEvents).toHaveBeenCalledWith(favorite.id,0);
   });

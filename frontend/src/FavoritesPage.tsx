@@ -1,6 +1,5 @@
 import {useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
 import {Link,useParams} from 'react-router-dom';
-import {microsoftDocumentUrl} from './favoriteNavigation';
 import {FavoriteDebugConsole} from './FavoriteDebugPanel';
 import {ArrowDown,ArrowUp,ExternalLink,Plus,RefreshCw,Save,ShieldCheck,
   Star,Trash2} from 'lucide-react';
@@ -127,9 +126,10 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
           onChange={e=>setForm({...form,url:e.target.value})}/>
         <p className="um-hint">Die Adresse kannst du selbst eintragen oder später
           ändern. Der Plenaro-Proxy öffnet die Webseite mit einer getrennten
-          Sitzung. Aus Sicherheitsgründen sind lokale Server-, Netzwerk- und
-          Metadaten-Adressen im persönlichen Proxy gesperrt. Interne HTTPS-Ziele
-          aus dem Servernetz sind erlaubt.</p>
+          Sitzung. DNS-Namen, IP-Adressen und URL-Fragmente (#) sind erlaubt.
+          Interne HTTPS-Ziele müssen vom Plenaro-Server erreichbar sein.
+          Loopback-, Link-Local- und Metadaten-Adressen bleiben gesperrt;
+          das TLS-Zertifikat muss zur Adresse passen.</p>
         <label htmlFor="fav-user">Anmeldename (optional)</label>
         <input id="fav-user" value={form.username} autoComplete="off" maxLength={180}
           onChange={e=>setForm({...form,username:e.target.value})}/>
@@ -203,9 +203,6 @@ export function FavoritePage({admin=false,favoriteId,visible=true}:{admin?:boole
         const items=await loadFavorites();
         const item=items.find(x=>x.id===id&&x.enabled);
         if(!item)throw new Error('Favorit nicht vorhanden oder deaktiviert.');
-        // Bookmarks and the settings Open link also bypass the proxy for
-        // Microsoft 365. The actual navigation is an explicit user click.
-        if(microsoftDocumentUrl(item.url))return {item,url:''};
         const result=await startFavorite(id);
         const destination=new URL(result.url);
         // The dedicated-host proxy uses /_plenaro/favorite-bootstrap.
@@ -235,7 +232,6 @@ export function FavoritePage({admin=false,favoriteId,visible=true}:{admin?:boole
     });
     return()=>{active=false;};
   },[id,revision]);
-  const direct=favorite?microsoftDocumentUrl(favorite.url):null;
   return <div className="page znuny-web-portal favorite-browser-page">
     <div className="znuny-web-portal-toolbar content-card favorite-browser-toolbar">
       <div className="favorite-browser-identity">
@@ -245,22 +241,14 @@ export function FavoritePage({admin=false,favoriteId,visible=true}:{admin?:boole
       </div>
       <div className="favorites-toolbar favorite-browser-actions">
         <button type="button" className="button button-secondary"
-          onClick={()=>setRevision(n=>n+1)} disabled={loading||!!direct}>
+          onClick={()=>setRevision(n=>n+1)} disabled={loading}>
           <RefreshCw size={15}/>Neu verbinden</button>
         {favorite?.url&&<a className="button button-secondary"
           href={favorite.url} target="_blank" rel="noopener noreferrer">
           <ExternalLink size={15}/>Originalseite öffnen</a>}
       </div>
     </div>
-    {direct&&!loading&&!error&&<section className="content-card">
-      <h2>Microsoft 365</h2>
-      <p>SharePoint und Excel Online verwenden die Microsoft-Anmeldung und können
-        nicht zuverlässig über einen fremden Webseiten-Proxy eingebettet werden.
-        Das Dokument wird deshalb direkt im Browser geöffnet.</p>
-      <a className="button button-primary" href={direct} target="_blank" rel="noopener noreferrer">
-        <ExternalLink size={16}/>Dokument in Microsoft 365 öffnen</a>
-    </section>}
-    {visible&&admin&&id&&!direct&&<FavoriteDebugConsole favoriteId={id}/>} 
+    {visible&&admin&&id&&<FavoriteDebugConsole favoriteId={id}/>} 
     {error&&<div className="content-card znuny-portal-error" role="alert">
       <strong>Favorit konnte nicht geöffnet werden</strong><p>{error}</p></div>}
     {loading&&!error&&<div role="status" className="znuny-native-loading">

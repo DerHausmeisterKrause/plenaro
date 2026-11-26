@@ -106,9 +106,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
             && request.Host.Port.GetValueOrDefault(443)==expected.Port;
     }
 
-    private static bool ValidPath(string path)=>path.StartsWith('/') &&
-        !path.StartsWith("//")&&!path.Contains('\\')&&!path.Contains('#') &&
-        !path.Contains("://")&&!path.Any(char.IsControl);
+    private static bool ValidPath(string path)=>FavoriteUrlPolicy.ValidPath(path);
 
     private static bool SameUpstream(Uri root,Uri url)=>
         url.Scheme==Uri.UriSchemeHttps &&
@@ -166,7 +164,8 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         if(!ValidPath(favorite.Path)||
             !Uri.TryCreate(upstreamUrl,UriKind.Absolute,out var upstream)||
             !SameUpstream(upstream,new Uri(upstream.GetLeftPart(UriPartial.Authority)))||
-            upstream.AbsolutePath!="/"||upstream.Query.Length>0)
+            upstream.AbsolutePath!="/"||upstream.Query.Length>0||upstream.Fragment.Length>0||
+            !FavoriteUrlPolicy.AllowedHost(upstream))
             throw new InvalidOperationException("Invalid upstream.");
 
         Debug(user,favorite.Id,"info","session-start");
@@ -290,9 +289,11 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         _users[(user,favorite.Id)]=key;
         var token=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var shared=IsPathHost(external.Host);
+        var entryUrl=new Uri(root,favorite.Path);
+        var entryPath=entryUrl.PathAndQuery+entryUrl.Fragment;
         var landing=shared
-            ? FavoritePathRouting.AppPath(favorite.Slug,favorite.Path)
-            : favorite.Path;
+            ? FavoritePathRouting.AppPath(favorite.Slug,entryPath)
+            : entryPath;
         _pending[token]=new(key,favorite.Slug,landing,
             DateTimeOffset.UtcNow.AddSeconds(45));
         var bootstrap=shared

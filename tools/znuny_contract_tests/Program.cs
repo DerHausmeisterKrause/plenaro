@@ -2565,6 +2565,34 @@ Assert(ZnunyTicketDetailEndpoints.BuildDirectTicketUrl("https://SERVER/index.pl"
     ZnunyTicketDetailEndpoints.BuildDirectTicketUrl("https://tickets.example.org/index.pl","77&foo=1")=="",
     "direct ticket URL rejects unset or unsafe configuration and IDs");
 
+// The target policy permits browser hash routes and ordinary LAN IPs
+// but does not relax HTTPS, authority or reserved network restrictions.
+Assert(FavoriteUrlPolicy.TryPersonalUrl("https://admin.cloud.microsoft/#/homepage",out var hashOrigin,out var hashPath) &&
+    hashOrigin=="https://admin.cloud.microsoft/" && hashPath=="/#/homepage" &&
+    FavoritePathRouting.AppPath("sample",hashPath)=="/sample/#/homepage",
+    "preserve SPA hash in shared proxy bootstrap");
+Assert(FavoriteUrlPolicy.TryPersonalUrl("https://192.168.1.50:8443/ui?tab=1#/settings",out var ipOrigin,out var ipPath) &&
+    ipOrigin=="https://192.168.1.50:8443/" && ipPath=="/ui?tab=1#/settings" &&
+    FavoriteUrlPolicy.TryPersonalUrl("https://[fd00::1234]/",out _,out _),
+    "HTTPS IPv4 and IPv6 LAN addresses accepted");
+Assert(FavoriteUrlPolicy.TryPersonalUrl("https://example.org/path?return=https://example.org/home#tab",out _,out _) &&
+    !FavoriteUrlPolicy.ValidPath("//other.example.org/") &&
+    !FavoriteUrlPolicy.TryPersonalUrl("http://192.168.1.50/",out _,out _) &&
+    !FavoriteUrlPolicy.TryPersonalUrl("https://127.0.0.1/",out _,out _) &&
+    !FavoriteUrlPolicy.TryPersonalUrl("https://[::1]/",out _,out _) &&
+    !FavoriteUrlPolicy.TryPersonalUrl("https://169.254.169.254/",out _,out _) &&
+    !FavoriteUrlPolicy.TryPersonalUrl("https://localhost/",out _,out _),
+    "reject unsafe targets and allow queries without changing authority");
+var networkFailureMethod=typeof(FavoriteProxy).GetMethod("NetworkFailure",BindingFlags.Static|BindingFlags.NonPublic)!;
+(int Status,string Code,string Message) NetworkFailure(HttpRequestException e)=>
+    ((int,string,string))networkFailureMethod.Invoke(null,new object[]{e})!;
+Assert(NetworkFailure(new HttpRequestException(HttpRequestError.NameResolutionError,"test")).Code=="upstream-dns" &&
+    NetworkFailure(new HttpRequestException(HttpRequestError.SecureConnectionError,"test")).Code=="upstream-tls" &&
+    NetworkFailure(new HttpRequestException(HttpRequestError.ConnectionError,"test",
+        new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.ConnectionRefused))).Code=="upstream-refused" &&
+    NetworkFailure(new HttpRequestException("Host address is blocked.")).Code=="private-upstream-blocked",
+    "network errors distinguish DNS TLS refusal and blocked address");
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory
