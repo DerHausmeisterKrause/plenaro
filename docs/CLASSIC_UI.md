@@ -7,7 +7,7 @@
 - [x] Bestehende HO-/BR-Sicherheitsabläufe beibehalten: neue HO-/BR-Anträge erfordern explizite Bestätigung; vor Speicherung erfolgt Preflight für Outlook-/Mail-Voraussetzungen; neue HO-Anträge prüfen/erstellen den ganztägigen Outlook-Termin und lösen die Mail aus; BR ohne HO versendet nur E-Mail. Bestehende HO-Termine lassen sich weiterhin nachtragen/prüfen. Keine doppelten Sendungen bei vorhandenen akzeptierten Mailstatus.
 - [x] WPF-ähnliche weiße 2-px-Jetzt-Linie mit Tag-Punkt durch das 06–18-Uhr-Zeitraster integriert; nur in der angezeigten aktuellen Arbeitswoche sichtbar, Position nach lokaler Browserzeit, Aktualisierung ohne Kalender-Reload alle 30 Sekunden, ohne Einfluss auf Drag-and-drop.
 - [x] Frontend-Regressionstests für Inline-Marker, HO-Bestätigung und API-Aufrufreihenfolge, Scrollpositionen von Ticketliste/lokalen Aufgaben/Wochenkalender sowie reine Jetzt-Linien-Zeitberechnung.
-- [ ] Vollständige GitHub-CI prüfen, PR mergen und Dokumentationsstatus abhaken.
+- [x] [PR #65](https://github.com/DerHausmeisterKrause/plenaro/pull/65) mit Squash-Commit `fa5c96b7a3a50b4711b9432bcb33b56e591d0d2b` in `main` gemergt; [GitHub-CI #45766414210](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45766414210) vollständig erfolgreich (Frontend-/Backend-Build, UI- und Kalender-Regressionstests, Znuny-Vertragstests, TLS, Docker-Smoke, Favoriten-Browser-Login).
 - [ ] Live-Sichtprüfung: Scrollposition bei tatsächlichem automatischen Sync, neue Marker im rechten Tagespanel und weiße Jetzt-Linie auf der produktiven Wochenansicht.
 - [x] Keine Datenbankmigration, keine neuen Container, Ports, DNS-Namen oder Browserdienste.
 
