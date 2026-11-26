@@ -23,6 +23,10 @@ jobs:
           node-version: '22'
       - name: Reject private DNS, embedded credentials and key material
         run: python3 tools/check_public_repository.py
+      - name: Full stack update safety tests (mocked Docker)
+        run: |
+          for script in update.sh tools/update-stack.sh tools/test-update-stack.sh; do bash -n "$script"; done
+          bash tools/test-update-stack.sh
       - name: Build backend and frontend
         run: |
           dotnet build src/Plenaro.Api/Plenaro.Api.csproj -c Release

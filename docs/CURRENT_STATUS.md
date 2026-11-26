@@ -1,3 +1,13 @@
+## 26.11.2026 – Phase 7/7: Kontrolliertes Stack-Update
+
+- [x] Ein Befehl für GitHub-Pull, aktuelle Docker-Images und vollständigen Neubau aktiver Build-Dienste.
+- [x] Bestehende optionale Profile beibehalten, PostgreSQL-Major 17 absichern, automatisches DB-Backup vor Deployment, Healthchecks, NGINX-Neustart.
+- [x] Tests für Pull-/Build-/Backupfehler, Major-Upgrade-Sperre, Profile und frischen Git-Stand ergänzt.
+- [x] [Update-Dokumentation](UPDATE.md); keine neuen dauerhaften Container oder Datenbankmigrationen.
+- [ ] CI und produktive Abnahme; Abhängigkeits-Audit und Host-Docker-Update separat.
+
+---
+
 ## 26.11.2026 – Phase 7/7: Bildvorschau-Korrektur
 
 - [x] Rasterbilder direkt aus geprüften Bytes per Canvas darstellen, keine blob:-Bildnavigation; Scan und Cache unverändert.
