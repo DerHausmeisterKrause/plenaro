@@ -95,12 +95,14 @@ public sealed class AttachmentScanner(IConfiguration configuration)
             return AttachmentScanVerdict.Unavailable;
         var host=configuration["PLENARO_ATTACHMENT_SCANNER_HOST"];
         if(string.IsNullOrWhiteSpace(host))return AttachmentScanVerdict.Unavailable;
+        var port=configuration.GetValue<int?>("PLENARO_ATTACHMENT_SCANNER_PORT")??3310;
+        if(port is <1 or >65535)return AttachmentScanVerdict.Unavailable;
         using var deadline=CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(TimeSpan.FromSeconds(25));
         var token=deadline.Token;
         try{
             using var client=new TcpClient();
-            await client.ConnectAsync(host,3310,token);
+            await client.ConnectAsync(host,port,token);
             await using var stream=client.GetStream();
             await stream.WriteAsync("zINSTREAM\0"u8.ToArray(),token);
             var length=new byte[4];
