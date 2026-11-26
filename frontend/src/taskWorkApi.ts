@@ -14,6 +14,10 @@ export type TaskSegment = {
   endsAt: string;
   note: string;
   participants: string[];
+  kind?: 'task'|'ticket';
+  calendarStatus?: string;
+  calendarError?: string;
+  outlookEventId?: string|null;
 };
 
 export type SegmentInput = {
