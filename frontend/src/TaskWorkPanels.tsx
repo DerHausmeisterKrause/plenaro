@@ -6,6 +6,7 @@ import {
   type SegmentAvailability, type SegmentInput, type TaskSegment, type TaskTimeSummary,
 } from './taskWorkApi';
 import { localDate } from './tasksApi';
+import {queueSegmentCalendar,segmentCalendarLabel} from './graphApi';
 import { Link } from 'react-router-dom';
 
 const timeOf = (date: string) =>
@@ -177,7 +178,7 @@ export function TaskSegmentsPanel({ taskId }: { taskId: string | null }) {
       if (editing) await updateTaskSegment(taskId, editing, input);
       else await createTaskSegment(taskId, input);
       setSegments(await listTaskSegments(taskId));
-      reset(); setNotice('Segment gespeichert.');
+      reset(); setNotice('Segment gespeichert. Outlook-Synchronisierung vorgemerkt.');
     } catch (e) { setError(e instanceof Error ? e.message : 'Segment konnte nicht gespeichert werden.'); }
     finally { setBusy(false); }
   }
@@ -188,9 +189,23 @@ export function TaskSegmentsPanel({ taskId }: { taskId: string | null }) {
     try {
       await deleteTaskSegment(taskId, id);
       setSegments(await listTaskSegments(taskId));
-      reset(); setNotice('Segment gelöscht.');
+      reset(); setNotice('Segment gelöscht. Outlook-Entfernung vorgemerkt.');
     } catch (e) { setError(e instanceof Error ? e.message : 'Löschen fehlgeschlagen.'); }
     finally { setBusy(false); }
+  }
+
+  useEffect(()=>{
+    if(!taskId||!segments.some(s=>s.calendarStatus==='pending'||s.calendarStatus==='syncing'))return;
+    let active=true;
+    const timer=window.setTimeout(()=>{void listTaskSegments(taskId).then(rows=>{if(active)setSegments(rows);}).catch(()=>{});},5000);
+    return()=>{active=false;window.clearTimeout(timer);};
+  },[taskId,segments]);
+  async function sync(id:string){
+    if(!taskId||busy||!window.confirm('Diesen Termin in Outlook synchronisieren? Eingetragene Teilnehmer erhalten gegebenenfalls eine Einladung.'))return;
+    setBusy(true);setError('');setNotice('');
+    try{await queueSegmentCalendar('task',id);setSegments(await listTaskSegments(taskId));setNotice('Outlook-Synchronisierung vorgemerkt.');}
+    catch(e){setError(e instanceof Error?e.message:'Synchronisierung fehlgeschlagen.');}
+    finally{setBusy(false);}
   }
 
   return <section className="content-card plenaro-segments" aria-label="Aufgabensegmente">
@@ -201,7 +216,7 @@ export function TaskSegmentsPanel({ taskId }: { taskId: string | null }) {
           <strong>{editing ? 'Segment bearbeiten' : 'Neues Segment'}</strong>
           {editing && <button type="button" className="button button-secondary" onClick={reset} aria-label="Bearbeitung abbrechen"><X size={15}/></button>}
         </div>
-        <p className="um-hint">Lokale Planung; keine automatische Outlook-Buchung.</p>
+        <p className="um-hint">Zeitsegmente werden bei verbundener Microsoft-365-Anmeldung automatisch in Outlook synchronisiert.</p>
         <div className="plenaro-segment-date">
           <label>Datum <input type="date" required min="2000-01-01" max="2099-12-31"
             value={day} onChange={e => setDay(e.target.value)}/></label>
@@ -211,7 +226,7 @@ export function TaskSegmentsPanel({ taskId }: { taskId: string | null }) {
         <label>Kurzbeschreibung <input maxLength={1000} value={note} onChange={e => setNote(e.target.value)}/></label>
         <label>Teilnehmer (E-Mail) <input value={participants} onChange={e => setParticipants(e.target.value)}
           placeholder="name@firma.de, weitere@firma.de"/></label>
-        <p className="um-hint">Mehrere E-Mail-Adressen mit Komma oder Semikolon trennen. Noch keine Kalendereinladungen.</p>
+        <p className="um-hint">Mehrere E-Mail-Adressen mit Komma oder Semikolon trennen. Bei verbundener Outlook-Anmeldung werden Kalendereinladungen versendet.</p>
         {availability && <div className={availability.available ? 'um-feedback success' : 'um-feedback failure'}
           role="status">
           {availability.available ? 'Lokal frei – keine Überschneidung mit eigenen Segmenten.' :
@@ -232,6 +247,8 @@ export function TaskSegmentsPanel({ taskId }: { taskId: string | null }) {
               <button type="button" className="button button-secondary" onClick={() => void remove(s.id)} disabled={busy} aria-label={'Segment ' + (index + 1) + ' löschen'}><Trash2 size={14}/></button>
             </div>
           </div>
+          <p className="um-hint">{segmentCalendarLabel(s.calendarStatus,s.calendarError)}</p>
+          {(!s.calendarStatus||['not-synced','error'].includes(s.calendarStatus))&&<button type="button" className="button button-secondary" disabled={busy} onClick={()=>void sync(s.id)}>Outlook synchronisieren</button>}
           <p>{dateOf(s.startsAt)} · {timeOf(s.startsAt)}–{timeOf(s.endsAt)}</p>
           {s.note && <p>{s.note}</p>}
           {s.participants.length > 0 && <p className="um-hint">{s.participants.join(', ')}</p>}
