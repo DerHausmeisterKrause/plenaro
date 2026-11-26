@@ -16,6 +16,7 @@ import {FavoritePage} from './FavoritesPage';
 import {WikiPage} from './WikiPage';
 import {loadFavorites,type Favorite} from './favoritesApi';
 import { ClassicTodayPage } from './ClassicTodayPage';
+import { DirectTicketPage } from './DirectTicketPage';
 import { ReportsPage } from './ReportsPage';
 import { NotificationCenter } from './NotificationCenter';
 import { readPersonalPreferences, readWorkspacePreferences, savePersonalPreferences, type PersonalPreferences } from './settingsApi';
@@ -331,7 +332,7 @@ export function AppContent() {
   }
 
   const current = navigation.find((entry) => location.pathname === entry.path);
-  const pageTitle = current?.label ?? (location.pathname === '/system' ? 'Systemstatus' : 'Übersicht');
+  const pageTitle = location.pathname.startsWith('/workspace/ticket/') ? 'Ticketdetails' : current?.label ?? (location.pathname === '/system' ? 'Systemstatus' : 'Übersicht');
 
   // Auth and installation screens must not render sidebar, topbar or app footer.
   if (setupState === 'loading')
@@ -385,7 +386,8 @@ export function AppContent() {
             <Route path="/tickets" element={<Navigate to="/workspace" replace />} />
             <Route path="/reports" element={<PrivateArea user={user}><ReportsPage/></PrivateArea>} />
             <Route path="/today" element={<Navigate to="/workspace" replace />} />
-             <Route path="/workspace" element={<PrivateArea user={user}><ClassicTodayPage/></PrivateArea>} />
+             <Route path="/workspace/ticket/:ticketId" element={<PrivateArea user={user}><DirectTicketPage/></PrivateArea>} />
+            <Route path="/workspace" element={<PrivateArea user={user}><ClassicTodayPage/></PrivateArea>} />
             <Route path="/settings" element={<PrivateArea user={user}><SettingsPage user={user} onPersonalSaved={value => { setPrefs(value); applyTheme(value.theme); setThemeError(''); }} onWorkspaceSaved={value => setInstanceName(value.instanceName)} onFavoritesChanged={() => setFavoriteVersion(x=>x+1)}/></PrivateArea>} />
             <Route path="/system" element={<SystemPage web={web} database={database}/>} />
             <Route path="*" element={<NotFound />} />
