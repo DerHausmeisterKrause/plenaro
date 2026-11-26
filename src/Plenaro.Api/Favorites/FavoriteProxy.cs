@@ -289,9 +289,11 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         _users[(user,favorite.Id)]=key;
         var token=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var shared=IsPathHost(external.Host);
+        var entryUrl=new Uri(root,favorite.Path);
+        var entryPath=entryUrl.PathAndQuery+entryUrl.Fragment;
         var landing=shared
-            ? FavoritePathRouting.AppPath(favorite.Slug,favorite.Path)
-            : favorite.Path;
+            ? FavoritePathRouting.AppPath(favorite.Slug,entryPath)
+            : entryPath;
         _pending[token]=new(key,favorite.Slug,landing,
             DateTimeOffset.UtcNow.AddSeconds(45));
         var bootstrap=shared
