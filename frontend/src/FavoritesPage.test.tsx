@@ -2,6 +2,7 @@ import {StrictMode} from 'react';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {MemoryRouter,Route,Routes} from 'react-router-dom';
+import {microsoftDocumentUrl} from './favoriteNavigation';
 import {FavoritePage,FavoriteSettingsPanel} from './FavoritesPage';
 import {FavoriteDebugSettingsPanel} from './FavoriteDebugPanel';
 import type {Favorite} from './favoritesApi';
@@ -60,6 +61,28 @@ beforeEach(()=>{
 afterEach(cleanup);
 
 describe('Favorite iframe bootstrap',()=>{
+  it('uses the original SharePoint Excel URL and does not start a proxy session',async()=>{
+    const url='https://tenant.sharepoint.com/:x:/r/sites/team/Shared%20Documents/plan.xlsx?web=1';
+    mocks.loadFavorites.mockResolvedValue([{...favorite,name:'Excel',url}]);
+    renderStrictFavorite();
+    const link=await screen.findByRole('link',{name:'Dokument in Microsoft 365 öffnen'});
+    expect(link.getAttribute('href')).toBe(url);
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+    expect(mocks.startFavorite).not.toHaveBeenCalled();
+    expect(document.querySelector('iframe')).toBeNull();
+  });
+  it('does not classify lookalike or non-HTTPS hosts as Microsoft documents',()=>{
+    for(const url of [
+      'https://sharepoint.com.attacker.example/','https://fake-sharepoint.com/',
+      'https://tenant.sharepoint.com@attacker.example/','http://tenant.sharepoint.com/',
+      'https://user:pass@tenant.sharepoint.com/','https://tenant.sharepoint.com:8443/'
+    ])expect(microsoftDocumentUrl(url)).toBeNull();
+    expect(microsoftDocumentUrl('https://1drv.ms/x/example')).toBe('https://1drv.ms/x/example');
+    expect(microsoftDocumentUrl('https://tenant.sharepoint.com/sites/team')).toBe(
+      'https://tenant.sharepoint.com/sites/team');
+  });
+
   it('hides diagnostic panels and makes no debug request for non-admin users',async()=>{
     renderStrictFavorite();
     expect(await screen.findByTitle('Wiki')).toBeTruthy();
