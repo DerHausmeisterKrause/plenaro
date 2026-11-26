@@ -1,3 +1,14 @@
+## 26.11.2026 – Phase 7/7: Einheitliche Favoriten und HTTPS-Adresskompatibilität
+
+- [x] SharePoint, OneDrive und Excel wieder wie normale Favoriten über den bestehenden Proxy öffnen; Originalseite weiterhin manuell verfügbar.
+- [x] URL-Fragmente (SPA-Hashrouten) und zulässige HTTPS-IP-Adressen (IPv4/IPv6, einschließlich LAN) unterstützen. Hash bleibt bei Bootstrap/Weiterleitung erhalten.
+- [x] DNS-, TLS-, TCP-, Timeout- und HTTP-403-Fehler verständlich unterscheiden; tatsächliche Firewall-Sperren können nicht allein aus einem Timeout bewiesen werden.
+- [x] HTTPS, Zertifikatsprüfung, tatsächliche TCP-Peer-Prüfung, reservierte Ziele, Same-Origin- und CSRF-Schutz bleiben bestehen. Keine zusätzlichen DNS-Aliase, Container oder Firewall-Umgehung.
+- [x] Classic-WebShortcut-Referenz und bestehende Proxy-Routen geprüft; API-/URL-/UI-Regressionstests ergänzt.
+- [ ] CI und produktiver Test; Microsoft-SSO und Cross-Origin-Weiterleitungen sind nicht durch eine Firewall-Freigabe allein lösbar.
+
+---
+
 ## 26.11.2026 – Phase 7/7: Persistenter Web-Arbeitsbereich
 
 - [x] Classic-Referenz `Services/WebShortcutBrowserSessionManager.cs` geprüft: stabile WebView-Instanzen statt Neuaufbau beim Reiterwechsel.
