@@ -42,6 +42,22 @@ public static class ZnunyTicketDetailEndpoints
                       AND account."NormalizedEmail"=upper(trim(participant.email))))))
         """;
 
+    public static string BuildDirectTicketUrl(string? webUrl,string ticketId)
+    {
+        if(string.IsNullOrWhiteSpace(webUrl)||webUrl.Length>2048||
+            string.IsNullOrEmpty(ticketId)||ticketId.Length>80||!ticketId.All(char.IsAsciiDigit)||
+            !Uri.TryCreate(webUrl,UriKind.Absolute,out var entry)||
+            entry.Scheme!=Uri.UriSchemeHttps||entry.HostNameType==UriHostNameType.Unknown||
+            entry.Host.Equals("SERVER",StringComparison.OrdinalIgnoreCase)||
+            !string.IsNullOrEmpty(entry.UserInfo)||!string.IsNullOrEmpty(entry.Query)||
+            !string.IsNullOrEmpty(entry.Fragment))return "";
+        // Keep the configured CGI path exactly, including any /otrs or /znuny
+        // prefix. No proxy bootstrap tokens, personal credentials or API URL.
+        var result=new UriBuilder(entry){Query="Action=AgentTicketZoom;TicketID="+
+            Uri.EscapeDataString(ticketId),Fragment=""}.Uri.AbsoluteUri;
+        return result.Length<=2048?result:"";
+    }
+
     public static void Map(RouteGroupBuilder group)
     {
         group.MapGet("/tickets/{ticketId}/workspace",async(string ticketId,
@@ -56,10 +72,18 @@ public static class ZnunyTicketDetailEndpoints
                 WHERE user_id=@user AND ticket_id=@ticket
                 """,db);
             Bind(cmd,user.Value,ticketId);
-            await using var reader=await cmd.ExecuteReaderAsync(ct);
-            return await reader.ReadAsync(ct)
-                ? Results.Ok(new {description=reader.GetString(0),ticketUrl=reader.GetString(1)})
-                : Results.Ok(new {description="",ticketUrl=""});
+            string description="",ticketUrl="";
+            await using(var reader=await cmd.ExecuteReaderAsync(ct)){
+                if(await reader.ReadAsync(ct)){
+                    description=reader.GetString(0);
+                    ticketUrl=reader.GetString(1);
+                }
+            }
+            var server=await ZnunyEndpoints.LoadServerAsync(db,ct);
+            // Display the canonical link without writing it into the local
+            // workspace: stored references are part of the access filter.
+            return Results.Ok(new {description,ticketUrl,
+                directTicketUrl=BuildDirectTicketUrl(server.WebUrl,ticketId)});
         });
 
         group.MapPut("/tickets/{ticketId}/workspace",async(string ticketId,WorkspaceInput input,

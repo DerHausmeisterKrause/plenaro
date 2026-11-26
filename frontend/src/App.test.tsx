@@ -36,7 +36,7 @@ let nativeProxyEnabled=false;
 let nativeInteractiveLogin=false;
 let nativeInvalidResponse=false;
 
-let workspaceFixture: TicketWorkspace = {description:'Das ist ein lokaler Test',ticketUrl:'https://example.org/ticket/77'};
+let workspaceFixture: TicketWorkspace = {description:'Das ist ein lokaler Test',ticketUrl:'https://example.org/ticket/77',directTicketUrl:'https://tickets.example.org/znuny/index.pl?Action=AgentTicketZoom;TicketID=77'};
 
 
 beforeEach(() => {
@@ -64,7 +64,7 @@ beforeEach(() => {
   nativeInteractiveLogin=false;
   nativeInvalidResponse=false;
 
-  workspaceFixture = {description:'Das ist ein lokaler Test',ticketUrl:'https://example.org/ticket/77'};
+  workspaceFixture = {description:'Das ist ein lokaler Test',ticketUrl:'https://example.org/ticket/77',directTicketUrl:'https://tickets.example.org/znuny/index.pl?Action=AgentTicketZoom;TicketID=77'};
   vi.stubGlobal('fetch', vi.fn(async (path: string, options?: RequestInit) => {
     if (path === '/api/v1/classic-import/batches') return {
       ok: true, status: 200, json: async () => [],
@@ -1151,13 +1151,13 @@ describe('Plenaro web shell', () => {
     expect((screen.getByLabelText('Beschreibung') as HTMLTextAreaElement).value)
       .toBe('Das ist ein lokaler Test');
     expect((screen.getByLabelText('Ticket URL') as HTMLInputElement).value)
-      .toBe('https://example.org/ticket/77');
+      .toBe('https://tickets.example.org/znuny/index.pl?Action=AgentTicketZoom;TicketID=77');
     fireEvent.click(within(agenda).getByRole('button',{name:/Outlook Projektbesprechung/}));
     expect(await screen.findByRole('heading',{name:'Outlook Projektbesprechung'})).toBeTruthy();
     expect(screen.getByRole('link',{name:/In Outlook öffnen/})).toBeTruthy();
   });
 
-  it('bearbeitet die lokale Task-Beschreibung und URL im Classic-Ticketdetail rechts', async()=>{
+  it('bearbeitet lokale Notizen und zeigt eine kopierbare direkte Ticket-URL', async()=>{
     ticketFixture.mine=[{
       ticketId:'77',ticketNumber:'2026#77',title:'Ticket mit Details',
       queue:'IT',state:'open',stateType:'open',
@@ -1171,14 +1171,20 @@ describe('Plenaro web shell', () => {
     expect(await screen.findByRole('region',{name:'Planung (Segmente)'})).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Beschreibung'),
       {target:{value:'Neue lokale Beschreibung'}});
-    fireEvent.change(screen.getByLabelText('Ticket URL'),
-      {target:{value:'https://example.org/neues-ticket'}});
+    const ticketUrl=screen.getByLabelText('Ticket URL') as HTMLInputElement;
+    expect(ticketUrl.value).toBe('https://tickets.example.org/znuny/index.pl?Action=AgentTicketZoom;TicketID=77');
+    expect(ticketUrl.readOnly).toBe(true);
+    expect(ticketUrl.disabled).toBe(false);
+    fireEvent.focus(ticketUrl);
+    expect(ticketUrl.selectionStart).toBe(0);
+    expect(ticketUrl.selectionEnd).toBe(ticketUrl.value.length);
+    expect(screen.getByRole('link',{name:/Ticket öffnen/}).getAttribute('href')).toBe('/ticket-system?ticket=77');
     fireEvent.click(screen.getByRole('button',{name:/Speichern/}));
     await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
       String(url).endsWith('/tickets/77/workspace') &&
       (opts as RequestInit)?.method==='PUT' &&
       JSON.parse(String((opts as RequestInit).body)).description==='Neue lokale Beschreibung' &&
-      JSON.parse(String((opts as RequestInit).body)).ticketUrl==='https://example.org/neues-ticket'
+      JSON.parse(String((opts as RequestInit).body)).ticketUrl==='https://example.org/ticket/77'
     )).toBe(true));
     expect(screen.getByRole('button',{name:'Erledigt'})).toHaveProperty('disabled',false);
   });

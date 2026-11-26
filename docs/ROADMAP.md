@@ -1,3 +1,14 @@
+## 26.11.2026 – Phase 7/7: Kopierbare direkte Ticket-URL
+
+- [x] WPF-Referenz `Services/TicketSystemService.cs` geprüft: direkter AgentTicketZoom-Link mit interner Ticket-ID.
+- [x] Kanonische HTTPS-URL aus konfigurierter Znuny-Webadresse berechnet; konfigurierte CGI-Pfade (/otrs, /znuny) bleiben bewusst erhalten. Keine Zugangsdaten oder Bootstrap-Tokens.
+- [x] Ticket-URL als schreibgeschütztes, markierbares Textfeld; automatische Auswahl bei Fokus. Geschützter „Ticket öffnen“-Reiter unverändert.
+- [x] Historische lokale URL bleibt in der Datenbank erhalten; generierte URL wird nicht gespeichert und verändert keine Zugriffsrechte.
+- [x] UI- und URL-Vertragstests ergänzt; keine Migration.
+- [ ] CI und produktive Sichtprüfung.
+
+---
+
 ## 26.11.2026 – Phase 7/7: Kontrolliertes Stack-Update
 
 - [x] Ein Befehl für GitHub-Pull, aktuelle Docker-Images und vollständigen Neubau aktiver Build-Dienste.
