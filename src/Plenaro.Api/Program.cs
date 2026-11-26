@@ -480,7 +480,11 @@ app.Use(async (http,next)=>{
     await next();
 });
 app.UseDefaultFiles();
-app.UseStaticFiles();
+var staticTypes=new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+staticTypes.Mappings[".mjs"]="text/javascript";
+staticTypes.Mappings[".bcmap"]="application/octet-stream";
+staticTypes.Mappings[".pfb"]="application/octet-stream";
+app.UseStaticFiles(new StaticFileOptions{ContentTypeProvider=staticTypes});
 app.UseRouting();
 // ASP.NET Core RateLimiter must run AFTER authentication when its policies
 // partition by ClaimsPrincipal. Otherwise every browser behind the same
