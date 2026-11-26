@@ -19,6 +19,7 @@ export type CachedTicket = {
   state: string; stateType: string; ownerId: number|null; responsibleId: number|null;
   createdAt: string|null; changedAt: string|null; isPinned?:boolean;
   unreadArticleCount?:number;
+  unreadArticleIds?:string[];
 };
 export type TicketAccess = {
   approved:boolean;agentId:number|null;candidateUserId:number|null;syncEnabled:boolean;
@@ -126,6 +127,10 @@ export const getCachedTickets=(view:'mine'|'new'|'completed'='mine',search='',pa
     queue:filters.queue??'',state:filters.state??'',
     sort:filters.sort??'changed',direction:filters.direction??'desc'
   }));
+export const getUnreadTickets=()=>request<CachedTicket[]>('/api/v1/znuny/tickets?view=unread');
+export const getTicketSummary=(ticketId:string)=>request<CachedTicket>(
+  '/api/v1/znuny/tickets/'+encodeURIComponent(ticketId)+'/summary');
+export const ticketReadEvent='plenaro-ticket-read';
 export const setShowAllCandidates=async(showAll:boolean)=>{
   await mutate('/api/v1/znuny/tickets/candidates/show-all','PUT',{showAll});
 };
@@ -207,6 +212,7 @@ export const readZnunyArticles=(ticketId:string)=>
   request<ZnunyConversation>(workspaceBase(ticketId)+'/articles');
 export const markZnunyArticleRead=async(ticketId:string,articleId:string):Promise<void>=>{
   await mutate(workspaceBase(ticketId)+'/articles/'+encodeURIComponent(articleId)+'/read','POST');
+  window.dispatchEvent(new Event(ticketReadEvent));
 };
 export const checkZnunyWriteReadiness=(ticketId:string)=>
   request<{personalLogin:boolean;ticketGet:boolean;writeMethod:string;
