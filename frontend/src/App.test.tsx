@@ -403,6 +403,9 @@ describe('Plenaro web shell', () => {
     const list=await screen.findByRole('listbox',{name:'Ticket-Nachricht auswählen'});
     expect(list.getAttribute('size')).toBe('4');
     expect(within(list).getAllByRole('option').map(o=>(o as HTMLOptionElement).value)).toEqual(['14','13']);
+    const options=within(list).getAllByRole('option');
+    expect(options[0].textContent).toMatch(/^2 \| 24\.11\.2026 09:00:00 \| (?:★ Neu · )?Neue Nachricht 14$/);
+    expect(options[1].textContent).toBe('1 | 24.11.2026 09:00:00 | ★ Neu · Neue Nachricht 13');
     await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
       String(url).endsWith('/articles/14/read')&&(opts as RequestInit)?.method==='POST')).toBe(true));
     // Opening the ticket does not clear the other unread message.
