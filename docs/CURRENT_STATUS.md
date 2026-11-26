@@ -1,3 +1,29 @@
+## 26.11.2026 – Phase 7/7: Arbeitsplatz-Hinweis entfernen und Ticketdetails aufklappen
+
+- [x] Bestehende Web-Ansicht `frontend/src/ClassicTodayPage.tsx` und `ClassicTicketDetailPanel.tsx` mit dem Desktop-Vorgänger `DerHausmeisterKrause/project_tool/Views/TodayView.xaml` und dem dokumentierten klassischen Zwei-Spalten-Konzept verglichen.
+- [x] Überflüssigen Hinweis „Hier bearbeitest du deine Znuny-Tickets und Termine. Lokale Aufgaben findest du direkt im Reiter „Lokale Aufgaben“.“ aus dem JSX vollständig entfernt, inklusive ungenutzter Schnellbereich-CSS-Regeln.
+- [x] Arbeitsplatz-Tabs und ersten Inhaltsblock mit einheitlichem Abstand (12 px) ausgerichtet; vorhandene Tagesmarker und Aufgabenliste bleiben unverändert.
+- [x] Im Header eines **geöffneten** Znuny-Tickets einen beschrifteten Expand-/Restore-Schalter hinzugefügt (Maximize/Minimize, `aria-label`, `aria-controls`, `aria-pressed`, Tastaturfokus).
+- [x] Breite umschaltbar: normale Aufteilung ca. 61 % Aufgabenliste / 39 % Ticketdetails, aufgeklappt ca. 25 % Aufgabenliste / 75 % Ticketdetails. Kein Verschieben oder Löschen von Ticketdaten.
+- [x] Bei Wechsel des Arbeitsplatz-Tabs normalisiert sich die Breite wieder; ohne ausgewähltes Ticket existiert kein Schalter. Unter 1050 px bleibt das bestehende gestapelte Ein-Spalten-Layout und der dort wirkungslose Schalter wird ausgeblendet.
+- [x] Frontend-Regressionstest prüft entfernten Text, Schalter nur bei Ticket-Auswahl, Aufklappen, Zurückklappen sowie Tab-Reset.
+- [ ] CI vollständig grün prüfen und Pull Request nach `main` mergen.
+- [ ] Live-Abnahme nach Deployment: Desktop-Abstände, Layoutwechsel, Lesbarkeit längerer Ticketinhalte und Responsive-Verhalten prüfen.
+- [x] Keine Backend-/Datenbankmigration, keine Docker-/Compose-/DNS-Änderungen.
+
+### Deployment nach CI/Merge
+
+```bash
+cd /opt/plenaro
+git switch main
+git pull --ff-only origin main
+docker compose up -d --build --no-deps web
+docker compose restart nginx
+docker compose ps
+```
+
+---
+
 ## 24.11.2026 – Phase 7/7: ATOSS ZK Dialoginitialisierung vor Anmeldung
 
 - [x] Nutzer-Livelog 15:29 geprüft: ATOSS ZK-Seite wird abgerufen, `atoss-zk-login-unconfirmed` vor der Plenaro-Proxy-Navigation. Der Code fasste Fehler bei Passwort-/Klickereignis und späterem Login-Check zusammen.
