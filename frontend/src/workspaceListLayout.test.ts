@@ -1,3 +1,4 @@
+// @ts-ignore: Node is available in Vitest, but browser-only tsconfig omits @types/node.
 import {readFileSync} from 'node:fs';
 import {describe,expect,it} from 'vitest';
 
