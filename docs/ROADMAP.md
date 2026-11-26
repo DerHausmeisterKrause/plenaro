@@ -6,7 +6,7 @@
 - [x] Mehrzeiligen „Plenaro / Favoriten“-Kopf samt redundantem Beschreibungstext durch eine dezente einzeilige Favoritenleiste ersetzt. Name, „Neu verbinden“, „Originalseite öffnen“ und „Favoriten verwalten“ bleiben vorhanden.
 - [x] Eng auf `.favorite-browser-page` begrenzte Styles: geringere Höhe, kompaktere Buttons, responsive Umbrüche. Größerer sichtbarer iframe-Bereich ohne Änderung seiner Sicherheitsattribute.
 - [x] Regressionstests für Administrator mit deaktivierter Diagnose, Administrator mit aktiver Diagnose, Nichtadministrator und kompakte Kopfleiste samt Aktionen.
-- [ ] GitHub CI vollständig erfolgreich prüfen und PR nach `main` mergen.
+- [x] [PR #63](https://github.com/DerHausmeisterKrause/plenaro/pull/63) nach `main` gemergt (Squash-Commit `481d933564ff169ace4c27588e6991fd4050f458`); [GitHub-CI #45763444813](https://github.com/DerHausmeisterKrause/plenaro/actions/runs/45763444813) erfolgreich: Build, Frontend-Regressionstests, Znuny-Vertragstests, TLS, Docker-Smoke und Favoriten-Browser-Login.
 - [ ] Live-Abnahme im Browser: ohne Admin-Debug keine Karte, nach Aktivierung Konsole sichtbar, Höhe der Webanwendung und mobile Breite prüfen.
 - [x] Keine neuen Dockercontainer, DNS-Einträge, Hosts, Ports, Migrationen oder Compose-Profile.
 
