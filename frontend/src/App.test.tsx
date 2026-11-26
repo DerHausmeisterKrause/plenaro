@@ -1213,9 +1213,35 @@ describe('Plenaro web shell', () => {
     fireEvent.click(restore);
     expect(split?.classList.contains('is-ticket-expanded')).toBe(false);
     fireEvent.click(screen.getByRole('button',{name:'Ticketdetails vergrößern'}));
+    const first=ticketFixture.mine[0];
+    ticketFixture.mine.push({...first,ticketId:'78',ticketNumber:'2026#78',title:'Zweites Ticket'});
+    ticketFixture.new=[{...first,ticketId:'79',ticketNumber:'2026#79',title:'Neues Ticket'}];
     fireEvent.click(screen.getByRole('tab',{name:'Neue Aufgaben'}));
     expect(screen.getByLabelText('Ticketdetails und Planung')
       .closest('.plenaro-today-columns')?.classList.contains('is-ticket-expanded')).toBe(false);
+    fireEvent.click(await screen.findByRole('button',{name:/Neues Ticket/}));
+    expect(screen.getByRole('button',{name:'Ticketdetails verkleinern'}).getAttribute('aria-pressed')).toBe('true');
+    expect(split?.classList.contains('is-ticket-expanded')).toBe(true);
+    fireEvent.click(screen.getByRole('tab',{name:'Aktuelle Aufgaben'}));
+    fireEvent.click(await screen.findByRole('button',{name:/Zweites Ticket/}));
+    expect(split?.classList.contains('is-ticket-expanded')).toBe(true);
+    fireEvent.click(await screen.findByRole('button',{name:/Ticket für breite Detailansicht/}));
+    expect(split?.classList.contains('is-ticket-expanded')).toBe(true);
+
+    // Remount the application like a browser reload, without clearing storage.
+    cleanup();
+    renderAt('/workspace');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    fireEvent.click(await screen.findByRole('button',{name:/Zweites Ticket/}));
+    expect(screen.getByRole('button',{name:'Ticketdetails verkleinern'}).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByRole('button',{name:'Ticketdetails verkleinern'}));
+    fireEvent.click(await screen.findByRole('button',{name:/Ticket für breite Detailansicht/}));
+    expect(screen.getByRole('button',{name:'Ticketdetails vergrößern'}).getAttribute('aria-pressed')).toBe('false');
+    cleanup();
+    renderAt('/workspace');
+    fireEvent.click(await screen.findByRole('tab',{name:'Aktuelle Aufgaben'}));
+    fireEvent.click(await screen.findByRole('button',{name:/Zweites Ticket/}));
+    expect(screen.getByRole('button',{name:'Ticketdetails vergrößern'}).getAttribute('aria-pressed')).toBe('false');
   });
 
   it('lädt echte Znuny-Nachrichten und bietet Antworten und Zuweisung an',async()=>{
