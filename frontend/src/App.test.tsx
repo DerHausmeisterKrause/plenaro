@@ -883,6 +883,21 @@ describe('Plenaro web shell', () => {
     await waitFor(()=>expect(scroll.scrollTop).toBe(135));
   });
 
+  it('kennzeichnet den heutigen Tag im Wochenkalender und zeigt keinen Zeitlinien-Punkt',async()=>{
+    renderAt('/week');
+    expect(await screen.findByRole('heading',{name:'Meine Woche'})).toBeTruthy();
+    const weekday=new Date().getDay();
+    const todayHeader=document.querySelector('.classic-calendar-header.today');
+    if(weekday>=1&&weekday<=5){
+      expect(todayHeader).not.toBeNull();
+      expect(todayHeader?.querySelector('.classic-calendar-today-badge')?.textContent)
+        .toBe('Heute');
+    }else{
+      expect(todayHeader).toBeNull();
+    }
+    expect(document.querySelector('.classic-calendar-now-marker')).toBeNull();
+  });
+
   it('verschiebt ein Segment mit Drag-and-drop und erhält Notizen durch den gezielten PATCH', async () => {
     const today = new Date();
     const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -1175,48 +1190,21 @@ describe('Plenaro web shell', () => {
     )).toBe(true);
   });
 
-  it('zeigt Normal, UL, AM, HO und BR als Tagesmarker ohne Microsoft', async () => {
+  it('zeigt am Arbeitsplatz nur Arbeitstag und rechts ausgerichtetes Datum mit Kalenderwoche',async()=>{
     renderAt('/today');
-    expect(await screen.findByRole('heading', { name: 'Arbeitstag heute' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'UL' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'AM' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'HO' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'BR' })).toBeTruthy();
-  });
-
-  it('beantragt HO in Heute erst nach Ja mit Kalenderprüfung, Marker und E-Mail', async()=>{
-    const today=localDate();
-    renderAt('/today');
-    const ho=await screen.findByRole('button',{name:'HO'});
-    fireEvent.click(ho);
-    expect(screen.getByRole('dialog').textContent).toContain(
-      'Willst du wirklich am');
-    // Nein: no side effects, as in WPF.
-    fireEvent.click(screen.getByRole('button',{name:'Nein'}));
-    expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
-      String(url)==='/api/v1/day-markers/'+today &&
-      (opts as RequestInit)?.method==='PUT')).toBe(false);
-    fireEvent.click(ho);
-    fireEvent.click(screen.getByRole('button',{name:'Ja, beantragen'}));
-    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
-      String(url)==='/api/v1/br-requests/preflight' &&
-      (opts as RequestInit)?.method==='POST' &&
-      JSON.parse(String((opts as RequestInit).body)).homeOffice===true
-    )).toBe(true));
-    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
-      String(url)==='/api/v1/day-markers/'+today &&
-      (opts as RequestInit)?.method==='PUT' &&
-      JSON.parse(String((opts as RequestInit).body)).isHo===true
-    )).toBe(true));
-    await waitFor(()=>expect(vi.mocked(fetch).mock.calls.some(([url,opts])=>
-      String(url)==='/api/v1/br-requests/'+today+'/send' &&
-      (opts as RequestInit)?.method==='POST'
-    )).toBe(true));
-    const records=vi.mocked(fetch).mock.calls.map(([url])=>String(url));
-    expect(records.indexOf('/api/v1/br-requests/preflight')).toBeLessThan(
-      records.indexOf('/api/v1/day-markers/'+today));
-    expect(records.indexOf('/api/v1/day-markers/'+today)).toBeLessThan(
-      records.indexOf('/api/v1/br-requests/'+today+'/send'));
+    expect(await screen.findByRole('heading',{name:'Arbeitstag heute'})).toBeTruthy();
+    const card=document.querySelector('.plenaro-workday');
+    expect(card).not.toBeNull();
+    expect(card?.querySelector('.plenaro-workday-date')?.textContent)
+      .toMatch(/KW\\s+\\d{1,2}/);
+    expect(screen.queryByText('Tagesmarker für deine persönliche Planung')).toBeNull();
+    expect(card?.querySelector('.plenaro-marker-actions')).toBeNull();
+    for(const action of ['Normal','UL','AM','HO','BR'])
+      expect(within(card as HTMLElement).queryByRole('button',{name:action})).toBeNull();
+    // Marker changes remain available through WeekCalendarPage; loading the
+    // workplace no longer needs day-marker requests.
+    expect(vi.mocked(fetch).mock.calls.some(([url])=>
+      String(url).startsWith('/api/v1/day-markers/'))).toBe(false);
   });
 
   it('zeigt lokale Aufgaben und zusammengeführte OTRS-Zeitbuchungen mit CSV', async () => {
