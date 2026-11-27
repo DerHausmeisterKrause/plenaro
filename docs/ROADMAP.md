@@ -1,3 +1,13 @@
+## 27.11.2026 – Phase 7/7: Wiki-Bereichsnavigation
+
+- [x] Classic-Referenz `Views/WikiBrowserView.xaml.cs` geprüft: Navigation bleibt in der persönlichen Browserinstanz.
+- [x] Dynamische Confluence-Bereichs-/Seitenlinks auf dem gemeinsamen Favoritenhost in den bestehenden /wiki-Pfad korrigieren. Externe Domains, andere persönliche Favoriten und bereits korrekte Links bleiben unverändert; keine Änderung der Proxy-Cookies, Anmeldung oder ACL.
+- [x] Sitzungsdiagnose unterscheidet fehlendes Cookie, fehlende Sitzung, Ablauf, falschen Pfad und ersetzte Sitzung, ohne URLs oder Geheimnisse zu protokollieren.
+- [x] Vertragstest und Chromium-Test mit echtem pfadgebundenem Cookie ergänzt.
+- [ ] CI und produktive Reproduktion. Die genaue Ursache des gemeldeten Fehlers ist ohne Netzwerkpfad noch nicht bestätigt; tatsächlicher Sitzungsablauf erfordert weiterhin Neuverbinden.
+
+---
+
 ## 27.11.2026 – Phase 7/7: Zentraler Znuny-Lesecache
 
 - [x] Classic-Referenz `Services/TicketDetailCacheService.cs` und `Models/ZnunySyncPolicy.cs` berücksichtigt.
