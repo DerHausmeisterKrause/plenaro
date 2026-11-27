@@ -2642,16 +2642,36 @@ Assert(ZnunyReadCache.Key(cacheSettings,"service-a")!=ZnunyReadCache.Key(cacheSe
     ZnunyReadCache.Key(cacheSettings,"service-a")!=ZnunyReadCache.Key(cacheSettings with{ApiUrl="https://other.example.org/api"},"service-a"),
     "read cache identity includes service account, source and reader configuration");
 
-var wikiNavigationMethod=typeof(FavoriteProxy).GetMethod("InjectWikiNavigationShim",BindingFlags.Static|BindingFlags.NonPublic)!;
-var wikiNavigationHtml="<html><head><script>var contextPath='';</script></head><body></body></html>";
-var wikiNavigationOrigin=new Uri("https://wiki.example.org/");
-var wikiNavigationResult=(string)wikiNavigationMethod.Invoke(null,new object[]{wikiNavigationHtml,wikiNavigationOrigin})!;
-Assert(wikiNavigationResult.Contains("data-plenaro-wiki-navigation")&&
-    wikiNavigationResult.Contains("const upstream = \"https://wiki.example.org\";")&&
-    wikiNavigationResult.IndexOf("data-plenaro-wiki-navigation",StringComparison.Ordinal)<
-    wikiNavigationResult.IndexOf("var contextPath",StringComparison.Ordinal)&&
-    (string)wikiNavigationMethod.Invoke(null,new object[]{wikiNavigationResult,wikiNavigationOrigin})! == wikiNavigationResult,
-    "wiki navigation shim precedes upstream scripts and is idempotent");
+// Synthetic reproduction of Confluence's spacesmenu JSON shape.
+var wikiMenuMethod=typeof(FavoriteProxy).GetMethod("RewriteConfluenceSpacesMenu",BindingFlags.Static|BindingFlags.NonPublic)!;
+var wikiMenuGate=typeof(FavoriteProxy).GetMethod("ShouldRewriteConfluenceSpacesMenu",BindingFlags.Static|BindingFlags.NonPublic)!;
+var wikiMenuOrigin=new Uri("https://wiki.example.org/");
+var wikiMenuProxy=new Uri("https://apps.example.org/wiki/");
+var wikiMenuHtml="""<ul><li><a href="/spaces/TEST/pages/42/Test">Test<img src="/download/attachments/7/global.logo?version=1&amp;api=v2"></a></li><li><a href="/wiki/display/TEST">Existing</a><a href="https://other.example.org/">External</a></li></ul>""";
+var wikiMenuJson=JsonSerializer.Serialize(new{template=wikiMenuHtml,other="/unrelated"});
+string RewriteWikiMenu(string json,string prefix="/wiki")=>(string)wikiMenuMethod.Invoke(null,new object[]{json,wikiMenuOrigin,wikiMenuProxy,prefix})!;
+var wikiMenuResult=RewriteWikiMenu(wikiMenuJson);
+using(var menu=JsonDocument.Parse(wikiMenuResult)){
+    var template=menu.RootElement.GetProperty("template").GetString()!;
+    Assert(template.Contains("href=\"/wiki/spaces/TEST/pages/42/Test\"")&&
+        template.Contains("src=\"/wiki/download/attachments/7/global.logo?version=1&amp;api=v2\"")&&
+        template.Contains("href=\"/wiki/display/TEST\"")&&
+        template.Contains("href=\"https://other.example.org/\"")&&
+        menu.RootElement.GetProperty("other").GetString()=="/unrelated",
+        "Confluence spaces menu rewrites only HTML template links and logos");
+}
+Assert(RewriteWikiMenu(wikiMenuResult)==wikiMenuResult&&RewriteWikiMenu(wikiMenuJson,"")==wikiMenuJson&&
+    RewriteWikiMenu("{\"template\":123}")=="{\"template\":123}"&&
+    RewriteWikiMenu("not json")=="not json","menu rewrite idempotent and safe for unexpected responses");
+bool WikiMenuGate(string method,HttpStatusCode status,string path,string prefix,string slug,string mime)=>
+    (bool)wikiMenuGate.Invoke(null,new object[]{method,status,path,prefix,slug,
+        System.Net.Http.Headers.MediaTypeHeaderValue.Parse(mime)})!;
+Assert(WikiMenuGate("GET",HttpStatusCode.OK,"/rest/ia/1.0/spacesmenu","/wiki","wiki","application/json; charset=utf-8")&&
+    !WikiMenuGate("POST",HttpStatusCode.OK,"/rest/ia/1.0/spacesmenu","/wiki","wiki","application/json")&&
+    !WikiMenuGate("GET",HttpStatusCode.OK,"/rest/ia/1.0/other","/wiki","wiki","application/json")&&
+    !WikiMenuGate("GET",HttpStatusCode.OK,"/rest/ia/1.0/spacesmenu","/site-test","site-test","application/json")&&
+    !WikiMenuGate("GET",HttpStatusCode.Unauthorized,"/rest/ia/1.0/spacesmenu","/wiki","wiki","application/json"),
+    "only successful central wiki spaces-menu JSON is rewritten");
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory
