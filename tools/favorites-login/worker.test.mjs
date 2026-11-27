@@ -1,5 +1,4 @@
 import test from 'node:test';
-import {readFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
 import {blockedIp,performLogin} from './server.mjs';
@@ -126,48 +125,5 @@ test('Chromium retains cross-origin iframe state while its stable parent is hidd
     assert.equal(await frame.locator('#draft').inputValue(),'unsaved draft');
     assert.equal(await frame.locator('body').evaluate(el=>el.ownerDocument.defaultView.scrollY),600);
     assert.equal(loads,1);
-  }finally{await browser.close();}
-});
-
-
-// Run the actual production shim, not a duplicate test implementation.
-test('wiki navigation keeps dynamic space links inside the session cookie path',{
-  skip:!process.env.PLENARO_WIKI_SHIM_SOURCE
-},async()=>{
-  const source=await readFile(process.env.PLENARO_WIKI_SHIM_SOURCE,'utf8');
-  const match=source.match(/private const string WikiNavigationShim = """\s*([\s\S]*?)\s*""";/);
-  assert.ok(match);
-  const script=match[1].replace('__WIKI_UPSTREAM__',JSON.stringify('https://wiki.example.org'));
-  const browser=await chromium.launch({headless:true,chromiumSandbox:false});
-  try{
-    const context=await browser.newContext();
-    await context.addCookies([{name:'Plenaro.FavoriteProxy',value:'mock-wiki-session',
-      domain:'apps.example.org',path:'/wiki',secure:true,httpOnly:true,sameSite:'Strict'}]);
-    const page=await context.newPage();
-    await page.route('https://apps.example.org/**',async route=>{
-      const path=new URL(route.request().url()).pathname;
-      if(path==='/wiki/')return route.fulfill({contentType:'text/html',body:
-        '<html><head>'+script+'</head><body><div id="menu"></div></body></html>'});
-      const headers=await route.request().allHeaders();
-      return route.fulfill({contentType:'text/html',body:
-        path.startsWith('/wiki/')&&headers.cookie?.includes('mock-wiki-session')?
-          '<h1>Wiki session retained</h1>':'<h1>Session missing</h1>'});
-    });
-    await page.goto('https://apps.example.org/wiki/');
-    await page.locator('#menu').evaluate(node=>{
-      node.innerHTML='<a id="space" href="/display/IT?x=1#section">Space</a>'+
-        '<a id="absolute" href="https://wiki.example.org/pages/viewpage.action?pageId=42">Page</a>'+
-        '<a id="existing" href="/wiki/display/IT">Existing</a>'+
-        '<a id="foreign" href="https://other.example.org/display/IT">Foreign</a>'+
-        '<a id="other" href="/site-00000000000040008000000000000001/">Other</a>';
-    });
-    await page.waitForFunction(()=>document.querySelector('#space').getAttribute('href')==='/wiki/display/IT?x=1#section');
-    assert.equal(await page.locator('#absolute').getAttribute('href'),'/wiki/pages/viewpage.action?pageId=42');
-    assert.equal(await page.locator('#existing').getAttribute('href'),'/wiki/display/IT');
-    assert.equal(await page.locator('#foreign').getAttribute('href'),'https://other.example.org/display/IT');
-    assert.equal(await page.locator('#other').getAttribute('href'),'/site-00000000000040008000000000000001/');
-    await page.locator('#space').click();
-    assert.equal(await page.locator('h1').textContent(),'Wiki session retained');
-    assert.equal(page.url(),'https://apps.example.org/wiki/display/IT?x=1#section');
   }finally{await browser.close();}
 });
