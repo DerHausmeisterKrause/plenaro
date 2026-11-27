@@ -2642,6 +2642,16 @@ Assert(ZnunyReadCache.Key(cacheSettings,"service-a")!=ZnunyReadCache.Key(cacheSe
     ZnunyReadCache.Key(cacheSettings,"service-a")!=ZnunyReadCache.Key(cacheSettings with{ApiUrl="https://other.example.org/api"},"service-a"),
     "read cache identity includes service account, source and reader configuration");
 
+var wikiNavigationMethod=typeof(FavoriteProxy).GetMethod("InjectWikiNavigationShim",BindingFlags.Static|BindingFlags.NonPublic)!;
+var wikiNavigationHtml="<html><head><script>var contextPath='';</script></head><body></body></html>";
+var wikiNavigationOrigin=new Uri("https://wiki.example.org/");
+var wikiNavigationResult=(string)wikiNavigationMethod.Invoke(null,new object[]{wikiNavigationHtml,wikiNavigationOrigin})!;
+Assert(wikiNavigationResult.Contains("data-plenaro-wiki-navigation")&&
+    wikiNavigationResult.Contains("const upstream = \"https://wiki.example.org\";")&&
+    wikiNavigationResult.IndexOf("data-plenaro-wiki-navigation",StringComparison.Ordinal)<
+    wikiNavigationResult.IndexOf("var contextPath",StringComparison.Ordinal)&&
+    (string)wikiNavigationMethod.Invoke(null,new object[]{wikiNavigationResult,wikiNavigationOrigin})! == wikiNavigationResult,
+    "wiki navigation shim precedes upstream scripts and is idempotent");
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory
