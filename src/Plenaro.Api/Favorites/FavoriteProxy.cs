@@ -398,11 +398,20 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         if(appPath==BootstrapPath){
             await BootstrapAsync(ctx,slug,pathMode,ct);return;
         }
-        if(!ctx.Request.Cookies.TryGetValue(CookieName,out var key)||
-            !_sessions.TryGetValue(key,out var session)||
+        var hasCookie=ctx.Request.Cookies.TryGetValue(CookieName,out var key);
+        if(!hasCookie||
+            !_sessions.TryGetValue(key!,out var session)||
             session.Expired||session.Slug!=slug||
             !_users.TryGetValue((session.User,session.Favorite),out var active)||
             active!=key){
+            if(Navigation(ctx.Request)){
+                var reason=!hasCookie?"cookie-missing":
+                    !_sessions.TryGetValue(key!,out var found)?"session-missing":
+                    found.Expired?"session-timeout":found.Slug!=slug?"route-mismatch":"session-replaced";
+                ctx.RequestServices?.GetService<ILogger<FavoriteProxy>>()?
+                    .LogWarning("Favorite navigation denied: {Reason}; wiki={Wiki}; shared={Shared}",
+                        reason,slug=="wiki",pathMode);
+            }
             await ProxyNavigationErrorAsync(ctx,401,"proxy-session-expired",
                 "Die Favoriten-Sitzung ist nicht mehr gültig. "+
                 "Klicke in Plenaro auf „Neu verbinden“.",ct);
@@ -412,7 +421,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         // was revoked, even when the existing proxy cookie is still valid.
         if(!await StillApprovedAsync(ctx,session,ct)){
             Debug(session.User,session.Favorite,"warning","session-revoked");
-            Remove(key,session);
+            Remove(key!,session);
             await ProxyNavigationErrorAsync(ctx,403,"proxy-session-revoked",
                 "Die Favoriten-Verbindung wurde geändert oder deaktiviert. "+
                 "Bitte die Webseite neu öffnen.",ct);

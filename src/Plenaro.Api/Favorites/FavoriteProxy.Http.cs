@@ -778,6 +778,30 @@ public sealed partial class FavoriteProxy
             FavoritePathRouting.BrowserShimEnabled(enabledSlugs,slug);
     }
 
+    // Confluence's space menu returns a JSON object with an HTML template.
+    // Rewrite only that field on this exact endpoint; never generic API JSON.
+    private static string RewriteConfluenceSpacesMenu(string json,Uri upstream,Uri external,string pathPrefix)
+    {
+        if(pathPrefix!="/wiki")return json;
+        try{
+            if(JsonNode.Parse(json) is not JsonObject document ||
+               document["template"] is not JsonValue value ||
+               !value.TryGetValue<string>(out var template) ||
+               string.IsNullOrEmpty(template))return json;
+            var corrected=RewriteHtmlPreservingScripts(template,upstream,external,pathPrefix);
+            if(corrected==template)return json;
+            document["template"]=corrected;
+            return document.ToJsonString();
+        }catch(JsonException){return json;}
+         catch(InvalidOperationException){return json;}
+    }
+
+    private static bool ShouldRewriteConfluenceSpacesMenu(string method,HttpStatusCode status,
+        string appPath,string pathPrefix,string slug,MediaTypeHeaderValue? mime)=>
+        HttpMethods.IsGet(method)&&status==HttpStatusCode.OK&&slug=="wiki"&&pathPrefix=="/wiki"&&
+        appPath.Equals("/rest/ia/1.0/spacesmenu",StringComparison.OrdinalIgnoreCase)&&
+        mime?.MediaType?.Equals("application/json",StringComparison.OrdinalIgnoreCase)==true;
+
     private static bool Navigation(HttpRequest request)
     {
         if(!HttpMethods.IsGet(request.Method))return false;
@@ -1064,6 +1088,17 @@ public sealed partial class FavoriteProxy
                     rewritten==content?"unchanged":"prefixed";
                 Debug(session.User,session.Favorite,"info",
                     rewritten==content?"login-next-unchanged":"login-next-rewritten",method,resource);
+                ctx.Response.ContentType="application/json; charset=utf-8";
+                await ctx.Response.WriteAsync(rewritten,ct);
+                return;
+            }
+            if(disposition is null&&ShouldRewriteConfluenceSpacesMenu(method,res.StatusCode,
+                appPath,pathPrefix,session.Slug,mime)){
+                var payload=await ReadLimitedAsync(res.Content,MaxTextBytes,ct);
+                var content=Encoding.UTF8.GetString(payload);
+                var rewritten=RewriteConfluenceSpacesMenu(content,session.Upstream,external,pathPrefix);
+                ctx.Response.Headers["X-Plenaro-Wiki-Spaces"]=
+                    rewritten==content?"unchanged":"prefixed";
                 ctx.Response.ContentType="application/json; charset=utf-8";
                 await ctx.Response.WriteAsync(rewritten,ct);
                 return;

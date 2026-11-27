@@ -1,3 +1,13 @@
+## 27.11.2026 – Phase 7/7: Wiki-Bereichsnavigation
+
+- [x] Netzwerkprotokoll bestätigt: `GET /wiki/rest/ia/1.0/spacesmenu` liefert JSON mit HTML im Feld `template`; Bereichslinks und Logo-Pfade ohne /wiki erzeugen HTTP 401.
+- [x] Nur erfolgreiche JSON-Antwort dieses zentralen Wiki-Endpunkts und nur dessen HTML-Template mit dem bestehenden HTML-Rewriter korrigieren. Keine generische JSON-Umschreibung, keine Browser-Shim-Erweiterung.
+- [x] Sitzungsdiagnose unterscheidet fehlendes Cookie, fehlende Sitzung, Ablauf, falschen Pfad und ersetzte Sitzung ohne URLs oder Geheimnisse.
+- [x] Vertragstest mit synthetischem Menü, Logo, externem Link, bereits korrektem Pfad und Endpoint-Gating.
+- [ ] CI und produktive Abnahme. Ablaufzeiten, Cookies, Anmeldung und andere Favoriten unverändert.
+
+---
+
 ## 27.11.2026 – Phase 7/7: Zentraler Znuny-Lesecache
 
 - [x] Classic-Referenz `Services/TicketDetailCacheService.cs` und `Models/ZnunySyncPolicy.cs` berücksichtigt.
