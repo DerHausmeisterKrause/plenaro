@@ -600,87 +600,6 @@ public sealed partial class FavoriteProxy
         </script>
         """;
 
-    // Confluence space menus can create anchors after the initial HTML
-    // rewrite. Keep navigation inside the wiki's cookie path without changing
-    // other favorites, external links or browser security settings.
-    private const string WikiNavigationShim = """
-        <script data-plenaro-wiki-navigation>
-        (function () {
-          "use strict";
-          const base = "/wiki";
-          const upstream = __WIKI_UPSTREAM__;
-          const origin = location.origin;
-          function rebase(raw) {
-            if (typeof raw !== "string" || !raw.trim() ||
-                raw.trim().startsWith("#")) return raw;
-            let url;
-            try { url = new URL(raw, document.baseURI); }
-            catch (_) { return raw; }
-            if (url.username || url.password ||
-                (url.origin !== origin && url.origin !== upstream)) return raw;
-            const path = url.pathname;
-            if (url.origin === origin &&
-                (path === base || path.startsWith(base + "/"))) return raw;
-            if (path.startsWith("//") || path.startsWith("/_plenaro") ||
-                path.startsWith("/site-")) return raw;
-            // On the shared host, only Confluence navigation routes are
-            // recoverable. Do not capture links to unrelated favorite apps.
-            if (url.origin === origin &&
-                !/^\/(?:display|spaces|pages|browse|dashboard|search|plugins|users|label)(?:\/|\.action$|$)/i.test(path) &&
-                !/^\/(?:index|homepage|viewpage|recentlyupdated)\.action$/i.test(path) &&
-                path !== "/") return raw;
-            return base + path + url.search + url.hash;
-          }
-          function adjust(anchor) {
-            if (!anchor || !anchor.matches("a[href],area[href]")) return;
-            const raw = anchor.getAttribute("href");
-            const next = rebase(raw);
-            if (next !== raw) anchor.setAttribute("href", next);
-          }
-          function scan(node) {
-            if (!node || node.nodeType !== 1) return;
-            adjust(node);
-            node.querySelectorAll("a[href],area[href]").forEach(adjust);
-          }
-          // Capture before Confluence's click handlers read the link.
-          function beforeNavigation(event) {
-            const anchor = event.composedPath().find(node =>
-              node instanceof Element && node.matches("a[href],area[href]"));
-            adjust(anchor);
-          }
-          document.addEventListener("click", beforeNavigation, true);
-          document.addEventListener("auxclick", beforeNavigation, true);
-          document.addEventListener("contextmenu", beforeNavigation, true);
-          const observer = new MutationObserver(changes => {
-            for (const change of changes) {
-              if (change.type === "attributes") adjust(change.target);
-              else for (const node of change.addedNodes) scan(node);
-            }
-          });
-          function watch() {
-            if (!document.documentElement) return;
-            observer.observe(document.documentElement, {
-              subtree:true, childList:true, attributes:true, attributeFilter:["href"]
-            });
-            scan(document.documentElement);
-          }
-          if (document.documentElement) watch();
-          else document.addEventListener("DOMContentLoaded", watch, {once:true});
-        })();
-        </script>
-        """;
-
-    private static string InjectWikiNavigationShim(string html,Uri upstream)
-    {
-        if(html.Contains("data-plenaro-wiki-navigation",StringComparison.Ordinal))
-            return html;
-        var script=WikiNavigationShim.Replace("__WIKI_UPSTREAM__",
-            JsonSerializer.Serialize(upstream.GetLeftPart(UriPartial.Authority)),
-            StringComparison.Ordinal);
-        return Regex.Replace(html,@"<head\b[^>]*>",m=>m.Value+script,
-            RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromSeconds(1));
-    }
-
     private static string InjectBrowserPathShim(string html,string pathPrefix)=>
         InjectPathShim(html,pathPrefix,false);
 
@@ -858,6 +777,30 @@ public sealed partial class FavoriteProxy
                 StringComparison.OrdinalIgnoreCase)==true &&
             FavoritePathRouting.BrowserShimEnabled(enabledSlugs,slug);
     }
+
+    // Confluence's space menu returns a JSON object with an HTML template.
+    // Rewrite only that field on this exact endpoint; never generic API JSON.
+    private static string RewriteConfluenceSpacesMenu(string json,Uri upstream,Uri external,string pathPrefix)
+    {
+        if(pathPrefix!="/wiki")return json;
+        try{
+            if(JsonNode.Parse(json) is not JsonObject document ||
+               document["template"] is not JsonValue value ||
+               !value.TryGetValue<string>(out var template) ||
+               string.IsNullOrEmpty(template))return json;
+            var corrected=RewriteHtmlPreservingScripts(template,upstream,external,pathPrefix);
+            if(corrected==template)return json;
+            document["template"]=corrected;
+            return document.ToJsonString();
+        }catch(JsonException){return json;}
+         catch(InvalidOperationException){return json;}
+    }
+
+    private static bool ShouldRewriteConfluenceSpacesMenu(string method,HttpStatusCode status,
+        string appPath,string pathPrefix,string slug,MediaTypeHeaderValue? mime)=>
+        HttpMethods.IsGet(method)&&status==HttpStatusCode.OK&&slug=="wiki"&&pathPrefix=="/wiki"&&
+        appPath.Equals("/rest/ia/1.0/spacesmenu",StringComparison.OrdinalIgnoreCase)&&
+        mime?.MediaType?.Equals("application/json",StringComparison.OrdinalIgnoreCase)==true;
 
     private static bool Navigation(HttpRequest request)
     {
@@ -1149,6 +1092,17 @@ public sealed partial class FavoriteProxy
                 await ctx.Response.WriteAsync(rewritten,ct);
                 return;
             }
+            if(disposition is null&&ShouldRewriteConfluenceSpacesMenu(method,res.StatusCode,
+                appPath,pathPrefix,session.Slug,mime)){
+                var payload=await ReadLimitedAsync(res.Content,MaxTextBytes,ct);
+                var content=Encoding.UTF8.GetString(payload);
+                var rewritten=RewriteConfluenceSpacesMenu(content,session.Upstream,external,pathPrefix);
+                ctx.Response.Headers["X-Plenaro-Wiki-Spaces"]=
+                    rewritten==content?"unchanged":"prefixed";
+                ctx.Response.ContentType="application/json; charset=utf-8";
+                await ctx.Response.WriteAsync(rewritten,ct);
+                return;
+            }
             var sniff=Navigation(ctx.Request)&&res.IsSuccessStatusCode&&
                 disposition is null && (mime?.MediaType is null or
                     "text/plain" or "application/octet-stream" or
@@ -1184,8 +1138,6 @@ public sealed partial class FavoriteProxy
                     ? RewriteHtmlPreservingScripts(html,session.Upstream,external,pathPrefix)
                     : Rewrite(html,session.Upstream,external,pathPrefix);
                 if(isHtml&&pathPrefix.Length>0){
-                    if(session.Slug=="wiki")
-                        transformed=InjectWikiNavigationShim(transformed,session.Upstream);
                     if(session.Slug.StartsWith("site-",StringComparison.Ordinal))
                         transformed=InjectPersonalSitePathShimWithOrigin(
                             transformed,pathPrefix,session.Upstream);
