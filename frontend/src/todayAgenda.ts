@@ -70,12 +70,13 @@ export function buildTodayAgenda(day: string, segments: TicketAgendaSegment[],
       allDay: false, location: '', webLink: null,
     });
   }
+  const linkedEvents=new Set(segments.map(s=>s.outlookEventId).filter(Boolean));
   const seenEvents = new Set<string>();
   for (const event of outlook) {
     const occursToday = event.isAllDay
       ? outlookAllDayOccursOnDay(event,day)
       : overlapsDay(event.start,event.end);
-    if (seenEvents.has(event.id) || !occursToday) continue;
+    if (seenEvents.has(event.id) || linkedEvents.has(event.id) || !occursToday) continue;
     seenEvents.add(event.id);
     let safeLink: string | null = null;
     if (event.webLink) {

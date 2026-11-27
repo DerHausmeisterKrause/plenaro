@@ -14,7 +14,8 @@ public static class FavoritesEndpoints
         bool Enabled,bool AvailableToAll,Guid[]? AllowedUsers);
     public sealed record PersonalSiteInput(string Name,string Url,string Username,
         bool AutoLogin,bool Enabled,int SortOrder,string? Password,
-        bool ClearPassword=false);
+        bool ClearPassword=false,string OpenMode="proxy");
+    public sealed record FavoriteModeInput(string OpenMode);
     public sealed record FavoriteOrderInput(Guid[] Ids);
     public sealed record FavoriteDebugToggle(bool Enabled);
     public sealed record FavoriteDebugClear(Guid FavoriteId);
@@ -25,7 +26,7 @@ public static class FavoritesEndpoints
     public sealed record FavoriteInfo(Guid Id,Guid AppId,string Name,string AppName,
         string Slug,string Path,string Username,bool AutoLogin,bool Enabled,
         int SortOrder,bool HasPassword,string? Url=null,
-        bool AllowPrivateUpstream=false);
+        bool AllowPrivateUpstream=false,string OpenMode="proxy");
 
     public static void MapPlenaroFavorites(this WebApplication app)
     {
@@ -138,8 +139,8 @@ public static class FavoritesEndpoints
             }
             await using(var favCmd=new NpgsqlCommand("""
                 INSERT INTO user_favorites(id,user_id,app_id,name,path,
-                    username,auto_login,enabled,sort_order)
-                VALUES(@id,@user,@app,@name,@path,@username,@auto,@enabled,@ord)
+                    username,auto_login,enabled,sort_order,open_mode)
+                VALUES(@id,@user,@app,@name,@path,@username,@auto,@enabled,@ord,@mode)
                 """,db,tx)){
                 favCmd.Parameters.AddWithValue("id",id);
                 favCmd.Parameters.AddWithValue("user",user.Id);
@@ -150,6 +151,7 @@ public static class FavoritesEndpoints
                 favCmd.Parameters.AddWithValue("auto",input.AutoLogin);
                 favCmd.Parameters.AddWithValue("enabled",input.Enabled);
                 favCmd.Parameters.AddWithValue("ord",input.SortOrder);
+                favCmd.Parameters.AddWithValue("mode",input.OpenMode);
                 await favCmd.ExecuteNonQueryAsync(ct);
             }
             await tx.CommitAsync(ct);
@@ -236,7 +238,7 @@ public static class FavoritesEndpoints
             }
             await using(var cmd=new NpgsqlCommand("""
                 UPDATE user_favorites SET name=@name,path=@path,username=@username,
-                    auto_login=@auto,enabled=@enabled,sort_order=@sort
+                    auto_login=@auto,enabled=@enabled,sort_order=@sort,open_mode=@mode
                 WHERE id=@id AND user_id=@user AND app_id=@app
                 """,db,tx)){
                 cmd.Parameters.AddWithValue("id",id);
@@ -248,6 +250,7 @@ public static class FavoritesEndpoints
                 cmd.Parameters.AddWithValue("auto",input.AutoLogin);
                 cmd.Parameters.AddWithValue("enabled",input.Enabled);
                 cmd.Parameters.AddWithValue("sort",input.SortOrder);
+                cmd.Parameters.AddWithValue("mode",input.OpenMode);
                 await cmd.ExecuteNonQueryAsync(ct);
             }
             await tx.CommitAsync(ct);
@@ -255,6 +258,28 @@ public static class FavoritesEndpoints
                 await vault.DeleteAsync("user",user.Id,PasswordName(id),ct);
             else if(input.Password is {Length:>0})
                 await vault.SetAsync("user",user.Id,PasswordName(id),input.Password,ct);
+            proxy.RevokeFavorite(user.Id,id);
+            return Results.NoContent();
+        });
+
+        group.MapPut("/personal/{id:guid}/mode",async(Guid id,FavoriteModeInput input,
+            HttpContext ctx,IAntiforgery anti,UserManager<ApplicationUser> users,
+            IConfiguration config,FavoriteProxy proxy,CancellationToken ct)=>{
+            if(!await ValidCsrf(ctx,anti))return CsrfError();
+            var user=await CurrentUser(ctx,users);
+            if(user is null)return Results.Unauthorized();
+            if(input.OpenMode is not ("proxy" or "direct" or "external"))
+                return Results.BadRequest(new{error="Ungültiger Öffnungsmodus."});
+            await using var db=await Open(config,ct);
+            await using var cmd=new NpgsqlCommand("""
+                UPDATE user_favorites f SET open_mode=@mode
+                FROM favorite_apps a WHERE f.id=@id AND f.user_id=@user
+                AND a.id=f.app_id AND a.owner_user_id=@user
+                """,db);
+            cmd.Parameters.AddWithValue("mode",input.OpenMode);
+            cmd.Parameters.AddWithValue("id",id);
+            cmd.Parameters.AddWithValue("user",user.Id);
+            if(await cmd.ExecuteNonQueryAsync(ct)!=1)return Results.NotFound();
             proxy.RevokeFavorite(user.Id,id);
             return Results.NoContent();
         });
@@ -418,6 +443,7 @@ public static class FavoritesEndpoints
             var favorites=await LoadFavorites(db,user.Id,ct);
             var favorite=favorites.FirstOrDefault(x=>x.Id==id && x.Enabled);
             if(favorite is null)return Results.NotFound();
+            if(favorite.OpenMode!="proxy")return Results.Conflict(new{error="Dieser Favorit verwendet den lokalen Browser."});
             var upstream=await Upstream(db,user.Id,favorite.AppId,ct);
             if(upstream is null)return Results.Forbid();
             proxy.ConfigureDebug(user.Id,ctx.User.IsInRole("Admin") &&
@@ -586,7 +612,7 @@ public static class FavoritesEndpoints
         await using var cmd=new NpgsqlCommand("""
             SELECT f.id,f.app_id,f.name,a.name,a.slug,f.path,f.username,
                 f.auto_login,f.enabled,f.sort_order,a.upstream_url,
-                a.allow_private_upstream
+                a.allow_private_upstream,f.open_mode
             FROM user_favorites f JOIN favorite_apps a ON a.id=f.app_id
             WHERE f.user_id=@uid AND a.enabled AND a.slug<>'wiki' AND
                 (a.owner_user_id=@uid OR
@@ -604,7 +630,7 @@ public static class FavoritesEndpoints
                 reader.GetString(5),reader.GetString(6),reader.GetBoolean(7),
                 reader.GetBoolean(8),reader.GetInt32(9),false,
                 new Uri(new Uri(reader.GetString(10)),reader.GetString(5)).AbsoluteUri,
-                reader.GetBoolean(11)));
+                reader.GetBoolean(11),reader.GetString(12)));
         return favorites;
     }
 
@@ -621,6 +647,9 @@ public static class FavoritesEndpoints
            (input.ClearPassword&&!string.IsNullOrEmpty(input.Password))||
            (input.AutoLogin&&string.IsNullOrWhiteSpace(input.Username)))
             return false;
+        if(input.OpenMode is not ("proxy" or "direct" or "external")){
+            error="Ungültiger Öffnungsmodus.";return false;
+        }
         if(!FavoriteUrlPolicy.TryPersonalUrl(input.Url,out origin,out path))return false;
         // Preserve the existing self-proxy, DNS and reserved-host checks.
         // User-provided DNS still gets checked again at TCP connect time.

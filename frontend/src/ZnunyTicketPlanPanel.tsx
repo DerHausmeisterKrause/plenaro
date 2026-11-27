@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Pencil, Save, Trash2, X } from 'lucide-react';
 import { localDate } from './tasksApi';
-import {graphStatus,readOutlookWeek,type OutlookEvent} from './graphApi';
+import {graphStatus,readOutlookWeek,queueSegmentCalendar,segmentCalendarLabel,type OutlookEvent} from './graphApi';
 import {availabilityOverlaps,buildAvailabilitySlots} from './znunyAvailability';
 import {
   deleteTicketSegment,getTicketSegments,planTicketSegment,updateTicketSegment,
@@ -24,7 +24,7 @@ const fmtDay=(day:string)=>new Intl.DateTimeFormat('de-DE',
   {weekday:'long',day:'2-digit',month:'2-digit',year:'numeric'}).format(parseDate(day));
 
 /** Desktop TaskDetailPanel.xaml: editable segment form, availability strip,
- *  existing segment editors, attendee text. No Outlook write is implied. */
+ *  existing segment editors, attendees and delegated Outlook synchronization. */
 export function ZnunyTicketPlanPanel({ticketId,onChanged}:{
   ticketId:string|null;onChanged?:()=>void;
 }) {
@@ -112,8 +112,10 @@ export function ZnunyTicketPlanPanel({ticketId,onChanged}:{
     return()=>{active=false;};
   },[ticketId,day,revision]);
 
-  const bar=useMemo(()=>buildAvailabilitySlots(day,localBusy,outlook,editing??undefined),
-    [day,localBusy,outlook,editing]);
+  const ownOutlookId=segments.find(s=>s.id===editing)?.outlookEventId;
+  const otherOutlook=useMemo(()=>outlook?.filter(e=>e.id!==ownOutlookId)??null,[outlook,ownOutlookId]);
+  const bar=useMemo(()=>buildAvailabilitySlots(day,localBusy,otherOutlook,editing??undefined),
+    [day,localBusy,otherOutlook,editing]);
   const newStart=new Date(day+'T'+start+':00');
   const newEnd=new Date(day+'T'+end+':00');
   const validDates=Number.isFinite(newStart.getTime())&&Number.isFinite(newEnd.getTime());
@@ -121,9 +123,9 @@ export function ZnunyTicketPlanPanel({ticketId,onChanged}:{
   const toIso=validDates?newEnd.toISOString():'';
   const localConflict=validDates&&localBusy!==null&&availabilityOverlaps(
     fromIso,toIso,localBusy.filter(item=>item.id!==editing));
-  const outlookConflict=validDates&&outlook!==null&&availabilityOverlaps(
+  const outlookConflict=validDates&&otherOutlook!==null&&availabilityOverlaps(
     fromIso,toIso,
-    outlook.filter(item=>!['free','workingelsewhere'].includes(item.showAs.toLowerCase()))
+    otherOutlook.filter(item=>!['free','workingelsewhere'].includes(item.showAs.toLowerCase()))
       .map(item=>({startsAt:item.start,endsAt:item.end})));
   const selectedConflict=localConflict||outlookConflict;
 
@@ -162,7 +164,7 @@ export function ZnunyTicketPlanPanel({ticketId,onChanged}:{
         note:note.trim(),participants:emails};
       if(editing)await updateTicketSegment(ticketId,editing,data);
       else await planTicketSegment(ticketId,data);
-      await reload(ticketId);reset();setNotice('Segment gespeichert.');
+      await reload(ticketId);reset();setNotice('Segment gespeichert. Outlook-Synchronisierung vorgemerkt.');
       onChanged?.();
     }catch(e){setError(e instanceof Error?e.message:'Segment konnte nicht gespeichert werden.');}
     finally{setBusy(false);}
@@ -173,8 +175,20 @@ export function ZnunyTicketPlanPanel({ticketId,onChanged}:{
     try{
       await deleteTicketSegment(ticketId,item.id);
       await reload(ticketId);
-      reset();setNotice('Segment gelöscht.');onChanged?.();
+      reset();setNotice('Segment gelöscht. Outlook-Entfernung vorgemerkt.');onChanged?.();
     }catch(e){setError(e instanceof Error?e.message:'Löschen fehlgeschlagen.');}
+    finally{setBusy(false);}
+  }
+  useEffect(()=>{
+    if(!ticketId||!segments.some(s=>s.calendarStatus==='pending'||s.calendarStatus==='syncing'))return;
+    const timer=window.setTimeout(()=>{void getTicketSegments(ticketId).then(setSegments).catch(()=>{});},5000);
+    return()=>window.clearTimeout(timer);
+  },[ticketId,segments]);
+  async function sync(item:TicketSegment){
+    if(!ticketId||busy||!window.confirm('Diesen Termin in Outlook synchronisieren? Eingetragene Teilnehmer erhalten gegebenenfalls eine Einladung.'))return;
+    setBusy(true);setError('');setNotice('');
+    try{await queueSegmentCalendar('ticket',item.id);await reload(ticketId);setNotice('Outlook-Synchronisierung vorgemerkt.');}
+    catch(e){setError(e instanceof Error?e.message:'Synchronisierung fehlgeschlagen.');}
     finally{setBusy(false);}
   }
   if(!ticketId)return null;
@@ -235,7 +249,7 @@ export function ZnunyTicketPlanPanel({ticketId,onChanged}:{
         <label htmlFor="wpf-segment-attendees">Teilnehmer (E-Mail)</label>
         <input id="wpf-segment-attendees" value={participants}
           onChange={e=>setParticipants(e.target.value)}/>
-        <p className="classic-wpf-help">Mehrere Adressen mit Komma oder Semikolon trennen.</p>
+        <p className="classic-wpf-help">Mehrere Adressen mit Komma oder Semikolon trennen. Bei verbundener Outlook-Anmeldung werden Einladungen versendet.</p>
         {error&&<p role="alert" className="um-feedback failure">{error}</p>}
         {notice&&<p role="status" className="um-feedback success">{notice}</p>}
         <button className="button button-primary" type="submit"
@@ -249,6 +263,8 @@ export function ZnunyTicketPlanPanel({ticketId,onChanged}:{
       {segments.map((item,index)=><div className="classic-wpf-segment-box"
         key={item.id}>
         <strong>Segment {index+1}</strong>
+        <p className="classic-wpf-help">{segmentCalendarLabel(item.calendarStatus,item.calendarError)}</p>
+        {(!item.calendarStatus||['not-synced','error'].includes(item.calendarStatus))&&<button type="button" className="button button-secondary" disabled={busy} onClick={()=>void sync(item)}>Outlook synchronisieren</button>}
         <p>{displayTime(item.startsAt)} – {displayTime(item.endsAt)}
           <span className="classic-wpf-help"> · Dauer: {duration(item.startsAt,item.endsAt)} min</span></p>
         {item.note&&<p>{item.note}</p>}

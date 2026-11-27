@@ -1,14 +1,15 @@
+export type FavoriteMode='proxy'|'direct'|'external';
 export type FavoriteApp={id:string;name:string;slug:string;enabled:boolean;
   availableToAll:boolean;upstreamUrl?:string;allowedUsers?:string[]};
 export type Favorite={id:string;appId:string;name:string;appName:string;
   slug:string;path:string;username:string;autoLogin:boolean;enabled:boolean;
-  sortOrder:number;hasPassword:boolean;url?:string};
+  sortOrder:number;hasPassword:boolean;url?:string;openMode?:FavoriteMode};
 export type FavoriteInput={appId:string;name:string;path:string;
   username:string;autoLogin:boolean;enabled:boolean;sortOrder:number;
   password?:string;clearPassword?:boolean};
 export type PersonalSiteInput={
   name:string;url:string;username:string;autoLogin:boolean;enabled:boolean;
-  sortOrder:number;password?:string;clearPassword?:boolean;
+  sortOrder:number;password?:string;clearPassword?:boolean;openMode?:FavoriteMode;
 };
 export type AppInput={name:string;slug:string;upstreamUrl:string;
   enabled:boolean;availableToAll:boolean;allowedUsers:string[]};
@@ -60,3 +61,5 @@ export const removePersonalFavorite=(id:string)=>
 export const sortPersonalFavorites=(ids:string[])=>
   request<void>('/api/v1/favorites/personal/order','PUT',{ids});
 
+
+export const setFavoriteMode=(id:string,openMode:FavoriteMode)=>request<void>('/api/v1/favorites/personal/'+encodeURIComponent(id)+'/mode','PUT',{openMode});

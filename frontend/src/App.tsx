@@ -80,7 +80,10 @@ function Sidebar({ onNavigate, favorites }: { onNavigate: () => void; favorites:
         </nav>
         <span className="nav-caption second">FAVORITEN</span>
         <nav className="nav-list" aria-label="Persönliche Favoriten">
-          {favorites.filter(x=>x.enabled).map(item=><NavLink key={item.id}
+          {favorites.filter(x=>x.enabled).map(item=>item.openMode==='external'&&item.url?
+            <a key={item.id} href={item.url} target="_blank" rel="noopener noreferrer" className="nav-link" onClick={onNavigate}>
+              <Star size={19}/><span>{item.name}</span><ExternalLink size={14}/></a>:
+            <NavLink key={item.id}
             to={'/favorites/'+item.id} onClick={onNavigate}
             className={({isActive})=>'nav-link'+(isActive?' active':'')}>
             <Star size={19}/><span>{item.name}</span>
@@ -375,7 +378,7 @@ export function AppContent() {
         <main id="main-content">
           {themeError && <p role="alert" className="um-feedback failure app-settings-error">{themeError}</p>}
           {user&&<RetainedWebWorkspace key={user.id} userId={user.id}
-            admin={user.roles.includes('Admin')} onInvalidSession={invalidateSession}/>}
+            admin={user.roles.includes('Admin')} onInvalidSession={invalidateSession} onModeChanged={()=>setFavoriteVersion(v=>v+1)}/>}
           <Routes>
             <Route path="/" element={<PrivateArea user={user}><Dashboard web={web} database={database} instanceName={instanceName}/></PrivateArea>} />
             {navigation.filter(item => !['settings', 'week', 'today', 'ticketsystem', 'reports', 'wiki'].includes(item.key)).map((item) => <Route key={item.key} path={item.path} element={<PrivateArea user={user}><EmptyModule item={item} theme={theme} toggleTheme={toggleTheme}/></PrivateArea>} />)}

@@ -456,7 +456,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                     WHERE f.id=@favorite AND f.user_id=@user AND
                       f.app_id=@app AND f.enabled AND a.enabled AND
                       a.slug=@slug AND a.upstream_url=@upstream AND
-                      a.slug<>'wiki' AND f.auto_login=@auto AND
+                      a.slug<>'wiki' AND f.open_mode='proxy' AND f.auto_login=@auto AND
                       f.username=@username AND
                       (a.owner_user_id=@user OR
                        (a.owner_user_id IS NULL AND

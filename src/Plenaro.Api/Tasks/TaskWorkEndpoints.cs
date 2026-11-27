@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Npgsql;
 using NpgsqlTypes;
 using Plenaro.Api.Identity;
+using Plenaro.Api.Graph;
 
 namespace Plenaro.Api.Tasks;
 
@@ -19,8 +20,9 @@ public static class TaskWorkEndpoints
         string? Note, string[]? Participants);
     public sealed record SegmentRescheduleInput(DateTimeOffset StartsAt, DateTimeOffset EndsAt,
         DateTimeOffset ExpectedStartsAt, DateTimeOffset ExpectedEndsAt);
-    public sealed record SegmentView(Guid Id, Guid TaskId, string TaskTitle,
-        DateTimeOffset StartsAt, DateTimeOffset EndsAt, string Note, string[] Participants);
+    public sealed record SegmentView(Guid Id, string TaskId, string TaskTitle,
+        DateTimeOffset StartsAt, DateTimeOffset EndsAt, string Note, string[] Participants,
+        string CalendarStatus,string CalendarError,string? OutlookEventId,string Kind);
     public sealed record TimeSummary(long BookedSeconds, long RunningSeconds,
         DateTimeOffset? RunningSince, long AdjustedMinutes, int SessionCount);
 
@@ -124,8 +126,10 @@ public static class TaskWorkEndpoints
             await using var db = await OpenAsync(config, ct);
             if (!await TaskExistsAsync(db, taskId, owner.Value, ct)) return Results.NotFound();
             await using var cmd = new NpgsqlCommand("""
-                SELECT s.id,s.task_id,t.title,s.starts_at,s.ends_at,s.note,s.participants
+                SELECT s.id,s.task_id::text,t.title,s.starts_at,s.ends_at,s.note,s.participants,
+                    COALESCE(c.status,'not-synced'),COALESCE(c.last_error,''),c.event_id,'task'::text
                 FROM task_segments s JOIN tasks t ON t.id=s.task_id AND t.owner_user_id=s.owner_user_id
+                LEFT JOIN segment_calendar_sync c ON c.kind='task' AND c.segment_id=s.id AND c.user_id=s.owner_user_id
                 WHERE s.owner_user_id=@owner AND s.task_id=@task
                 ORDER BY s.starts_at LIMIT 200
                 """, db);
@@ -144,10 +148,20 @@ public static class TaskWorkEndpoints
             if (owner is null) return Results.Unauthorized();
             await using var db = await OpenAsync(config, ct);
             await using var cmd = new NpgsqlCommand("""
-                SELECT s.id,s.task_id,t.title,s.starts_at,s.ends_at,s.note,s.participants
+                SELECT s.id,s.task_id::text,t.title,s.starts_at,s.ends_at,s.note,s.participants,
+                    COALESCE(c.status,'not-synced'),COALESCE(c.last_error,''),c.event_id,'task'::text
                 FROM task_segments s JOIN tasks t ON t.id=s.task_id AND t.owner_user_id=s.owner_user_id
+                LEFT JOIN segment_calendar_sync c ON c.kind='task' AND c.segment_id=s.id AND c.user_id=s.owner_user_id
                 WHERE s.owner_user_id=@owner AND s.ends_at>@start AND s.starts_at<@end
-                ORDER BY s.starts_at LIMIT 200
+                UNION ALL
+                SELECT s.id,s.ticket_id,t.title,s.starts_at,s.ends_at,s.note,s.participants,
+                    COALESCE(c.status,'not-synced'),COALESCE(c.last_error,''),c.event_id,'ticket'::text
+                FROM znuny_ticket_segments s JOIN znuny_cached_tickets t ON t.ticket_id=s.ticket_id
+                JOIN znuny_approved_agent_bindings b ON b.user_id=s.user_id
+                LEFT JOIN segment_calendar_sync c ON c.kind='ticket' AND c.segment_id=s.id AND c.user_id=s.user_id
+                WHERE s.user_id=@owner AND s.ends_at>@start AND s.starts_at<@end
+                    AND lower(t.state_type)<>'closed'
+                ORDER BY starts_at LIMIT 400
                 """, db);
             cmd.Parameters.AddWithValue("owner", owner.Value);
             cmd.Parameters.AddWithValue("start", NpgsqlDbType.TimestampTz).Value = start.UtcDateTime;
@@ -195,6 +209,7 @@ public static class TaskWorkEndpoints
                 """, db, tx);
             BindSegment(cmd, input, owner.Value, taskId, id);
             if (await cmd.ExecuteScalarAsync(ct) is null) return Results.NotFound();
+            await SegmentCalendarSync.QueueAsync(db,tx,"task",id,owner.Value,ct);
             await tx.CommitAsync(ct);
             return Results.Created($"/api/v1/tasks/{taskId}/segments", new { id });
         });
@@ -224,6 +239,7 @@ public static class TaskWorkEndpoints
                 """, db, tx);
             BindSegment(cmd, input, owner.Value, taskId, segmentId);
             if (await cmd.ExecuteScalarAsync(ct) is null) return Results.NotFound();
+            await SegmentCalendarSync.QueueAsync(db,tx,"task",segmentId,owner.Value,ct);
             await tx.CommitAsync(ct);
             return Results.NoContent();
         });
@@ -279,6 +295,7 @@ public static class TaskWorkEndpoints
             cmd.Parameters.Add("expected_end", NpgsqlDbType.TimestampTz).Value = input.ExpectedEndsAt.UtcDateTime;
             if (await cmd.ExecuteScalarAsync(ct) is null)
                 return Results.Conflict(new { error = "Segmentänderung konnte nicht übernommen werden." });
+            await SegmentCalendarSync.QueueAsync(db,tx,"task",segmentId,owner.Value,ct);
             await tx.CommitAsync(ct);
             return Results.NoContent();
         });
@@ -342,10 +359,11 @@ public static class TaskWorkEndpoints
         var result = new List<SegmentView>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
-            result.Add(new SegmentView(reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2),
+            result.Add(new SegmentView(reader.GetGuid(0), reader.GetString(1), reader.GetString(2),
                 new DateTimeOffset(reader.GetDateTime(3), TimeSpan.Zero),
                 new DateTimeOffset(reader.GetDateTime(4), TimeSpan.Zero),
-                reader.GetString(5), reader.GetFieldValue<string[]>(6)));
+                reader.GetString(5), reader.GetFieldValue<string[]>(6),reader.GetString(7),reader.GetString(8),
+                reader.IsDBNull(9)?null:reader.GetString(9),reader.GetString(10)));
         return result;
     }
 

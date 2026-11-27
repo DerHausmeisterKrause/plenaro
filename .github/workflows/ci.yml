@@ -287,6 +287,8 @@ jobs:
           docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "INSERT INTO znuny_ticket_segments(id,user_id,ticket_id,starts_at,ends_at,note,participants) SELECT '11111111-1111-4111-8111-111111111111',b.user_id,'42','2026-10-31 09:00:00+00','2026-10-31 09:30:00+00','Tag only',ARRAY['USER@EXAMPLE.INVALID']::text[] FROM znuny_approved_agent_bindings b WHERE b.agent_id=42"
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets?view=mine" | python3 -c 'import json,sys;assert set(x["ticketId"] for x in json.load(sys.stdin))=={"42","77","78"}'
           curl -fsS -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/agenda?date=2026-10-31" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert len(d)==1 and d[0]["ticketId"]=="42"'
+          curl -fsS -b "$COOKIE" "$API/api/v1/segments/?start=2026-10-31T00%3A00%3A00Z&end=2026-11-01T00%3A00%3A00Z" | python3 -c 'import json,sys;d=json.load(sys.stdin);assert any(s["kind"]=="ticket" and s["taskId"]=="42" and s["calendarStatus"]=="not-synced" for s in d)'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/graph/segments/ticket/11111111-1111-4111-8111-111111111111/sync" -H "X-CSRF-TOKEN: $USER_CSRF")" = "404"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/42/workspace")" = "200"
           docker compose exec -T database psql -U plenaro -d plenaro -v ON_ERROR_STOP=1 -c "DELETE FROM znuny_ticket_segments WHERE id='11111111-1111-4111-8111-111111111111'"
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" "$API/api/v1/znuny/tickets/42/workspace")" = "404"
@@ -396,6 +398,8 @@ jobs:
             -d '{"startsAt":"2026-10-29T09:00:00Z","endsAt":"2026-10-29T09:30:00Z","note":"Testsegment","participants":["kunde@example.invalid"]}' \
             | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
           test -n "$SEG_ID"
+          test "$(docker compose exec -T database psql -U plenaro -d plenaro -At -c "SELECT count(*) FROM segment_calendar_sync WHERE kind='task' AND segment_id='$SEG_ID'")" = "1"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -b "$USER_COOKIE" -X POST "$API/api/v1/graph/segments/task/$SEG_ID/sync" -H "X-CSRF-TOKEN: $USER_CSRF")" = "404"
           curl -fsS -b "$COOKIE" "$API/api/v1/segments/availability?start=2026-10-29T09:30:00Z&end=2026-10-29T10:00:00Z" | python3 -c 'import json,sys;assert json.load(sys.stdin)["available"]'
 
           curl -fsS -b "$COOKIE" "$API/api/v1/segments/availability?start=2026-10-29T09:00:00Z&end=2026-10-29T09:30:00Z&excludeId=$SEG_ID" | python3 -c 'import json,sys;assert json.load(sys.stdin)["available"]'
@@ -419,6 +423,7 @@ jobs:
           curl -fsS -b "$COOKIE" "$API/api/v1/tasks/$WORK_ID/segments" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert len(d)==1 and d[0]["note"]=="Verschoben"'
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X DELETE "$API/api/v1/tasks/$WORK_ID/segments/$SEG_ID" -H "X-CSRF-TOKEN: $CSRF")" = "204"
           curl -fsS -b "$COOKIE" "$API/api/v1/tasks/$WORK_ID/segments" | python3 -c 'import json,sys; assert json.load(sys.stdin)==[]'
+          test "$(docker compose exec -T database psql -U plenaro -d plenaro -At -c "SELECT revision FROM segment_calendar_sync WHERE kind='task' AND segment_id='$SEG_ID'")" = "4"
           # Calendar schedule-only API: the removed segment must be inaccessible.
           test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PATCH "$API/api/v1/tasks/$WORK_ID/segments/$SEG_ID/schedule" -H "X-CSRF-TOKEN: $CSRF" -H 'Content-Type: application/json' -d '{"startsAt":"2026-10-30T11:00:00Z","endsAt":"2026-10-30T11:30:00Z","expectedStartsAt":"2026-10-29T09:00:00Z","expectedEndsAt":"2026-10-29T09:30:00Z"}')" = "404"
           # Availability API: unauthenticated reads are rejected; users see only their bookings.

@@ -77,6 +77,7 @@ builder.Services.AddHttpClient("Plenaro.Graph", http =>
 builder.Services.AddScoped<GraphCalendarService>();
 builder.Services.AddScoped<BrMailService>();
 builder.Services.AddScoped<HomeOfficeCalendarService>();
+builder.Services.AddHostedService<SegmentCalendarSync>();
 builder.Services.AddHttpClient("Plenaro.Znuny", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(10);

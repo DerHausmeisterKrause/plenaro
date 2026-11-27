@@ -2593,6 +2593,27 @@ Assert(NetworkFailure(new HttpRequestException(HttpRequestError.NameResolutionEr
     NetworkFailure(new HttpRequestException("Host address is blocked.")).Code=="private-upstream-blocked",
     "network errors distinguish DNS TLS refusal and blocked address");
 
+// Outlook events use absolute UTC instants, participant invitations and a
+// private marker for exact event identity instead of matching by subject.
+var calendarSegmentId=Guid.NewGuid();
+var calendarOwner=Guid.NewGuid();
+var calendarMarker=Plenaro.Api.Graph.SegmentCalendarSync.Marker("ticket",calendarOwner,calendarSegmentId);
+var calendarData=new Plenaro.Api.Graph.SegmentCalendarSync.SegmentData("Ticket A",
+    new DateTime(2026,11,26,8,30,0,DateTimeKind.Utc),new DateTime(2026,11,26,9,0,0,DateTimeKind.Utc),
+    "Testnotiz",new[]{"test@example.invalid","TEST@example.invalid"},"https://example.org/index.pl?TicketID=42");
+using(var payload=JsonDocument.Parse(JsonSerializer.Serialize(Plenaro.Api.Graph.SegmentCalendarSync.Payload(calendarData,calendarMarker,calendarSegmentId,true)))){
+    var root=payload.RootElement;
+    Assert(root.GetProperty("showAs").GetString()=="busy"&&
+        root.GetProperty("start").GetProperty("dateTime").GetString()=="2026-11-26T08:30:00.0000000"&&
+        root.GetProperty("start").GetProperty("timeZone").GetString()=="UTC"&&
+        root.GetProperty("attendees").GetArrayLength()==1&&
+        root.GetProperty("singleValueExtendedProperties")[0].GetProperty("value").GetString()==calendarMarker&&
+        root.GetProperty("transactionId").GetString()==calendarSegmentId.ToString("D"),
+        "Graph segment payload has stable identity, UTC time and deduplicated attendees");
+}
+var calendarUpdate=Plenaro.Api.Graph.SegmentCalendarSync.Payload(calendarData,calendarMarker,calendarSegmentId,false);
+Assert(!calendarUpdate.ContainsKey("transactionId")&&!calendarUpdate.ContainsKey("singleValueExtendedProperties"),
+    "existing event update leaves identity marker and transaction ID intact");
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory

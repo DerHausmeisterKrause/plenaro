@@ -6,12 +6,12 @@ import {ArrowDown,ArrowUp,ExternalLink,Plus,RefreshCw,Save,ShieldCheck,
 import {
   loadFavorites,createPersonalFavorite,updatePersonalFavorite,
   removePersonalFavorite,sortPersonalFavorites,startFavorite,
-  type Favorite,type PersonalSiteInput
+  setFavoriteMode,type Favorite,type PersonalSiteInput,type FavoriteMode
 } from './favoritesApi';
 
 const blank=():PersonalSiteInput=>({
   name:'',url:'https://',username:'',autoLogin:false,
-  enabled:true,sortOrder:0,password:'',clearPassword:false
+  enabled:true,sortOrder:0,password:'',clearPassword:false,openMode:'proxy'
 });
 function ErrorMessage({message}:{message:string}){
   return message?<p role="alert" className="um-feedback failure">{message}</p>:null;
@@ -40,7 +40,7 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
     setSelected(item.id);
     setForm({name:item.name,url:item.url??'https://',username:item.username,
       autoLogin:item.autoLogin,enabled:item.enabled,sortOrder:item.sortOrder,
-      password:'',clearPassword:false});
+      password:'',clearPassword:false,openMode:item.openMode??'proxy'});
     setError('');setInfo('');
   }
   function fresh(){
@@ -130,6 +130,14 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
           Interne HTTPS-Ziele müssen vom Plenaro-Server erreichbar sein.
           Loopback-, Link-Local- und Metadaten-Adressen bleiben gesperrt;
           das TLS-Zertifikat muss zur Adresse passen.</p>
+        <label htmlFor="fav-mode">Öffnungsmodus</label>
+        <select id="fav-mode" value={form.openMode??'proxy'}
+          onChange={e=>setForm({...form,openMode:e.target.value as FavoriteMode})}>
+          <option value="proxy">Plenaro-Engine (Standard)</option>
+          <option value="direct">Direkt eingebettet (lokaler Browser)</option>
+          <option value="external">Externer Browser-Tab</option>
+        </select>
+        <p className="um-hint">Lokale Modi verwenden den Browser am Arbeitsplatz und keine gespeicherten Plenaro-Zugangsdaten. Direkt eingebettet funktioniert nur, wenn die Zielseite Iframes erlaubt.</p>
         <label htmlFor="fav-user">Anmeldename (optional)</label>
         <input id="fav-user" value={form.username} autoComplete="off" maxLength={180}
           onChange={e=>setForm({...form,username:e.target.value})}/>
@@ -178,7 +186,7 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
   </section>;
 }
 
-export function FavoritePage({admin=false,favoriteId,visible=true}:{admin?:boolean;favoriteId?:string;visible?:boolean}){
+export function FavoritePage({admin=false,favoriteId,visible=true,onModeChanged}:{admin?:boolean;favoriteId?:string;visible?:boolean;onModeChanged?:()=>void}){
   const route=useParams();
   const id=favoriteId??route.id;
   const [favorite,setFavorite]=useState<Favorite|null>(null);
@@ -186,12 +194,13 @@ export function FavoritePage({admin=false,favoriteId,visible=true}:{admin?:boole
   const [error,setError]=useState('');
   const [loading,setLoading]=useState(true);
   const [revision,setRevision]=useState(0);
+  const [modeBusy,setModeBusy]=useState(false);
   // React.StrictMode mounts effects twice in development. Starting the proxy
   // twice revokes the first server-side session, so the iframe can be handed
   // an already invalid single-use bootstrap token. Share ONE in-flight
   // request across both effect invocations for the same favorite/revision.
   const startup=useRef<{
-    key:string;promise:Promise<{item:Favorite;url:string}>
+    key:string;promise:Promise<{item:Favorite;url:string;failure?:string}>
   }|null>(null);
   useEffect(()=>{
     let active=true;
@@ -203,6 +212,13 @@ export function FavoritePage({admin=false,favoriteId,visible=true}:{admin?:boole
         const items=await loadFavorites();
         const item=items.find(x=>x.id===id&&x.enabled);
         if(!item)throw new Error('Favorit nicht vorhanden oder deaktiviert.');
+        try{
+        if(item.openMode==='external'||item.openMode==='direct'){
+          const original=new URL(item.url??'');
+          if(original.protocol!=='https:'||original.username||original.password||
+            original.origin===window.location.origin)throw new Error('Ungültige direkte HTTPS-Adresse.');
+          return {item,url:item.openMode==='direct'?original.href:''};
+        }
         const result=await startFavorite(id);
         const destination=new URL(result.url);
         // The dedicated-host proxy uses /_plenaro/favorite-bootstrap.
@@ -218,12 +234,13 @@ export function FavoritePage({admin=false,favoriteId,visible=true}:{admin?:boole
           (!legacyBootstrap&&!sharedBootstrap))
           throw new Error('Ungültige Favoriten-Proxy-Adresse.');
         return {item,url:destination.toString()};
+        }catch(e){return {item,url:'',failure:e instanceof Error?e.message:'Webseite nicht erreichbar.'};}
       })();
       startup.current={key,promise};
     }
-    void startup.current.promise.then(({item,url})=>{
+    void startup.current.promise.then(({item,url,failure})=>{
       if(active){
-        setFavorite(item);setUrl(url);
+        setFavorite(item);setUrl(url);setError(failure??'');
         if(!url)setLoading(false);
       }
     }).catch(e=>{
@@ -232,36 +249,52 @@ export function FavoritePage({admin=false,favoriteId,visible=true}:{admin?:boole
     });
     return()=>{active=false;};
   },[id,revision]);
+  const mode=favorite?.openMode??'proxy';
+  async function changeMode(next:FavoriteMode){
+    if(!id||modeBusy||next===mode)return;
+    setModeBusy(true);setError('');
+    try{
+      await setFavoriteMode(id,next);
+      setFavorite(old=>old?{...old,openMode:next}:old);setUrl('');
+      onModeChanged?.();setRevision(n=>n+1);
+    }catch(e){setError(e instanceof Error?e.message:'Öffnungsmodus konnte nicht gespeichert werden.');}
+    finally{setModeBusy(false);}
+  }
   return <div className="page znuny-web-portal favorite-browser-page">
     <div className="znuny-web-portal-toolbar content-card favorite-browser-toolbar">
       <div className="favorite-browser-identity">
         <Star size={15} aria-hidden="true"/>
         <h1>{favorite?.name??'Webfavorit'}</h1>
-        <span className="favorite-browser-context">Favorit</span>
+        <span className="favorite-browser-context">{mode==='proxy'?'Favorit':mode==='direct'?'Lokal eingebettet':'Externer Browser'}</span>
       </div>
       <div className="favorites-toolbar favorite-browser-actions">
+        {favorite&&<select aria-label="Öffnungsmodus" value={mode} disabled={modeBusy}
+          onChange={e=>void changeMode(e.target.value as FavoriteMode)}>
+          <option value="proxy">Plenaro-Engine</option><option value="direct">Direkt eingebettet</option>
+          <option value="external">Externer Browser-Tab</option></select>}
         <button type="button" className="button button-secondary"
-          onClick={()=>setRevision(n=>n+1)} disabled={loading}>
+          onClick={()=>setRevision(n=>n+1)} disabled={loading||modeBusy||mode==='external'}>
           <RefreshCw size={15}/>Neu verbinden</button>
         {favorite?.url&&<a className="button button-secondary"
           href={favorite.url} target="_blank" rel="noopener noreferrer">
           <ExternalLink size={15}/>Originalseite öffnen</a>}
       </div>
     </div>
-    {visible&&admin&&id&&<FavoriteDebugConsole favoriteId={id}/>} 
+    {visible&&admin&&id&&mode==='proxy'&&<FavoriteDebugConsole favoriteId={id}/>} 
     {error&&<div className="content-card znuny-portal-error" role="alert">
       <strong>Favorit konnte nicht geöffnet werden</strong><p>{error}</p></div>}
+    {mode==='external'&&favorite?.url&&!loading&&!error&&<section className="content-card">
+      <p>Diese Webseite wird direkt im eigenen Browser geöffnet, mit dessen normaler Anmeldung.</p>
+      <a className="button button-primary" href={favorite.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={15}/>Im Browser öffnen</a>
+    </section>}
     {loading&&!error&&<div role="status" className="znuny-native-loading">
       Webseite wird geöffnet …</div>}
     {!error&&url&&<div className="znuny-portal-frame-wrap znuny-native-frame-wrap">
       <div className="znuny-portal-security-caption">
-        <ShieldCheck size={14}/>Webseite über den Plenaro-Proxy. Manche
-        Webseiten benötigen externe Skripte, verbieten Einbettungen oder
-        sind aus dem Servernetz nicht erreichbar. Falls die Ansicht leer
-        bleibt, die Originalseite über den oberen Link öffnen.</div>
+        <ShieldCheck size={14}/>{mode==='direct'?'Direkter Browserzugriff. Falls die Seite Einbettung verbietet, bitte im eigenen Tab öffnen.':'Webseite über den Plenaro-Proxy. Manche Webseiten benötigen externe Skripte, verbieten Einbettungen oder sind aus dem Servernetz nicht erreichbar. Falls die Ansicht leer bleibt, die Originalseite über den oberen Link öffnen.'}</div>
       <iframe key={url} title={favorite?.name??'Webfavorit'}
         src={url} className="znuny-native-frame"
-        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"
+        sandbox={mode==='direct'?'allow-scripts allow-forms allow-popups allow-modals allow-downloads':'allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads'}
         referrerPolicy="no-referrer"
         onLoad={()=>setLoading(false)}/>
     </div>}

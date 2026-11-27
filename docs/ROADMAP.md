@@ -1,3 +1,14 @@
+## 26.11.2026 – Phase 7/7: Favoriten-Öffnungsmodus und Outlook-Segmentplanung
+
+- [x] Persönlicher Öffnungsmodus pro Favorit (Proxy als Standard, direkt eingebetteter Browser, eigener Tab), Wechsel in Einstellungen und Favoritenleiste. Keine Domain-Sonderfälle oder neuen Container.
+- [x] Bestehende Proxy-Engine und Schutzprüfungen beibehalten; lokale Modi verwenden keine gespeicherten Zugangsdaten. Direkte Frames respektieren Sandbox und Sicherheitsvorgaben der Zielseite.
+- [x] Classic-Referenz TaskService.SyncSegmentOutlook/DeleteSegmentOutlook geprüft. Eigene Aufgaben- und Znuny-Segmente werden beim Anlegen, Ändern, Verschieben und Löschen über delegiertes Calendars.ReadWrite mit Outlook synchronisiert.
+- [x] Dauerhafte, transaktionale Auftragswarteschlange, eindeutige Outlook-Identität, sichtbarer Status und explizites Nachtragen bestehender Segmente. Kein erneuter POST nach unklarem Erstellungsversuch.
+- [x] Wochenplanung enthält eigene Znuny-Segmente; Deduplizierung anhand der Outlook-ID und Berücksichtigung eigener Blocker beim Bearbeiten.
+- [ ] CI und produktiver Outlook-Test, ggf. Microsoft 365 erneut verbinden. Kein automatisches Massennachtragen historischer Segmente oder Versand alter Einladungen.
+
+---
+
 ## 26.11.2026 – Phase 7/7: Einheitliche Favoriten und HTTPS-Adresskompatibilität
 
 - [x] SharePoint, OneDrive und Excel wieder wie normale Favoriten über den bestehenden Proxy öffnen; Originalseite weiterhin manuell verfügbar.
