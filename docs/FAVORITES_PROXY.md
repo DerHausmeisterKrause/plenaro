@@ -1,3 +1,13 @@
+## 27.11.2026 – Explizite alternative Browser-Anmeldung und externer Browser
+
+Standardmäßig bleibt die Klartext-Passwortübergabe auf der gemeinsamen Browser-Origin gesperrt. Die neue persönliche Option ist eine bewusst unsichere Ausnahme, keine Origin-Isolation. Sie ist pro Favorit und Nutzer standardmäßig aus, erfordert automatische Anmeldung und Proxy-Modus und eine ausdrückliche Warnbestätigung in der UI. Sie überspringt den serverseitigen Login, injiziert maximal einmal je Proxy-Sitzung auf einer Browser-Navigation des eigenen Pfads und versucht die bekannte WPF-DOM-Anmeldung. Pfad- und Sitzungsprüfungen verhindern versehentliche Übertragung an andere Favoriten, aber nicht das absichtliche Mitlesen durch andere Webseiten derselben Origin. Nur mit separaten, nicht wiederverwendeten Zugangsdaten und vertrauenswürdigen Webseiten einsetzen; keinesfalls zentrale Firmen- oder Admin-Zugangsdaten. Keine Passwörter in Debug-Ereignissen. Beim Ändern des Modus auf direkt/extern, beim Abschalten der Anmeldung oder beim Löschen des Passworts im Editor wird die Option deaktiviert. Ein erneutes Verbinden ermöglicht einen neuen Versuch. Live-ATOSS-Test steht aus.
+
+Die Checkbox „Favorit im externen Browser öffnen“ verwendet den bestehenden Modus `external`: Sidebar und Öffnen-Link im Editor öffnen die HTTPS-Originalseite im neuen Tab ohne Proxy, ohne Plenaro-Passwortübergabe. Eine Webanwendung kann nicht einen anderen lokalen Standardbrowser starten; der bereits genutzte Browser öffnet den Tab.
+
+Ältere Einträge unten dokumentieren den damaligen Stand vor Einführung der ausdrücklichen Ausnahme.
+
+---
+
 ## 24.11.2026 – Phase 7/7: ATOSS ZK Dialoginitialisierung vor Anmeldung
 
 - [x] Nutzer-Livelog 15:29 geprüft: ATOSS ZK-Seite wird abgerufen, `atoss-zk-login-unconfirmed` vor der Plenaro-Proxy-Navigation. Der Code fasste Fehler bei Passwort-/Klickereignis und späterem Login-Check zusammen.

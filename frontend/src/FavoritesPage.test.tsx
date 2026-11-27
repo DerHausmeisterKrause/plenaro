@@ -304,6 +304,15 @@ describe('Personal self-service favorite management',()=>{
       entries[0].id,expect.objectContaining({openMode:'external',sharedDomAutofill:false})));
     expect(screen.queryByRole('checkbox',{name:'Alternative Browser-Anmeldung (unsicher)'})).toBeNull();
   });
+  it('opens a saved external favorite directly from settings',async()=>{
+    mocks.loadFavorites.mockResolvedValue([{...entries[0],openMode:'external'}]);
+    mount();
+    fireEvent.click(await screen.findByRole('button',{name:/Erste Webseite/}));
+    const link=screen.getByRole('link',{name:'Öffnen'});
+    expect(link.getAttribute('href')).toBe(entries[0].url);
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+  });
   it('requires explicit consent before enabling unsafe shared DOM autofill',async()=>{
     const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
     try{

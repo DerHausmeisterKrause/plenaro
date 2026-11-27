@@ -52,7 +52,7 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
     try{
       const payload={...form,name:form.name.trim(),url:form.url.trim(),
         username:form.username.trim(),
-        sharedDomAutofill:form.openMode==='proxy'&&form.autoLogin&&form.sharedDomAutofill===true,
+        sharedDomAutofill:form.openMode==='proxy'&&form.autoLogin&&!form.clearPassword&&form.sharedDomAutofill===true,
         sortOrder:current?form.sortOrder:favorites.length};
       const id=current?current.id:(await createPersonalFavorite(payload)).id;
       if(current)await updatePersonalFavorite(current.id,payload);
@@ -124,7 +124,7 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
         <label htmlFor="fav-url">Webadresse (HTTPS)</label>
         <input id="fav-url" type="url" value={form.url} required maxLength={2048}
           placeholder="https://example.org/unterseite"
-          onChange={e=>setForm({...form,url:e.target.value})}/>
+          onChange={e=>setForm({...form,url:e.target.value,sharedDomAutofill:false})}/>
         <p className="um-hint">Die Adresse kannst du selbst eintragen oder später
           ändern. Der Plenaro-Proxy öffnet die Webseite mit einer getrennten
           Sitzung. DNS-Namen, IP-Adressen und URL-Fragmente (#) sind erlaubt.
@@ -155,7 +155,8 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
         {current?.hasPassword&&<label className="favorites-check">
           <input type="checkbox" checked={form.clearPassword===true}
             onChange={e=>setForm({...form,clearPassword:e.target.checked,
-              password:e.target.checked?'':form.password})}/>
+              password:e.target.checked?'':form.password,
+              sharedDomAutofill:!e.target.checked&&form.sharedDomAutofill===true})}/>
           Gespeichertes Passwort löschen
         </label>}
         <label className="favorites-check"><input type="checkbox"
@@ -177,7 +178,7 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
           bereitgestellt.</p>
         {form.autoLogin&&(form.openMode??'proxy')==='proxy'&&<>
           <label className="favorites-check"><input type="checkbox"
-            checked={form.sharedDomAutofill===true}
+            checked={form.sharedDomAutofill===true} disabled={form.clearPassword===true}
             onChange={e=>{
               if(e.target.checked&&!window.confirm('Achtung: Andere Webseiten auf dem gemeinsamen Favoriten-Host können das Passwort mitlesen. Nur für vertrauenswürdige Webseiten und separate Zugangsdaten verwenden. Trotzdem aktivieren?'))return;
               setForm({...form,sharedDomAutofill:e.target.checked});

@@ -151,7 +151,7 @@ internal static class FavoriteDomAutoLogin
             catch (_) { /* No persistent state; still prevent duplicate on this page. */ }
           }
           function tryFill() {
-            if (submitted) return true;
+            if (submitted || !allowedLocation(location)) return true;
             // A second script in an about:blank/same-origin child frame
             // must not repeat the first successful submit.
             try {

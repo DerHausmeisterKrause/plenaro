@@ -398,7 +398,7 @@ public static class FavoritesEndpoints
             await using(var cmd=new NpgsqlCommand("""
                 UPDATE user_favorites SET app_id=@app,name=@name,path=@path,
                     username=@username,auto_login=@auto,enabled=@enabled,
-                    sort_order=@ord WHERE id=@id AND user_id=@user AND app_id=@app
+                    sort_order=@ord,shared_dom_autofill=false WHERE id=@id AND user_id=@user AND app_id=@app
                 """,db)){
                 BindFavorite(cmd,id,user.Id,input);
                 if(await cmd.ExecuteNonQueryAsync(ct)==0)return Results.NotFound();
