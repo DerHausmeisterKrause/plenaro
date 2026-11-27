@@ -7,6 +7,11 @@ using Plenaro.Api.Znuny;
 using Plenaro.Api.Favorites;
 using static Plenaro.Api.Znuny.ZnunyEndpoints;
 
+if(Environment.GetEnvironmentVariable("PLENARO_TEST_CACHE_CONNECTION") is {Length:>0} cacheConnection){
+    await ReadCacheDatabaseTest.RunAsync(cacheConnection);
+    return;
+}
+
 // Regression: RateLimiter used to run BEFORE UseAuthentication and therefore
 // saw every user behind NGINX as the same reverse-proxy IP. A Znuny read
 // limiter of 40/5 minutes was exhausted across different Plenaro users.
