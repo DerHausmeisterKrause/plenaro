@@ -5,8 +5,8 @@ namespace Plenaro.Api.Favorites;
 
 /// <summary>
 /// DOM autofill parity with the WPF WebShortcutBrowserSessionManager.
-/// Plaintext credentials may enter the browser ONLY on a unique, dedicated
-/// per-personal-favorite HTTPS hostname (never the shared /site-... host).
+/// Dedicated origins are preferred. Explicit shared-origin opt-in is unsafe:
+/// browser paths are not a security boundary.
 /// The caller must first validate user, session, origin and authorization.
 /// </summary>
 internal static class FavoriteDomAutoLogin
@@ -22,6 +22,13 @@ internal static class FavoriteDomAutoLogin
             host.Equals(preferredHost,StringComparison.OrdinalIgnoreCase);
     }
 
+    internal static bool SharedEligible(string slug,bool autoLogin,bool optIn,
+        bool pathMode,string? username,string pathPrefix)=>
+        optIn&&autoLogin&&pathMode&&
+        slug.StartsWith("site-",StringComparison.Ordinal)&&
+        Guid.TryParseExact(slug.AsSpan(5),"N",out _)&&
+        pathPrefix=="/"+slug&&!string.IsNullOrWhiteSpace(username);
+
     // Keeping the template separate makes it possible to execute the EXACT
     // shipped JS in the frontend's browser-runtime contract test.
     private const string AutoFillScript = """
@@ -29,9 +36,13 @@ internal static class FavoriteDomAutoLogin
         (function () {
           "use strict";
           const expectedHost = __HOST__;
-          if (location.protocol !== "https:" ||
-              location.hostname.toLowerCase() !== expectedHost.toLowerCase())
-            return;
+          const expectedPrefix = "";
+          function allowedLocation(loc) {
+            return loc.protocol === "https:" &&
+                loc.hostname.toLowerCase() === expectedHost.toLowerCase() &&
+                (!expectedPrefix || loc.pathname.startsWith(expectedPrefix + "/"));
+          }
+          if (!allowedLocation(location)) return;
 
           const username = __USERNAME__;
           const password = __PASSWORD__;
@@ -80,7 +91,8 @@ internal static class FavoriteDomAutoLogin
               for (const frame of documents[i].querySelectorAll("iframe,frame")) {
                 try {
                   const child = frame.contentDocument;
-                  if (child && !seen.has(child)) {
+                  if (child && !seen.has(child) &&
+                      (!expectedPrefix || allowedLocation(child.location))) {
                     seen.add(child);
                     documents.push(child);
                   }
@@ -231,7 +243,19 @@ internal static class FavoriteDomAutoLogin
         """;
 
     internal static string Inject(string html,string username,string password,
-        string host,string nonce)
+        string host,string nonce)=>InjectCore(html,username,password,host,nonce,"");
+
+    internal static string InjectShared(string html,string username,string password,
+        string host,string nonce,string pathPrefix)
+    {
+        if(!pathPrefix.StartsWith("/site-",StringComparison.Ordinal)||
+            !Guid.TryParseExact(pathPrefix.AsSpan(6),"N",out _))
+            throw new InvalidOperationException("Invalid shared autofill path.");
+        return InjectCore(html,username,password,host,nonce,pathPrefix);
+    }
+
+    private static string InjectCore(string html,string username,string password,
+        string host,string nonce,string pathPrefix)
     {
         if(string.IsNullOrWhiteSpace(username)||
            string.IsNullOrEmpty(password)||
@@ -242,11 +266,13 @@ internal static class FavoriteDomAutoLogin
             throw new InvalidOperationException("Invalid dedicated autofill context.");
         if(html.Contains("data-plenaro-dom-autofill",StringComparison.Ordinal))
             return html;
-        var script=AutoFillScript
-            .Replace("__HOST__",JsonSerializer.Serialize(host),StringComparison.Ordinal)
-            .Replace("__USERNAME__",JsonSerializer.Serialize(username),StringComparison.Ordinal)
-            .Replace("__PASSWORD__",JsonSerializer.Serialize(password),StringComparison.Ordinal)
-            .Replace("__NONCE__",JsonSerializer.Serialize(nonce),StringComparison.Ordinal);
+        var template=AutoFillScript.Replace("const expectedPrefix = \"\";",
+            "const expectedPrefix = "+JsonSerializer.Serialize(pathPrefix)+";",StringComparison.Ordinal);
+        var script=Regex.Replace(template,"__HOST__|__USERNAME__|__PASSWORD__|__NONCE__",
+            match=>JsonSerializer.Serialize(match.Value switch{
+                "__HOST__"=>host,"__USERNAME__"=>username,
+                "__PASSWORD__"=>password,_=>nonce
+            }),RegexOptions.CultureInvariant,TimeSpan.FromSeconds(1));
         var head=Regex.Match(html,@"<head\b[^>]*>",RegexOptions.IgnoreCase|
             RegexOptions.CultureInvariant,TimeSpan.FromSeconds(1));
         if(head.Success)return html.Insert(head.Index+head.Length,script);

@@ -1147,10 +1147,10 @@ public sealed partial class FavoriteProxy
                         transformed=InjectBrowserPathShim(transformed,pathPrefix);
                 }
                 // The WPF desktop client fills *rendered* DOM fields, not
-                // server-side HTML forms. Transmit this browser helper ONLY
-                // inside a per-favorite dedicated HTTPS origin. On the
-                // shared path host, other favorite JS would have same-origin
-                // access to the injected credentials: intentionally skip.
+                // server-side HTML forms. Dedicated origins remain the default.
+                // Shared-origin injection requires explicit per-user/per-favorite
+                // opt-in; it is NOT an isolation boundary and can expose secrets
+                // to other pages on that origin.
                 if(isHtml && res.IsSuccessStatusCode &&
                    disposition is null && HttpMethods.IsGet(method) &&
                    Navigation(ctx.Request) && session.AutoLogin &&
@@ -1158,9 +1158,18 @@ public sealed partial class FavoriteProxy
                     var dedicated=FavoriteHostNames.PreferredOrigin(session.Slug,
                         configuration["PLENARO_FAVORITES_BASE_DOMAIN"],
                         configuration["PLENARO_FAVORITES_HOST_TEMPLATE"]);
-                    if(!FavoriteDomAutoLogin.Eligible(
+                    var sharedAllowed=FavoriteDomAutoLogin.SharedEligible(session.Slug,
+                        session.AutoLogin,session.SharedDomActive,IsPathHost(external.Host),
+                        session.Username,pathPrefix);
+                    var dedicatedAllowed=FavoriteDomAutoLogin.Eligible(
                         session.Slug,session.AutoLogin,pathPrefix.Length>0,
-                        session.Username,external.Host,dedicated?.Host)){
+                        session.Username,external.Host,dedicated?.Host);
+                    // Shared opt-in is only issued once on a real browser navigation.
+                    // Never return credentials in a fetch/XHR or to another slug.
+                    var sharedNavigation=sharedAllowed&&
+                        ctx.Request.Headers["Sec-Fetch-Mode"].ToString()=="navigate"&&
+                        ctx.Request.Headers["Sec-Fetch-Dest"].ToString() is "document" or "iframe";
+                    if(!dedicatedAllowed&&!sharedNavigation){
                         ctx.Response.Headers["X-Plenaro-Autofill"]="isolated-origin-required";
                         // The shared host is intentional; don't warn on
                         // every HTML navigation or recommend more DNS aliases.
@@ -1171,11 +1180,19 @@ public sealed partial class FavoriteProxy
                                 "user",session.User,
                                 FavoritesEndpoints.PasswordName(session.Favorite),ct);
                             if(!string.IsNullOrEmpty(secret)){
-                                transformed=FavoriteDomAutoLogin.Inject(
-                                    transformed,session.Username,secret,
-                                    external.Host,session.AutoFillNonce);
-                                ctx.Response.Headers["X-Plenaro-Autofill"]="dedicated-dom";
-                                Debug(session.User,session.Favorite,"info","autofill-injected",method,resource);
+                                if(dedicatedAllowed){
+                                    transformed=FavoriteDomAutoLogin.Inject(
+                                        transformed,session.Username,secret,
+                                        external.Host,session.AutoFillNonce);
+                                    ctx.Response.Headers["X-Plenaro-Autofill"]="dedicated-dom";
+                                    Debug(session.User,session.Favorite,"info","autofill-injected",method,resource);
+                                }else if(session.TryIssueSharedDom()){
+                                    transformed=FavoriteDomAutoLogin.InjectShared(
+                                        transformed,session.Username,secret,external.Host,
+                                        session.AutoFillNonce,pathPrefix);
+                                    ctx.Response.Headers["X-Plenaro-Autofill"]="shared-dom-opt-in";
+                                    Debug(session.User,session.Favorite,"info","autofill-shared-injected",method,resource);
+                                }
                             }else{
                                 ctx.Response.Headers["X-Plenaro-Autofill"]="missing-password";
                                 Debug(session.User,session.Favorite,"warning","autofill-password-missing",method,resource);

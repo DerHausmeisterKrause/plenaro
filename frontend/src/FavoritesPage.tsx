@@ -11,7 +11,7 @@ import {
 
 const blank=():PersonalSiteInput=>({
   name:'',url:'https://',username:'',autoLogin:false,
-  enabled:true,sortOrder:0,password:'',clearPassword:false,openMode:'proxy'
+  enabled:true,sortOrder:0,password:'',clearPassword:false,openMode:'proxy',sharedDomAutofill:false
 });
 function ErrorMessage({message}:{message:string}){
   return message?<p role="alert" className="um-feedback failure">{message}</p>:null;
@@ -40,7 +40,7 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
     setSelected(item.id);
     setForm({name:item.name,url:item.url??'https://',username:item.username,
       autoLogin:item.autoLogin,enabled:item.enabled,sortOrder:item.sortOrder,
-      password:'',clearPassword:false,openMode:item.openMode??'proxy'});
+      password:'',clearPassword:false,openMode:item.openMode??'proxy',sharedDomAutofill:item.sharedDomAutofill===true});
     setError('');setInfo('');
   }
   function fresh(){
@@ -52,6 +52,7 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
     try{
       const payload={...form,name:form.name.trim(),url:form.url.trim(),
         username:form.username.trim(),
+        sharedDomAutofill:form.openMode==='proxy'&&form.autoLogin&&form.sharedDomAutofill===true,
         sortOrder:current?form.sortOrder:favorites.length};
       const id=current?current.id:(await createPersonalFavorite(payload)).id;
       if(current)await updatePersonalFavorite(current.id,payload);
@@ -132,11 +133,16 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
           das TLS-Zertifikat muss zur Adresse passen.</p>
         <label htmlFor="fav-mode">Öffnungsmodus</label>
         <select id="fav-mode" value={form.openMode??'proxy'}
-          onChange={e=>setForm({...form,openMode:e.target.value as FavoriteMode})}>
+          onChange={e=>setForm({...form,openMode:e.target.value as FavoriteMode,
+            sharedDomAutofill:e.target.value==='proxy'&&form.sharedDomAutofill===true})}>
           <option value="proxy">Plenaro-Engine (Standard)</option>
           <option value="direct">Direkt eingebettet (lokaler Browser)</option>
           <option value="external">Externer Browser-Tab</option>
         </select>
+        <label className="favorites-check"><input type="checkbox"
+          checked={form.openMode==='external'} onChange={e=>setForm({...form,
+            openMode:e.target.checked?'external':'proxy',sharedDomAutofill:false})}/>
+          Favorit im externen Browser öffnen</label>
         <p className="um-hint">Lokale Modi verwenden den Browser am Arbeitsplatz und keine gespeicherten Plenaro-Zugangsdaten. Direkt eingebettet funktioniert nur, wenn die Zielseite Iframes erlaubt.</p>
         <label htmlFor="fav-user">Anmeldename (optional)</label>
         <input id="fav-user" value={form.username} autoComplete="off" maxLength={180}
@@ -157,25 +163,44 @@ export function FavoriteSettingsPanel({onChanged}:{onChanged:()=>void}){
             setForm({...form,enabled:e.target.checked})}/>Webseite aktiv</label>
         <label className="favorites-check"><input type="checkbox"
           checked={form.autoLogin} onChange={e=>
-            setForm({...form,autoLogin:e.target.checked})}/>
+            setForm({...form,autoLogin:e.target.checked,
+              sharedDomAutofill:e.target.checked&&form.sharedDomAutofill===true})}/>
           Automatische Anmeldung über ein übliches HTML-Loginformular versuchen</label>
         <p className="um-hint">Mit einem eigenen HTTPS-Host für diesen Favoriten
           erkennt Plenaro auch nachgeladene ATOSS-/JavaScript-Felder und füllt
           die Anmeldedaten wie in der Desktop-Version ein. Auf dem gemeinsamen
           Favoriten-Host versucht Plenaro weiterhin nur einen serverseitigen
-          klassischen HTML-Login; die Browser-Passwortübergabe ist dort
-          gesperrt. SSO, MFA und externe Login-Domains bleiben gesonderte Fälle.
+          klassischen HTML-Login, sofern unten keine alternative Browser-Anmeldung
+          aktiviert ist. SSO, MFA und externe Login-Domains bleiben gesonderte Fälle.
           Passwörter sind verschlüsselt gespeichert; im dedizierten Modus
           werden sie ausschließlich der gewählten Webseite zur Anmeldung
           bereitgestellt.</p>
+        {form.autoLogin&&(form.openMode??'proxy')==='proxy'&&<>
+          <label className="favorites-check"><input type="checkbox"
+            checked={form.sharedDomAutofill===true}
+            onChange={e=>{
+              if(e.target.checked&&!window.confirm('Achtung: Andere Webseiten auf dem gemeinsamen Favoriten-Host können das Passwort mitlesen. Nur für vertrauenswürdige Webseiten und separate Zugangsdaten verwenden. Trotzdem aktivieren?'))return;
+              setForm({...form,sharedDomAutofill:e.target.checked});
+            }}/>
+            Alternative Browser-Anmeldung (unsicher)</label>
+          <p className="um-hint">Füllt die sichtbaren Login-Felder auch auf dem gemeinsamen
+            Favoriten-Host aus und versucht die Anmeldung statt des serverseitigen Logins.
+            Das Passwort wird dabei im Browser im Klartext bereitgestellt. Andere
+            Favoriten auf demselben Host können es mitlesen. Nicht für zentrale
+            Firmen-, Administrator- oder wiederverwendete Passwörter verwenden.
+            Nur für diesen Favoriten; standardmäßig deaktiviert.</p>
+        </>}
         <ErrorMessage message={error}/>
         {info&&<p role="status" className="um-feedback success">{info}</p>}
         <div className="favorites-toolbar">
           <button type="submit" className="button button-primary" disabled={busy}>
             <Save size={16}/>Speichern</button>
           {current&&<>
-            <Link className="button button-secondary" to={'/favorites/'+current.id}>
-              <ExternalLink size={15}/>Öffnen</Link>
+            {current.openMode==='external'&&current.url?
+              <a className="button button-secondary" href={current.url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink size={15}/>Öffnen</a>:
+              <Link className="button button-secondary" to={'/favorites/'+current.id}>
+                <ExternalLink size={15}/>Öffnen</Link>}
             <button type="button" className="button button-secondary"
               disabled={busy} onClick={()=>void erase()}>
               <Trash2 size={15}/>Entfernen</button>

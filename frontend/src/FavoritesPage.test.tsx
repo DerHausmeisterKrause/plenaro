@@ -293,6 +293,34 @@ describe('Personal self-service favorite management',()=>{
       })
     ));
   });
+  it('stores external mode from the explicit checkbox',async()=>{
+    mocks.loadFavorites.mockResolvedValue(entries);
+    mocks.updatePersonalFavorite.mockResolvedValue(undefined);
+    mount();
+    fireEvent.click(await screen.findByRole('button',{name:/Erste Webseite/}));
+    fireEvent.click(screen.getByRole('checkbox',{name:'Favorit im externen Browser öffnen'}));
+    fireEvent.click(screen.getByRole('button',{name:'Speichern'}));
+    await waitFor(()=>expect(mocks.updatePersonalFavorite).toHaveBeenCalledWith(
+      entries[0].id,expect.objectContaining({openMode:'external',sharedDomAutofill:false})));
+    expect(screen.queryByRole('checkbox',{name:'Alternative Browser-Anmeldung (unsicher)'})).toBeNull();
+  });
+  it('requires explicit consent before enabling unsafe shared DOM autofill',async()=>{
+    const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
+    try{
+      mocks.loadFavorites.mockResolvedValue([{...entries[0],username:'demo',autoLogin:true}]);
+      mocks.updatePersonalFavorite.mockResolvedValue(undefined);
+      mount();
+      fireEvent.click(await screen.findByRole('button',{name:/Erste Webseite/}));
+      const checkbox=screen.getByRole('checkbox',{name:'Alternative Browser-Anmeldung (unsicher)'}) as HTMLInputElement;
+      expect(checkbox.checked).toBe(false);
+      fireEvent.click(checkbox);expect(checkbox.checked).toBe(false);
+      confirm.mockReturnValue(true);
+      fireEvent.click(checkbox);expect(checkbox.checked).toBe(true);
+      fireEvent.click(screen.getByRole('button',{name:'Speichern'}));
+      await waitFor(()=>expect(mocks.updatePersonalFavorite).toHaveBeenCalledWith(
+        entries[0].id,expect.objectContaining({sharedDomAutofill:true})));
+    }finally{confirm.mockRestore();}
+  });
   it('persists independent sorting and can edit an existing URL',async()=>{
     mocks.loadFavorites.mockResolvedValue(entries);
     mocks.sortPersonalFavorites.mockResolvedValue(undefined);

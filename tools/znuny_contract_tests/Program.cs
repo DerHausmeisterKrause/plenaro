@@ -222,6 +222,21 @@ try{
 }catch(InvalidOperationException){invalidFavoritesDomainRejected=true;}
 Assert(invalidFavoritesDomainRejected,"invalid base domains fail closed");
 
+// Explicit shared mode is a compatibility exception, NOT browser isolation.
+var sharedDomMethod=typeof(FavoriteProxy).Assembly.GetType(
+    "Plenaro.Api.Favorites.FavoriteDomAutoLogin")!.GetMethod("SharedEligible",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+bool SharedDomAllowed(string slug,bool auto,bool opt,bool path,string prefix)=>
+    (bool)sharedDomMethod.Invoke(null,new object[]{slug,auto,opt,path,"demo",prefix})!;
+const string sharedTestSlug="site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+Assert(SharedDomAllowed(sharedTestSlug,true,true,true,"/"+sharedTestSlug)&&
+    !SharedDomAllowed(sharedTestSlug,true,false,true,"/"+sharedTestSlug)&&
+    !SharedDomAllowed(sharedTestSlug,false,true,true,"/"+sharedTestSlug)&&
+    !SharedDomAllowed(sharedTestSlug,true,true,false,"/"+sharedTestSlug)&&
+    !SharedDomAllowed("wiki",true,true,true,"/wiki")&&
+    !SharedDomAllowed(sharedTestSlug,true,true,true,"/site-other"),
+    "shared DOM autofill requires explicit personal proxy opt-in and exact prefix");
+
 // WPF WebView2 DOM autofill may receive a password only when each
 // personal site has its own browser origin (Issue #40). Explicit path-host
 // sharing is never sufficient, even though browser cookies are path-scoped.

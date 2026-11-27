@@ -14,7 +14,7 @@ public static class FavoritesEndpoints
         bool Enabled,bool AvailableToAll,Guid[]? AllowedUsers);
     public sealed record PersonalSiteInput(string Name,string Url,string Username,
         bool AutoLogin,bool Enabled,int SortOrder,string? Password,
-        bool ClearPassword=false,string OpenMode="proxy");
+        bool ClearPassword=false,string OpenMode="proxy",bool SharedDomAutofill=false);
     public sealed record FavoriteModeInput(string OpenMode);
     public sealed record FavoriteOrderInput(Guid[] Ids);
     public sealed record FavoriteDebugToggle(bool Enabled);
@@ -26,7 +26,7 @@ public static class FavoritesEndpoints
     public sealed record FavoriteInfo(Guid Id,Guid AppId,string Name,string AppName,
         string Slug,string Path,string Username,bool AutoLogin,bool Enabled,
         int SortOrder,bool HasPassword,string? Url=null,
-        bool AllowPrivateUpstream=false,string OpenMode="proxy");
+        bool AllowPrivateUpstream=false,string OpenMode="proxy",bool SharedDomAutofill=false);
 
     public static void MapPlenaroFavorites(this WebApplication app)
     {
@@ -139,8 +139,8 @@ public static class FavoritesEndpoints
             }
             await using(var favCmd=new NpgsqlCommand("""
                 INSERT INTO user_favorites(id,user_id,app_id,name,path,
-                    username,auto_login,enabled,sort_order,open_mode)
-                VALUES(@id,@user,@app,@name,@path,@username,@auto,@enabled,@ord,@mode)
+                    username,auto_login,enabled,sort_order,open_mode,shared_dom_autofill)
+                VALUES(@id,@user,@app,@name,@path,@username,@auto,@enabled,@ord,@mode,@dom)
                 """,db,tx)){
                 favCmd.Parameters.AddWithValue("id",id);
                 favCmd.Parameters.AddWithValue("user",user.Id);
@@ -152,6 +152,7 @@ public static class FavoritesEndpoints
                 favCmd.Parameters.AddWithValue("enabled",input.Enabled);
                 favCmd.Parameters.AddWithValue("ord",input.SortOrder);
                 favCmd.Parameters.AddWithValue("mode",input.OpenMode);
+                favCmd.Parameters.AddWithValue("dom",input.SharedDomAutofill);
                 await favCmd.ExecuteNonQueryAsync(ct);
             }
             await tx.CommitAsync(ct);
@@ -238,7 +239,7 @@ public static class FavoritesEndpoints
             }
             await using(var cmd=new NpgsqlCommand("""
                 UPDATE user_favorites SET name=@name,path=@path,username=@username,
-                    auto_login=@auto,enabled=@enabled,sort_order=@sort,open_mode=@mode
+                    auto_login=@auto,enabled=@enabled,sort_order=@sort,open_mode=@mode,shared_dom_autofill=@dom
                 WHERE id=@id AND user_id=@user AND app_id=@app
                 """,db,tx)){
                 cmd.Parameters.AddWithValue("id",id);
@@ -251,6 +252,7 @@ public static class FavoritesEndpoints
                 cmd.Parameters.AddWithValue("enabled",input.Enabled);
                 cmd.Parameters.AddWithValue("sort",input.SortOrder);
                 cmd.Parameters.AddWithValue("mode",input.OpenMode);
+                cmd.Parameters.AddWithValue("dom",input.SharedDomAutofill);
                 await cmd.ExecuteNonQueryAsync(ct);
             }
             await tx.CommitAsync(ct);
@@ -272,7 +274,8 @@ public static class FavoritesEndpoints
                 return Results.BadRequest(new{error="Ungültiger Öffnungsmodus."});
             await using var db=await Open(config,ct);
             await using var cmd=new NpgsqlCommand("""
-                UPDATE user_favorites f SET open_mode=@mode
+                UPDATE user_favorites f SET open_mode=@mode,
+                    shared_dom_autofill=CASE WHEN @mode='proxy' THEN f.shared_dom_autofill ELSE false END
                 FROM favorite_apps a WHERE f.id=@id AND f.user_id=@user
                 AND a.id=f.app_id AND a.owner_user_id=@user
                 """,db);
@@ -612,7 +615,7 @@ public static class FavoritesEndpoints
         await using var cmd=new NpgsqlCommand("""
             SELECT f.id,f.app_id,f.name,a.name,a.slug,f.path,f.username,
                 f.auto_login,f.enabled,f.sort_order,a.upstream_url,
-                a.allow_private_upstream,f.open_mode
+                a.allow_private_upstream,f.open_mode,f.shared_dom_autofill
             FROM user_favorites f JOIN favorite_apps a ON a.id=f.app_id
             WHERE f.user_id=@uid AND a.enabled AND a.slug<>'wiki' AND
                 (a.owner_user_id=@uid OR
@@ -630,7 +633,7 @@ public static class FavoritesEndpoints
                 reader.GetString(5),reader.GetString(6),reader.GetBoolean(7),
                 reader.GetBoolean(8),reader.GetInt32(9),false,
                 new Uri(new Uri(reader.GetString(10)),reader.GetString(5)).AbsoluteUri,
-                reader.GetBoolean(11),reader.GetString(12)));
+                reader.GetBoolean(11),reader.GetString(12),reader.GetBoolean(13)));
         return favorites;
     }
 
@@ -649,6 +652,9 @@ public static class FavoritesEndpoints
             return false;
         if(input.OpenMode is not ("proxy" or "direct" or "external")){
             error="Ungültiger Öffnungsmodus.";return false;
+        }
+        if(input.SharedDomAutofill&&(!input.AutoLogin||input.OpenMode!="proxy"||input.ClearPassword)){
+            error="Alternative Browser-Anmeldung benötigt den Proxy, automatische Anmeldung und Zugangsdaten.";return false;
         }
         if(!FavoriteUrlPolicy.TryPersonalUrl(input.Url,out origin,out path))return false;
         // Preserve the existing self-proxy, DNS and reserved-host checks.
