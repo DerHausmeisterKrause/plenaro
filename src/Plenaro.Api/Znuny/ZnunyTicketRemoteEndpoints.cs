@@ -417,14 +417,14 @@ public static class ZnunyTicketRemoteEndpoints
                 }catch(ZnunyReader.RemoteFailure e){return RemoteReadError(e.Code);}
             }).RequireRateLimiting("znuny-ticket-read");
 
-        group.MapGet("/agents",async(HttpContext http,UserManager<ApplicationUser> users,
+        group.MapGet("/agents",async(bool? refresh,HttpContext http,UserManager<ApplicationUser> users,
             IConfiguration config,SecretVault vault,ZnunyReadCache cache,CancellationToken ct)=>{
             var context=await Context(http,users,config,vault,null,false,ct);
             if(context.Error is {} failure)return failure;
             try{
                 var cred=await CacheCredentials(context,vault,ct);
                 if(cred is null)return MissingCredentials();
-                return Results.Ok(await cache.AgentsAsync(context.Server!,cred,context.UserId!.Value,ct));
+                return Results.Ok(await cache.AgentsAsync(context.Server!,cred,context.UserId!.Value,ct,refresh==true));
             }catch(ZnunyReader.RemoteFailure e){return RemoteReadError(e.Code);}
         });
 
