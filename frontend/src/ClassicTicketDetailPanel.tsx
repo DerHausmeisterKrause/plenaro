@@ -111,7 +111,7 @@ export function ClassicTicketDetailPanel({ticket,onChanged,detailsExpanded=false
       <p className="classic-wpf-help">Persönliche Plenaro-Beschreibung.
         Der Originalinhalt des Znuny-Tickets bleibt unverändert.</p>
 
-      <ZnunyTicketConversationPanel ticketId={ticket.ticketId} closed={closed}
+      <ZnunyTicketConversationPanel key={'conversation:'+ticket.ticketId} ticketId={ticket.ticketId} closed={closed}
         closeRequest={closeRequest} onReadChange={onChanged} onClosed={()=>{
           setNotice('Antwort versendet und Ticket in Znuny geschlossen.');
           onChanged?.();
