@@ -73,29 +73,55 @@ public sealed class ZnunyCentralSync(
                 var server=await ReadServerAsync(db,ct);
                 if(ValidateServer(server) is not null ||
                    !string.Equals(server.ApiUrl,state.SourceUrl,StringComparison.Ordinal))return;
+                var cacheKey=ZnunyReadCache.Key(server,state.Username);
+                var needAgents=await ZnunyReadCache.ReadSharedAsync<ZnunyReader.Agent[]>(db,server,state.Username,"agents",ct) is null;
+                var needOptions=await ZnunyReadCache.ReadSharedAsync<ZnunyReader.BookingOptions>(db,server,state.Username,"options",ct) is null;
                 var pending=new List<(string Id,DateTimeOffset? Changed)>();
                 await using(var select=new NpgsqlCommand("""
                     SELECT t.ticket_id,t.changed_at
                     FROM znuny_cached_tickets t
                     LEFT JOIN znuny_ticket_search_documents d ON d.ticket_id=t.ticket_id
                     LEFT JOIN znuny_ticket_article_heads h ON h.ticket_id=t.ticket_id
-                    WHERE d.ticket_id IS NULL OR d.indexed_changed_at IS DISTINCT FROM t.changed_at
-                       OR h.ticket_id IS NULL
-                    ORDER BY CASE WHEN lower(t.state_type)='closed' THEN 1 ELSE 0 END,
+                    LEFT JOIN znuny_ticket_detail_cache s ON s.ticket_id=t.ticket_id
+                    WHERE (s.retry_after IS NULL OR s.retry_after<=now())
+                      AND (s.payload IS NULL OR s.config_key IS DISTINCT FROM @key
+                       OR s.changed_at IS DISTINCT FROM t.changed_at
+                       OR s.requested_at>s.fetched_at
+                       OR d.ticket_id IS NULL OR d.indexed_changed_at IS DISTINCT FROM t.changed_at)
+                    ORDER BY CASE WHEN s.requested_at>s.fetched_at THEN 0 ELSE 1 END,
+                        CASE WHEN lower(t.state_type)='closed' THEN 1 ELSE 0 END,
                         t.changed_at DESC NULLS LAST,t.ticket_id DESC
                     LIMIT 4
-                    """,db))
-                await using(var rows=await select.ExecuteReaderAsync(ct)){
+                    """,db)){
+                select.Parameters.AddWithValue("key",cacheKey);
+                await using var rows=await select.ExecuteReaderAsync(ct);
                     while(await rows.ReadAsync(ct))
                         pending.Add((rows.GetString(0),rows.IsDBNull(1)?null:
                             new DateTimeOffset(rows.GetDateTime(1),TimeSpan.Zero)));
                 }
-                if(pending.Count==0)return;
-                var calls=new ZnunyReader.Counter(7);
+                if(pending.Count==0&&!needAgents&&!needOptions)return;
+                // Four ticket snapshots plus one session and up to three shared reference requests.
+                var calls=new ZnunyReader.Counter(12);
                 var session=await reader.SessionAsync(server,state.Username,pwd,calls,ct);
+                if(needAgents){
+                    try{
+                        var started=DateTimeOffset.UtcNow;
+                        var agents=await reader.GetAgentsAsync(server,session,calls,ct);
+                        await ZnunyReadCache.SaveSharedAsync(db,server,state.Username,"agents",agents,started,ct);
+                    }catch(ZnunyReader.RemoteFailure e){logger.LogWarning("Znuny agent cache refresh: {Code}",e.Code);}
+                }
+                if(needOptions){
+                    try{
+                        var started=DateTimeOffset.UtcNow;
+                        var options=await reader.GetBookingOptionsAsync(server,session,calls,ct);
+                        await ZnunyReadCache.SaveSharedAsync(db,server,state.Username,"options",options,started,ct);
+                    }catch(ZnunyReader.RemoteFailure e){logger.LogWarning("Znuny option cache refresh: {Code}",e.Code);}
+                }
                 foreach(var item in pending){
+                    var started=DateTimeOffset.UtcNow;
                     try{
                         var result=await reader.GetArticlesAsync(server,session,item.Id,calls,ct);
+                        await ZnunyReadCache.SaveTicketAsync(db,server,state.Username,item.Id,item.Changed,started,result,ct);
                         // Limit indexed content per ticket (no attachments,
                         // no personal notes, no HTML execution or logging).
                         var text=string.Join("\n",result.Articles.Select(a=>a.Subject+"\n"+a.Body));
@@ -126,7 +152,18 @@ public sealed class ZnunyCentralSync(
                         // interrupt indexing of every other ticket.
                         logger.LogWarning("Znuny search index could not read ticket {Ticket}: {Code}",
                             item.Id,ex.Code);
-                        break;
+                        if(ex.Code is "rate-limited" or "authentication" or "request-budget-exhausted" or "network-error" or "timeout")break;
+                        await using var defer=new NpgsqlCommand("""
+                            INSERT INTO znuny_ticket_detail_cache(ticket_id,config_key,fetched_at,retry_after)
+                            SELECT ticket_id,@key,@started,now()+interval '5 minutes'
+                            FROM znuny_cached_tickets WHERE ticket_id=@ticket
+                            ON CONFLICT(ticket_id) DO UPDATE SET retry_after=EXCLUDED.retry_after
+                            WHERE znuny_ticket_detail_cache.fetched_at<=EXCLUDED.fetched_at
+                            """,db);
+                        defer.Parameters.AddWithValue("ticket",item.Id);
+                        defer.Parameters.AddWithValue("key",cacheKey);
+                        defer.Parameters.AddWithValue("started",started.UtcDateTime);
+                        await defer.ExecuteNonQueryAsync(ct);
                     }
                 }
             }finally{
