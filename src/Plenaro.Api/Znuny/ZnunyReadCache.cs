@@ -176,7 +176,7 @@ public sealed class ZnunyReadCache(IConfiguration config,ZnunyReader reader,
     }
 
     private async Task<T> SharedAsync<T>(ServerSettings server,Credentials cred,Guid user,string kind,
-        Func<string,ZnunyReader.Counter,Task<T>> load,CancellationToken ct) where T:class
+        Func<string,ZnunyReader.Counter,Task<T>> load,CancellationToken ct,bool refresh=false) where T:class
     {
         Task<T> Fetch()=>RemoteAsync(user,async()=>{
             var calls=new ZnunyReader.Counter(4);
@@ -186,10 +186,10 @@ public sealed class ZnunyReadCache(IConfiguration config,ZnunyReader reader,
         if(!cred.Central)return await Fetch();
         await using var db=await OpenAsync(ct);
         var found=await ReadSharedAsync<T>(db,server,cred.Username,kind,ct);
-        if(found is not null)return found;
+        if(!refresh&&found is not null)return found;
         return await LockedAsync(Stripe("shared:"+kind),async()=>{
             var existing=await ReadSharedAsync<T>(db,server,cred.Username,kind,ct);
-            if(existing is not null)return existing;
+            if(!refresh&&existing is not null)return existing;
             var started=DateTimeOffset.UtcNow;
             var result=await Fetch();
             await SaveSharedAsync(db,server,cred.Username,kind,result,started,ct);
@@ -197,9 +197,9 @@ public sealed class ZnunyReadCache(IConfiguration config,ZnunyReader reader,
         },ct);
     }
 
-    public Task<ZnunyReader.Agent[]> AgentsAsync(ServerSettings server,Credentials cred,Guid user,CancellationToken ct)=>
+    public Task<ZnunyReader.Agent[]> AgentsAsync(ServerSettings server,Credentials cred,Guid user,CancellationToken ct,bool refresh=false)=>
         SharedAsync(server,cred,user,"agents",async(session,calls)=>
-            (await reader.GetAgentsAsync(server,session,calls,ct)).ToArray(),ct);
+            (await reader.GetAgentsAsync(server,session,calls,ct)).ToArray(),ct,refresh);
 
     public async Task<ZnunyReader.BookingFields> BookingAsync(ServerSettings server,Credentials cred,
         Guid user,string ticket,CancellationToken ct)
