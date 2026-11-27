@@ -36,7 +36,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
 
     private sealed class ProxySession(
         Guid user,Guid favorite,Guid app,string slug,Uri upstream,
-        Uri parent,HttpClient client,bool autoLogin,string username,bool sharedDomOptIn=false,bool sharedDomActive=false)
+        Uri parent,HttpClient client,bool autoLogin,string username,bool sharedDomOptIn=false,bool sharedDomActive=false,bool atossDomFrame=false)
     {
         public Guid User {get;}=user;
         public Guid Favorite {get;}=favorite;
@@ -49,6 +49,8 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         public string Username {get;}=username;
         public bool SharedDomOptIn {get;}=sharedDomOptIn;
         public bool SharedDomActive {get;}=sharedDomActive;
+        public bool AtossDomFrame {get;}=atossDomFrame;
+        public ConcurrentDictionary<string,byte> DomReports {get;}=new();
         private int _sharedDomIssued;
         public bool TryIssueSharedDom()=>SharedDomActive&&Interlocked.CompareExchange(ref _sharedDomIssued,1,0)==0;
         // A harmless, random per-bootstrap attempt ID. Never the auth cookie.
@@ -289,7 +291,8 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         var key=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var session=new ProxySession(user,favorite.Id,favorite.AppId,
             favorite.Slug,root,new Uri(configuration["PLENARO_PUBLIC_ORIGIN"]!),
-            client,favorite.AutoLogin,favorite.Username,favorite.SharedDomAutofill,sharedDom);
+            client,favorite.AutoLogin,favorite.Username,favorite.SharedDomAutofill,sharedDom,
+            sharedDom&&AtossEntry(new Uri(root,favorite.Path)));
         if(_users.TryGetValue((user,favorite.Id),out var previous) &&
             _sessions.TryGetValue(previous,out var old))
             Remove(previous,old);
@@ -438,6 +441,25 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         // The app proxy host never enters the normal Plenaro route pipeline.
         // /api and /health belong to the approved upstream app here, while
         // reserved bootstrap paths must never be forwarded.
+        const string reportPrefix="/_plenaro/favorite-autofill/";
+        if(appPath.StartsWith(reportPrefix,StringComparison.Ordinal)){
+            var code=appPath[reportPrefix.Length..];
+            // Fixed status codes only, never a request body or credential.
+            // Reports are advisory, not proof of successful authentication.
+            if(!session.SharedDomActive||!pathMode||!HttpMethods.IsPost(ctx.Request.Method)||
+               ctx.Request.QueryString.HasValue||ctx.Request.ContentLength is >0||
+               ctx.Request.Headers.ContainsKey("Transfer-Encoding")||
+               ctx.Request.Headers["Sec-Fetch-Site"].ToString()!="same-origin"||
+               ctx.Request.Headers["Origin"].ToString()!=external.GetLeftPart(UriPartial.Authority)||
+               !FavoriteDomAutoLogin.IsReportCode(code)){
+                ctx.Response.StatusCode=404;return;
+            }
+            if(session.DomReports.TryAdd(code,0))
+                Debug(session.User,session.Favorite,
+                    code is "timeout" or "fill-blocked" or "action-missing"?"warning":"info",
+                    "autofill-dom-"+code);
+            ctx.Response.StatusCode=204;return;
+        }
         if(appPath.StartsWith("/_plenaro",StringComparison.OrdinalIgnoreCase)){
             ctx.Response.StatusCode=404;return;
         }

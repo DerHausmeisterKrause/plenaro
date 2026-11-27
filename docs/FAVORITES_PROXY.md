@@ -1,3 +1,13 @@
+## 27.11.2026 – Phase 7/7: ATOSS-Login-Iframe
+
+- [x] Live-Log: Shared-DOM-Opt-in aktiv und einmalige Injektion gemeldet, weitere HTML-Dokumente geladen; tatsächliche Felderkennung/Anmeldung nicht nachgewiesen.
+- [x] ATOSS-Einstieg `/SES/html` von generiertem `/SES/uuid…/html` getrennt; einmalige Shared-DOM-Injektion nur im eigentlichen ZK-Dokument.
+- [x] Native Fokus-/Blur-Ereignisse für ZK; feste, geheime-freie Browserdiagnose für Start, Felder, Ausfüllen, Absenden und Timeout.
+- [x] Routing- und DOM-Vertragstests sowie echter Chromium-Test mit Produktionsskript und verschachteltem synthetischem ATOSS-Iframe ergänzt.
+- [ ] CI, Merge, produktive Abnahme. Keine neuen Container, DNS-Einträge oder Datenbankmigrationen. Shared-Origin-Risiko bleibt unverändert.
+
+---
+
 ## 27.11.2026 – Explizite alternative Browser-Anmeldung und externer Browser
 
 Standardmäßig bleibt die Klartext-Passwortübergabe auf der gemeinsamen Browser-Origin gesperrt. Die neue persönliche Option ist eine bewusst unsichere Ausnahme, keine Origin-Isolation. Sie ist pro Favorit und Nutzer standardmäßig aus, erfordert automatische Anmeldung und Proxy-Modus und eine ausdrückliche Warnbestätigung in der UI. Sie überspringt den serverseitigen Login, injiziert maximal einmal je Proxy-Sitzung auf einer Browser-Navigation des eigenen Pfads und versucht die bekannte WPF-DOM-Anmeldung. Pfad- und Sitzungsprüfungen verhindern versehentliche Übertragung an andere Favoriten, aber nicht das absichtliche Mitlesen durch andere Webseiten derselben Origin. Nur mit separaten, nicht wiederverwendeten Zugangsdaten und vertrauenswürdigen Webseiten einsetzen; keinesfalls zentrale Firmen- oder Admin-Zugangsdaten. Keine Passwörter in Debug-Ereignissen. Beim Ändern des Modus auf direkt/extern, beim Abschalten der Anmeldung oder beim Löschen des Passworts im Editor wird die Option deaktiviert. Ein erneutes Verbinden ermöglicht einen neuen Versuch. Live-ATOSS-Test steht aus.

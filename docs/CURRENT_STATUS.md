@@ -1,3 +1,13 @@
+## 27.11.2026 – Phase 7/7: ATOSS-Login-Iframe
+
+- [x] Live-Log: Shared-DOM-Opt-in aktiv und einmalige Injektion gemeldet, weitere HTML-Dokumente geladen; tatsächliche Felderkennung/Anmeldung nicht nachgewiesen.
+- [x] ATOSS-Einstieg `/SES/html` von generiertem `/SES/uuid…/html` getrennt; einmalige Shared-DOM-Injektion nur im eigentlichen ZK-Dokument.
+- [x] Native Fokus-/Blur-Ereignisse für ZK; feste, geheime-freie Browserdiagnose für Start, Felder, Ausfüllen, Absenden und Timeout.
+- [x] Routing- und DOM-Vertragstests sowie echter Chromium-Test mit Produktionsskript und verschachteltem synthetischem ATOSS-Iframe ergänzt.
+- [ ] CI, Merge, produktive Abnahme. Keine neuen Container, DNS-Einträge oder Datenbankmigrationen. Shared-Origin-Risiko bleibt unverändert.
+
+---
+
 ## 27.11.2026 – Phase 7/7: Favoriten-Öffnungsmodus und alternative Anmeldung
 
 - [x] WPF `WebShortcutBrowserSessionManager` als Referenz geprüft; vorhandene DOM-Logik wiederverwendet.

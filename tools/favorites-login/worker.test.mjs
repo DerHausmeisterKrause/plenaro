@@ -1,3 +1,4 @@
+import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
@@ -125,5 +126,45 @@ test('Chromium retains cross-origin iframe state while its stable parent is hidd
     assert.equal(await frame.locator('#draft').inputValue(),'unsaved draft');
     assert.equal(await frame.locator('body').evaluate(el=>el.ownerDocument.defaultView.scrollY),600);
     assert.equal(loads,1);
+  }finally{await browser.close();}
+});
+
+test('production shared DOM helper fills a dynamically rendered ATOSS nested login frame',async()=>{
+  const source=readFileSync('/tmp/FavoriteDomAutoLogin.cs','utf8');
+  const template=source.match(/private const string AutoFillScript = """\s*(<script data-plenaro-dom-autofill>[\s\S]*?<\/script>)\s*""";/)[1];
+  const host='apps.example.org';
+  const prefix='/site-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const nonce='0123456789ABCDEF0123456789ABCDEF';
+  const script=template.replace('const expectedPrefix = "";','const expectedPrefix = '+JSON.stringify(prefix)+';')
+    .replaceAll('__HOST__',JSON.stringify(host))
+    .replaceAll('__USERNAME__',JSON.stringify('test.user'))
+    .replaceAll('__PASSWORD__',JSON.stringify('test.password'))
+    .replaceAll('__NONCE__',JSON.stringify(nonce));
+  const browser=await chromium.launch({headless:true,chromiumSandbox:false});
+  try{
+    const page=await browser.newPage();
+    const origin='https://'+host;
+    const child=prefix+'/SES/uuid01234567-89ab-cdef-0123-456789abcdef/html';
+    const reports=[];
+    await page.route('https://portal.example.org/',route=>route.fulfill({contentType:'text/html',body:
+      '<iframe sandbox="allow-scripts allow-same-origin allow-forms" src="'+origin+prefix+'/SES/html"></iframe>'}));
+    await page.route(origin+prefix+'/SES/html',route=>route.fulfill({contentType:'text/html',body:
+      '<iframe src="'+child+'"></iframe>'}));
+    await page.route(origin+prefix+'/_plenaro/favorite-autofill/**',route=>{
+      reports.push(new URL(route.request().url()).pathname.split('/').at(-1));
+      return route.fulfill({status:204});
+    });
+    await page.route(origin+child,route=>route.fulfill({contentType:'text/html',body:
+      '<html><head>'+script+'</head><body><main></main><script>'+
+      'setTimeout(()=>{document.querySelector("main").innerHTML=\'<input placeholder="Benutzername"><input type="password" placeholder="Kennwort"><a class="z-button" role="button">Anmelden</a>\';'+
+      'let values=[];document.querySelectorAll("input").forEach(el=>el.addEventListener("blur",()=>values.push(el.value)));'+
+      'document.querySelector("a").onclick=()=>{if(values.join("|")==="test.user|test.password") document.querySelector("main").innerHTML="<h1>Angemeldet</h1>";};},350);'+
+      '</script></body></html>'}));
+    await page.goto('https://portal.example.org/');
+    const nested=page.frameLocator('iframe').frameLocator('iframe');
+    await nested.locator('h1').waitFor({timeout:10000});
+    assert.equal(await nested.locator('h1').textContent(),'Angemeldet');
+    assert.ok(reports.includes('fields-found')&&reports.includes('filled')&&reports.includes('submitted'));
+    assert.equal(reports.filter(x=>x==='submitted').length,1);
   }finally{await browser.close();}
 });

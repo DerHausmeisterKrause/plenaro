@@ -29,6 +29,15 @@ internal static class FavoriteDomAutoLogin
         Guid.TryParseExact(slug.AsSpan(5),"N",out _)&&
         pathPrefix=="/"+slug&&!string.IsNullOrWhiteSpace(username);
 
+    internal static bool SharedDocumentEligible(bool atossFrame,string appPath)=>
+        !atossFrame || (appPath.StartsWith("/SES/uuid",StringComparison.Ordinal)&&
+            appPath.EndsWith("/html",StringComparison.Ordinal)&&appPath.Length==50&&
+            Guid.TryParseExact(appPath.AsSpan(9,36),"D",out _));
+
+    internal static bool IsReportCode(string code)=>code is
+        "started" or "fields-found" or "filled" or "fill-blocked" or
+        "action-missing" or "submitted" or "timeout";
+
     // Keeping the template separate makes it possible to execute the EXACT
     // shipped JS in the frontend's browser-runtime contract test.
     private const string AutoFillScript = """
@@ -51,6 +60,20 @@ internal static class FavoriteDomAutoLogin
           try { submitted = sessionStorage.getItem(attemptKey) === "submitted"; }
           catch (_) { /* Browser storage may be disabled in a sandbox. */ }
           if (submitted) return;
+
+          const reports = new Set();
+          function report(code) {
+            if (!expectedPrefix || reports.has(code)) return;
+            reports.add(code);
+            try {
+              console.info("[Plenaro Autofill]",code);
+              if (typeof fetch === "function")
+                void fetch(expectedPrefix + "/_plenaro/favorite-autofill/" + code,
+                  {method:"POST",mode:"same-origin",credentials:"same-origin",keepalive:true})
+                  .catch(()=>{});
+            } catch (_) { /* Diagnostics must not block login. */ }
+          }
+          report("started");
 
           const selectors = {
             user: [
@@ -137,16 +160,22 @@ internal static class FavoriteDomAutoLogin
             const setter = Object.getOwnPropertyDescriptor(
                 view.HTMLInputElement.prototype, "value")?.set;
             if (typeof element.focus === "function") element.focus();
-            element.dispatchEvent(new view.FocusEvent("focus", {bubbles:true}));
+            if (element.ownerDocument.activeElement !== element)
+              element.dispatchEvent(new view.FocusEvent("focus", {bubbles:true}));
             if (setter) setter.call(element,value);
             else element.value = value;
             element.dispatchEvent(new view.Event("input", {bubbles:true}));
             element.dispatchEvent(new view.Event("change", {bubbles:true}));
-            element.dispatchEvent(new view.FocusEvent("blur", {bubbles:true}));
+            // ZK commits edited textbox values in native blur handlers.
+            // Merely dispatching a synthetic blur leaves the element focused.
+            if (element.ownerDocument.activeElement === element &&
+                typeof element.blur === "function") element.blur();
+            else element.dispatchEvent(new view.FocusEvent("blur", {bubbles:true}));
             return element.value === value;
           }
           function markSubmitted() {
             submitted = true;
+            report("submitted");
             try { sessionStorage.setItem(attemptKey,"submitted"); }
             catch (_) { /* No persistent state; still prevent duplicate on this page. */ }
           }
@@ -163,8 +192,12 @@ internal static class FavoriteDomAutoLogin
             const found = findLoginFields();
             if (!found) return false;
             const {user,pass,form} = found;
-            if (!setInputValue(user,username) || !setInputValue(pass,password))
+            report("fields-found");
+            if (!setInputValue(user,username) || !setInputValue(pass,password)) {
+              report("fill-blocked");
               return false;
+            }
+            report("filled");
 
             const area = form || pass.closest('[role="dialog"], main, section') ||
                 pass.ownerDocument;
@@ -212,6 +245,7 @@ internal static class FavoriteDomAutoLogin
                     key:"Enter",code:"Enter",bubbles:true}));
               return true;
             }
+            report("action-missing");
             return false;
           }
 
@@ -238,6 +272,9 @@ internal static class FavoriteDomAutoLogin
             else document.addEventListener("DOMContentLoaded",attach,{once:true});
             setTimeout(()=>observer.disconnect(),10000);
           }
+          if (expectedPrefix) setTimeout(()=>{
+            if (!submitted && !reports.has("submitted")) report("timeout");
+          },10500);
         })();
         </script>
         """;
