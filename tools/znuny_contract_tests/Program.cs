@@ -222,6 +222,16 @@ try{
 }catch(InvalidOperationException){invalidFavoritesDomainRejected=true;}
 Assert(invalidFavoritesDomainRejected,"invalid base domains fail closed");
 
+// ATOSS first loads an outer shell and only then the generated ZK document.
+var domFrameMethod=typeof(FavoriteProxy).Assembly.GetType(
+    "Plenaro.Api.Favorites.FavoriteDomAutoLogin")!.GetMethod("SharedDocumentEligible",
+    BindingFlags.Static|BindingFlags.NonPublic)!;
+bool DomFrameAllowed(bool atoss,string path)=>(bool)domFrameMethod.Invoke(null,new object[]{atoss,path})!;
+Assert(!DomFrameAllowed(true,"/SES/html")&&
+    DomFrameAllowed(true,"/SES/uuid01234567-89ab-cdef-0123-456789abcdef/html")&&
+    !DomFrameAllowed(true,"/SES/uuid01234567-89ab-cdef-0123-456789abcdef/html/other")&&
+    !DomFrameAllowed(true,"/SES/uuid01234567-89ab-cdef-0123-456789abcdef/zkau")&&
+    DomFrameAllowed(false,"/login"),"ATOSS shared DOM injection waits for actual generated login frame");
 // Explicit shared mode is a compatibility exception, NOT browser isolation.
 var sharedDomMethod=typeof(FavoriteProxy).Assembly.GetType(
     "Plenaro.Api.Favorites.FavoriteDomAutoLogin")!.GetMethod("SharedEligible",

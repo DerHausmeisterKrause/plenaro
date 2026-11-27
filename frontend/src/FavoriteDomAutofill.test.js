@@ -162,6 +162,24 @@ describe('Dedicated personal favorite DOM autofill (WPF parity)',()=>{
     expect(correct.window.document.querySelector('input[type=password]').value).toBe('test-password');
     correct.window.close();
   });
+  it('shared login reports fixed stages without credentials and commits actual focus changes',()=>{
+    const shared='apps-plenaro.example.org';
+    const script=renderScript().replace(JSON.stringify(host),JSON.stringify(shared))
+      .replace('const expectedPrefix = "";','const expectedPrefix = '+JSON.stringify('/'+slug)+';');
+    const p=page('<input name="user" placeholder="Benutzername"><input type="password" placeholder="Kennwort"><a class="z-button" role="button">Anmelden</a>',shared,'/'+slug+'/SES/uuid01234567-89ab-cdef-0123-456789abcdef/html');
+    const pwd=p.window.document.querySelector('input[type=password]');
+    const button=p.window.document.querySelector('a');
+    const blur=vi.fn();pwd.addEventListener('blur',blur);
+    const click=vi.fn();button.addEventListener('click',click);
+    const fetch=vi.fn().mockResolvedValue({ok:true});p.window.fetch=fetch;
+    p.window.eval(script);p.scheduled[0]();
+    expect(pwd.value).toBe('test-password');
+    expect(p.window.document.activeElement).not.toBe(pwd);
+    expect(blur).toHaveBeenCalled();expect(click).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls.map(x=>x[0].split('/').at(-1))).toEqual(['started','fields-found','filled','submitted']);
+    expect(JSON.stringify(fetch.mock.calls)).not.toContain('test-password');
+    p.window.close();
+  });
   it('never fills or submits on another origin',()=>{
     const p=page('<form><input name="user"><input type="password"></form>',
       'apps-plenaro.example.org');

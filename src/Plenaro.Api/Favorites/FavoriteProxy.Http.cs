@@ -1169,6 +1169,14 @@ public sealed partial class FavoriteProxy
                     var sharedNavigation=sharedAllowed&&
                         ctx.Request.Headers["Sec-Fetch-Mode"].ToString()=="navigate"&&
                         ctx.Request.Headers["Sec-Fetch-Dest"].ToString() is "document" or "iframe";
+                    // ATOSS /SES/html is just the outer shell; the actual
+                    // ZK login lives at /SES/uuid.../html. Do not spend the
+                    // single credential injection on the disposable shell.
+                    if(sharedNavigation&&!FavoriteDomAutoLogin.SharedDocumentEligible(
+                        session.AtossDomFrame,appPath)){
+                        sharedNavigation=false;
+                        Debug(session.User,session.Favorite,"info","autofill-atoss-wait-frame",method,resource);
+                    }
                     if(!dedicatedAllowed&&!sharedNavigation){
                         ctx.Response.Headers["X-Plenaro-Autofill"]="isolated-origin-required";
                         // The shared host is intentional; don't warn on
