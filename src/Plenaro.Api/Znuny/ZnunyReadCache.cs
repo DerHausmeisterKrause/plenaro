@@ -22,7 +22,7 @@ public sealed class ZnunyReadCache(IConfiguration config,ZnunyReader reader,
     public sealed record Snapshot(ZnunyReader.Detail Detail,DateTimeOffset FetchedAt,bool Stale);
     public sealed record Credentials(string Username,string Password,bool Central);
     private sealed record TicketRow(ZnunyReader.Detail? Detail,DateTimeOffset Fetched,
-        DateTimeOffset? Changed,DateTimeOffset? Current,bool Scoped);
+        DateTimeOffset? Changed,DateTimeOffset? Current,bool Scoped,bool Enabled);
 
     public static string Key(ServerSettings server,string username)=>
         Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new{server,username})));
@@ -54,7 +54,7 @@ public sealed class ZnunyReadCache(IConfiguration config,ZnunyReader reader,
     {
         await using var cmd=new NpgsqlCommand("""
             SELECT t.changed_at,d.payload::text,d.fetched_at,d.changed_at,
-                c.source_api_url=@source AND c.service_username=@username
+                c.source_api_url=@source AND c.service_username=@username,c.enabled
             FROM znuny_cached_tickets t CROSS JOIN znuny_sync_control c
             LEFT JOIN znuny_ticket_detail_cache d ON d.ticket_id=t.ticket_id AND d.config_key=@key
             WHERE t.ticket_id=@ticket
@@ -64,11 +64,11 @@ public sealed class ZnunyReadCache(IConfiguration config,ZnunyReader reader,
         cmd.Parameters.AddWithValue("key",Key(server,username));
         cmd.Parameters.AddWithValue("ticket",ticket);
         await using var row=await cmd.ExecuteReaderAsync(ct);
-        if(!await row.ReadAsync(ct))return new(null,DateTimeOffset.MinValue,null,null,false);
+        if(!await row.ReadAsync(ct))return new(null,DateTimeOffset.MinValue,null,null,false,false);
         DateTimeOffset? Date(int i)=>row.IsDBNull(i)?null:new DateTimeOffset(row.GetDateTime(i),TimeSpan.Zero);
         var scoped=!row.IsDBNull(4)&&row.GetBoolean(4);
         return new(scoped&&!row.IsDBNull(1)?JsonSerializer.Deserialize<ZnunyReader.Detail>(row.GetString(1)):null,
-            Date(2)??DateTimeOffset.MinValue,Date(3),Date(0),scoped);
+            Date(2)??DateTimeOffset.MinValue,Date(3),Date(0),scoped,row.GetBoolean(5));
     }
 
     private static async Task RequestAsync(NpgsqlConnection db,string ticket,string key,CancellationToken ct)
@@ -120,21 +120,24 @@ public sealed class ZnunyReadCache(IConfiguration config,ZnunyReader reader,
         await using var db=await OpenAsync(ct);
         var row=await ReadTicketAsync(db,server,cred.Username,ticket,ct);
         if(!row.Scoped)return await FetchAsync();
-        if(!refresh&&row.Detail is not null&&row.Changed==row.Current){
+        if(!refresh&&row.Detail is not null&&row.Changed==row.Current&&
+            (row.Enabled||DateTimeOffset.UtcNow-row.Fetched<TimeSpan.FromMinutes(1))){
             await RequestAsync(db,ticket,key,ct);
-            return new(row.Detail,row.Fetched,false);
+            return new(row.Detail,row.Fetched,DateTimeOffset.UtcNow-row.Fetched>TimeSpan.FromMinutes(2));
         }
         return await LockedAsync(Stripe("ticket:"+ticket),async()=>{
             row=await ReadTicketAsync(db,server,cred.Username,ticket,ct);
-            if(!refresh&&row.Detail is not null&&row.Changed==row.Current){
+            if(!refresh&&row.Detail is not null&&row.Changed==row.Current&&
+            (row.Enabled||DateTimeOffset.UtcNow-row.Fetched<TimeSpan.FromMinutes(1))){
                 await RequestAsync(db,ticket,key,ct);
-                return new Snapshot(row.Detail,row.Fetched,false);
+                return new Snapshot(row.Detail,row.Fetched,DateTimeOffset.UtcNow-row.Fetched>TimeSpan.FromMinutes(2));
             }
             try{
                 var result=await FetchAsync();
                 await SaveTicketAsync(db,server,cred.Username,ticket,row.Current,result.FetchedAt,result.Detail,ct);
                 return result;
-            }catch(ZnunyReader.RemoteFailure) when(!refresh&&row.Detail is not null){
+            }catch(ZnunyReader.RemoteFailure e) when(!refresh&&row.Detail is not null&&
+                e.Code is "timeout" or "network-error" or "server-error" or "rate-limited" or "cache-miss-limit" or "cache-fetch-busy"){
                 await RequestAsync(db,ticket,key,ct);
                 return new Snapshot(row.Detail,row.Fetched,true);
             }
