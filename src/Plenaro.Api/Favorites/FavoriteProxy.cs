@@ -36,7 +36,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
 
     private sealed class ProxySession(
         Guid user,Guid favorite,Guid app,string slug,Uri upstream,
-        Uri parent,HttpClient client,bool autoLogin,string username)
+        Uri parent,HttpClient client,bool autoLogin,string username,bool sharedDomOptIn=false,bool sharedDomActive=false)
     {
         public Guid User {get;}=user;
         public Guid Favorite {get;}=favorite;
@@ -47,6 +47,10 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         public HttpClient Client {get;}=client;
         public bool AutoLogin {get;}=autoLogin;
         public string Username {get;}=username;
+        public bool SharedDomOptIn {get;}=sharedDomOptIn;
+        public bool SharedDomActive {get;}=sharedDomActive;
+        private int _sharedDomIssued;
+        public bool TryIssueSharedDom()=>SharedDomActive&&Interlocked.CompareExchange(ref _sharedDomIssued,1,0)==0;
         // A harmless, random per-bootstrap attempt ID. Never the auth cookie.
         public string AutoFillNonce {get;}=
             Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
@@ -185,10 +189,14 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         var domAutoLogin=FavoriteDomAutoLogin.Eligible(
             favorite.Slug,favorite.AutoLogin,IsPathHost(external.Host),
             favorite.Username,external.Host,preferred?.Host);
+        var sharedDom=FavoriteDomAutoLogin.SharedEligible(favorite.Slug,favorite.AutoLogin,
+            favorite.SharedDomAutofill,IsPathHost(external.Host),favorite.Username,
+            "/"+favorite.Slug);
         Debug(user,favorite.Id,"info",
             !favorite.AutoLogin?"login-disabled":
+            sharedDom?"login-shared-dom-opt-in":
             domAutoLogin?"login-dedicated-dom":"login-server-or-browser");
-        if(favorite.AutoLogin && IsPathHost(external.Host) && !domAutoLogin)
+        if(favorite.AutoLogin && IsPathHost(external.Host) && !domAutoLogin && !sharedDom)
             Debug(user,favorite.Id,"info","shared-origin-autofill-disabled");
         // Personal favorites also support internal HTTPS services without
         // an operator-managed origin list, as in the Desktop application.
@@ -217,7 +225,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                    !await TryConfluenceWikiLoginAsync(client,root,
                        favorite.Username,secret,ct))
                     throw new InvalidOperationException("Wiki-Autologin wurde nicht bestätigt.");
-            }else if(favorite.AutoLogin && vault.IsConfigured && !domAutoLogin){
+            }else if(favorite.AutoLogin && vault.IsConfigured && !domAutoLogin && !sharedDom){
                 var password=await vault.GetForIntegrationAsync("user",user,
                     FavoritesEndpoints.PasswordName(favorite.Id),ct);
                 if(!string.IsNullOrEmpty(password) &&
@@ -281,7 +289,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         var key=Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var session=new ProxySession(user,favorite.Id,favorite.AppId,
             favorite.Slug,root,new Uri(configuration["PLENARO_PUBLIC_ORIGIN"]!),
-            client,favorite.AutoLogin,favorite.Username);
+            client,favorite.AutoLogin,favorite.Username,favorite.SharedDomAutofill,sharedDom);
         if(_users.TryGetValue((user,favorite.Id),out var previous) &&
             _sessions.TryGetValue(previous,out var old))
             Remove(previous,old);
@@ -466,7 +474,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
                       f.app_id=@app AND f.enabled AND a.enabled AND
                       a.slug=@slug AND a.upstream_url=@upstream AND
                       a.slug<>'wiki' AND f.open_mode='proxy' AND f.auto_login=@auto AND
-                      f.username=@username AND
+                      f.username=@username AND f.shared_dom_autofill=@dom AND
                       (a.owner_user_id=@user OR
                        (a.owner_user_id IS NULL AND
                         (a.available_to_all OR EXISTS(
@@ -487,6 +495,7 @@ public sealed partial class FavoriteProxy(IConfiguration configuration)
         cmd.Parameters.AddWithValue("upstream",session.Upstream.AbsoluteUri);
         cmd.Parameters.AddWithValue("auto",session.AutoLogin);
         cmd.Parameters.AddWithValue("username",session.Username);
+        cmd.Parameters.AddWithValue("dom",session.SharedDomOptIn);
         return await cmd.ExecuteScalarAsync(ct) is true;
     }
 

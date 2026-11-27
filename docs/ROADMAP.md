@@ -1,3 +1,13 @@
+## 27.11.2026 – Phase 7/7: Favoriten-Öffnungsmodus und alternative Anmeldung
+
+- [x] WPF `WebShortcutBrowserSessionManager` als Referenz geprüft; vorhandene DOM-Logik wiederverwendet.
+- [x] Externen Browser als Checkbox im Editor und direkten Link beim Öffnen abbilden; vorhandenen Modus und Sidebar-Link beibehalten.
+- [x] Explizite, standardmäßig deaktivierte persönliche Shared-Origin-DOM-Option, Warnung und Bestätigung; nur einmal pro Proxy-Sitzung auf Browsernavigation. Keine zusätzliche parallele Server-Anmeldung.
+- [x] Migration und Frontend-/Backend-Vertragstests ergänzt. Zentraler Wiki-Login unverändert.
+- [ ] CI, Merge und produktiver ATOSS-Test. Shared-Origin-Opt-in kann Zugangsdaten anderen Webseiten auf demselben Host offenlegen; keine Sicherheitsisolierung.
+
+---
+
 ## 27.11.2026 – Phase 7/7: Wiki-Bereichsnavigation
 
 - [x] Netzwerkprotokoll bestätigt: `GET /wiki/rest/ia/1.0/spacesmenu` liefert JSON mit HTML im Feld `template`; Bereichslinks und Logo-Pfade ohne /wiki erzeugen HTTP 401.

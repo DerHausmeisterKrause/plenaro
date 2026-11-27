@@ -16,16 +16,22 @@ test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$url/person
 test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X POST "$url/personal" "${header[@]}" -d '{"name":"Unsafe","url":"http://127.0.0.1/","username":"","autoLogin":false,"enabled":true,"sortOrder":0}')" = "400"
 ID=$(curl -fsS -b "$COOKIE" -X POST "$url/personal" "${header[@]}" -d "$one" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
 test -n "$ID"
-curl -fsS -b "$COOKIE" "$url/" | python3 -c 'import json,sys;a=json.load(sys.stdin);assert len(a)==1 and a[0]["name"]=="Personal Wiki Link" and a[0]["url"]=="https://example.org/docs/guide" and a[0]["slug"].startswith("site-") and a[0]["openMode"]=="proxy" and not a[0]["hasPassword"] and "password" not in a[0]'
+curl -fsS -b "$COOKIE" "$url/" | python3 -c 'import json,sys;a=json.load(sys.stdin);assert len(a)==1 and a[0]["name"]=="Personal Wiki Link" and a[0]["url"]=="https://example.org/docs/guide" and a[0]["slug"].startswith("site-") and a[0]["openMode"]=="proxy" and not a[0]["sharedDomAutofill"] and not a[0]["hasPassword"] and "password" not in a[0]'
 # Existing browser favorite has an immutable random proxy alias but editable URL.
 modified='{"name":"Personal Wiki Link","url":"https://example.net/other#/homepage","username":"","autoLogin":false,"enabled":true,"sortOrder":0,"password":""}'
 test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$url/personal/$ID" "${header[@]}" -d "$modified")" = "204"
 SECOND=$(curl -fsS -b "$COOKIE" -X POST "$url/personal" "${header[@]}" -d "$two" | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
 test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$url/personal/order" "${header[@]}" -d "{\"ids\":[\"$SECOND\",\"$ID\"]}")" = "204"
 curl -fsS -b "$COOKIE" "$url/" | python3 -c 'import json,sys;a=json.load(sys.stdin);assert len(a)==2 and a[0]["name"]=="My Search" and a[0]["url"]=="https://192.168.1.50:8443/search?tab=1#/settings" and a[1]["url"]=="https://example.net/other#/homepage"'
+# Explicit opt-in is persisted only with the proxy and auto-login (no live credentials).
+optin='{"name":"Personal Wiki Link","url":"https://example.net/other#/homepage","username":"ci-user","autoLogin":true,"enabled":true,"sortOrder":1,"sharedDomAutofill":true}'
+test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$url/personal/$ID" "${header[@]}" -d "$optin")" = "204"
+curl -fsS -b "$COOKIE" "$url/" | python3 -c 'import json,sys;a=json.load(sys.stdin);assert a[1]["sharedDomAutofill"] and not a[0]["sharedDomAutofill"]'
+invalid='{"name":"Personal Wiki Link","url":"https://example.net/other#/homepage","username":"ci-user","autoLogin":true,"enabled":true,"sortOrder":1,"openMode":"external","sharedDomAutofill":true}'
+test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$url/personal/$ID" "${header[@]}" -d "$invalid")" = "400"
 # Opening modes are persisted on the individual owner's favorite.
 test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$url/personal/$ID/mode" "${header[@]}" -d '{"openMode":"external"}')" = "204"
-curl -fsS -b "$COOKIE" "$url/" | python3 -c 'import json,sys;a=json.load(sys.stdin);assert a[1]["openMode"]=="external" and a[0]["openMode"]=="proxy"'
+curl -fsS -b "$COOKIE" "$url/" | python3 -c 'import json,sys;a=json.load(sys.stdin);assert a[1]["openMode"]=="external" and a[0]["openMode"]=="proxy" and not a[1]["sharedDomAutofill"]'
 test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$url/personal/$ID/mode" "${header[@]}" -d '{"openMode":"unknown"}')" = "400"
 test "$(curl -s -o /dev/null -w '%{http_code}' -b "$COOKIE" -X PUT "$url/personal/$ID/mode" "${header[@]}" -d '{"openMode":"proxy"}')" = "204"
 # Starting an iframe requires the dedicated HTTPS proxy and must not work on HTTP CI.

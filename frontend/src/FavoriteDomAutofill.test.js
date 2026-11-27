@@ -23,10 +23,10 @@ function renderScript(h=host,secret='test-password'){
     .replaceAll('__NONCE__',JSON.stringify(nonce));
 }
 
-function page(markup,origin=host){
+function page(markup,origin=host,path='/login'){
   const dom=new JSDOM(
     '<!doctype html><html><head></head><body>'+markup+'</body></html>',
-    {url:'https://'+origin+'/login',runScripts:'outside-only'});
+    {url:'https://'+origin+path,runScripts:'outside-only'});
   const {window}=dom;
   const scheduled=[];
   window.setTimeout=cb=>{scheduled.push(cb);return scheduled.length;};
@@ -148,6 +148,20 @@ describe('Dedicated personal favorite DOM autofill (WPF parity)',()=>{
     p.window.close();
   });
 
+  it('scopes shared opt-in script to the selected favorite path',()=>{
+    const shared='apps-plenaro.example.org';
+    const script=renderScript().replace(JSON.stringify(host),JSON.stringify(shared))
+      .replace('const expectedPrefix = "";','const expectedPrefix = '+JSON.stringify('/'+slug)+';');
+    const markup='<form><input name="user"><input type="password"><button type="submit">Login</button></form>';
+    const wrong=page(markup,shared,'/site-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/login');
+    wrong.window.eval(script);
+    expect(wrong.scheduled).toHaveLength(0);wrong.window.close();
+    const correct=page(markup,shared,'/'+slug+'/login');
+    correct.window.document.querySelector('form').requestSubmit=vi.fn();
+    correct.window.eval(script);correct.scheduled[0]();
+    expect(correct.window.document.querySelector('input[type=password]').value).toBe('test-password');
+    correct.window.close();
+  });
   it('never fills or submits on another origin',()=>{
     const p=page('<form><input name="user"><input type="password"></form>',
       'apps-plenaro.example.org');

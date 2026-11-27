@@ -13,6 +13,8 @@ const descriptions:Record<string,string>={
   'session-revoked':'Favorit oder Benutzerberechtigung wurde verändert',
   'login-disabled':'Automatische Anmeldung ist deaktiviert',
   'login-server-or-browser':'Server-/Browser-Anmeldung vorgesehen',
+  'login-shared-dom-opt-in':'Alternative Browser-Anmeldung bewusst aktiviert (gemeinsamer Host, Klartext-Risiko)',
+  'autofill-shared-injected':'Alternative Browser-Anmeldung einmalig in die Webseite eingebunden',
   'login-dedicated-dom':'Automatische Browser-Anmeldung über eigenen HTTPS-Host vorgesehen',
   'login-credentials-missing':'Benutzername oder Passwort fehlen',
   'headless-login-attempt':'Privater Login-Browser wird aufgerufen',
