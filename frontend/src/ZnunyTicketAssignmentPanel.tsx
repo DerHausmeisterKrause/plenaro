@@ -43,7 +43,7 @@ export function ZnunyTicketAssignmentPanel({ticket,onChanged}:{
   async function refresh(){
     setBusy(true);setError('');
     try{
-      setAgents(await readZnunyAgents());setLoaded(true);
+      setAgents(await readZnunyAgents(true));setLoaded(true);
     }catch(e){
       setError(e instanceof Error?e.message:'Agentenliste nicht verfügbar.');
     }finally{setBusy(false);}
@@ -108,7 +108,7 @@ export function ZnunyTicketAssignmentPanel({ticket,onChanged}:{
         <UserRoundCheck size={14}/>Mir zuweisen</button>}
     </div>
     <p className="classic-wpf-help">
-      Agentennamen werden beim Öffnen automatisch geladen und alle fünf Minuten
+      Agentennamen werden aus dem zentralen Cache geladen und regelmäßig
       aktualisiert. Änderungen erfordern deine persönlichen Znuny-Zugangsdaten
       und werden direkt in Znuny ausgeführt.</p>
     {error&&<p role="alert" className="um-feedback failure">{error}</p>}
