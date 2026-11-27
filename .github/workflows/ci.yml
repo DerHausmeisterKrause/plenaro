@@ -666,6 +666,8 @@ jobs:
       - name: Real Chromium ATOSS/ZK login contract (no actual credentials)
         run: |
           docker run --rm --shm-size=128m --entrypoint node \
+            -v "$PWD/src/Plenaro.Api/Favorites/FavoriteProxy.Http.cs:/tmp/wiki-shim.cs:ro" \
+            -e PLENARO_WIKI_SHIM_SOURCE=/tmp/wiki-shim.cs \
             plenaro-favorites-login-ci /app/worker.test.mjs
       - name: Worker startup smoke (nonroot user and internal health)
         run: |
