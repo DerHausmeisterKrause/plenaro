@@ -211,12 +211,12 @@ export type ZnunyArticle = {
 };
 export type ZnunyConversation = {
   ticketId:string;ticketNumber:string;title:string;articles:ZnunyArticle[];
-  unreadArticleIds:string[];
+  unreadArticleIds:string[];fetchedAt?:string;stale?:boolean;
 };
 export type ZnunyAgent = { id:number;name:string };
 export type ZnunyUpdateConfirmation = { confirmed:boolean;cacheUpdated?:boolean };
-export const readZnunyArticles=(ticketId:string)=>
-  request<ZnunyConversation>(workspaceBase(ticketId)+'/articles');
+export const readZnunyArticles=(ticketId:string,refresh=false)=>
+  request<ZnunyConversation>(workspaceBase(ticketId)+'/articles'+(refresh?'?refresh=true':''));
 export const markZnunyArticleRead=async(ticketId:string,articleId:string):Promise<void>=>{
   await mutate(workspaceBase(ticketId)+'/articles/'+encodeURIComponent(articleId)+'/read','POST');
   window.dispatchEvent(new Event(ticketReadEvent));
@@ -231,8 +231,8 @@ export const znunyAttachmentDownloadUrl=(ticketId:string,articleId:string,fileId
   '/attachments/'+encodeURIComponent(fileId);
 export const readZnunyInlineImage=(ticketId:string,articleId:string,fileId:string)=>
   request<{dataUri:string}>(znunyAttachmentDownloadUrl(ticketId,articleId,fileId)+'/inline');
-export const readZnunyAgents=()=>
-  request<ZnunyAgent[]>('/api/v1/znuny/agents');
+export const readZnunyAgents=(refresh=false)=>
+  request<ZnunyAgent[]>('/api/v1/znuny/agents'+(refresh?'?refresh=true':''));
 export const updateZnunyAssignment=async(ticketId:string,ownerId:number|null,
   responsibleId:number|null)=>{
   const result=await mutate(workspaceBase(ticketId)+'/assignment','PUT',{

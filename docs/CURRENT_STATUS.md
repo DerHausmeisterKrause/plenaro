@@ -1,3 +1,16 @@
+## 27.11.2026 – Phase 7/7: Zentraler Znuny-Lesecache
+
+- [x] Classic-Referenz `Services/TicketDetailCacheService.cs` und `Models/ZnunySyncPolicy.cs` berücksichtigt.
+- [x] Ticketdetails mit Nachrichten, MIME-Body, Anhangsmetadaten und aktuellen Buchungsfeldwerten zentral in PostgreSQL speichern. Keine Anhangsdateien oder persönlichen Zugangsdaten im Cache.
+- [x] Agenten und Buchungsoptionen gemeinsam für berechtigte Benutzer zwischenspeichern (5 Minuten); die Hintergrundsynchronisierung füllt jeweils bis zu vier Ticketdetails pro Zyklus, offene und kürzlich angeforderte Tickets zuerst.
+- [x] Normale Cache-Treffer und lokales Tagesbuchungslimit vom bisherigen Znuny-Leselimit trennen. Nur tatsächliche interaktive Nachladevorgänge begrenzen (120 pro Benutzer/5 Minuten, bis zu sechs parallel pro Webprozess).
+- [x] Berechtigungsfilter, personenbezogene Lesemarkierungen, Live-Anhänge, persönliche Schreibzugriffe, Buchungsvalidierung und explizite Nachrichten-/Agentenaktualisierung erhalten. Cache nach bestätigten Schreibvorgängen invalidieren; alte laufende Abrufe dürfen den invalidierten Stand nicht überschreiben.
+- [x] Cache an Quelle, Servicekonto und Konfiguration binden; ohne Servicekonto persönliche Live-Abfragen beibehalten. Letzten Stand bei vorübergehendem Fehler kennzeichnen.
+- [x] PostgreSQL-Regressionstest mit simuliertem Znuny, 150 Cache-Treffern, Aktualisierung, Buchungsfeldern, Konto-/Quellenwechsel und ungültigen Snapshots ergänzt.
+- [ ] Vollständige CI und produktive Abnahme. Bestehender Artikelumfang und Berechtigungsmodell bleiben erhalten; zusätzliche Speicherung von Nachrichtentexten beim Backup und der Aufbewahrung berücksichtigen.
+
+---
+
 ## 26.11.2026 – Phase 7/7: Favoriten-Öffnungsmodus und Outlook-Segmentplanung
 
 - [x] Persönlicher Öffnungsmodus pro Favorit (Proxy als Standard, direkt eingebetteter Browser, eigener Tab), Wechsel in Einstellungen und Favoritenleiste. Keine Domain-Sonderfälle oder neuen Container.

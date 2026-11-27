@@ -58,10 +58,13 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const [loaded,setLoaded]=useState(false);
-  async function reload(){
+  const [fetchedAt,setFetchedAt]=useState('');
+  const [stale,setStale]=useState(false);
+  async function reload(refresh=false){
     setBusy(true);setError('');
     try{
-      const data=await readZnunyArticles(ticketId);
+      const data=await readZnunyArticles(ticketId,refresh);
+      setFetchedAt(data.fetchedAt??'');setStale(data.stale===true);
       setArticles(data.articles);
       setUnreadIds(data.unreadArticleIds??[]);
       setTicketNumber(data.ticketNumber);setTicketTitle(data.title);
@@ -74,7 +77,7 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
   useEffect(()=>{
     setPreview(null);setArticles([]);setSelectedId('');setUnreadIds([]);setOpened(true);setEmailExpanded(false);
     setTicketNumber('');setTicketTitle('');
-    setLoaded(false);setError('');setNotice('');setReplying(false);setReply('');
+    setLoaded(false);setFetchedAt('');setStale(false);setError('');setNotice('');setReplying(false);setReply('');
     setCloseMode(false);setTemplateWarning('');
     void reload();
   },[ticketId]);
@@ -85,6 +88,7 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
     const interval=window.setInterval(()=>{
       if(document.hidden||busy||replying)return;
       void readZnunyArticles(ticketId).then(data=>{
+        setFetchedAt(data.fetchedAt??'');setStale(data.stale===true);
         setArticles(data.articles);
         setUnreadIds(data.unreadArticleIds??[]);
         setSelectedId(id=>selectedArticleId(data.articles,data.unreadArticleIds??[],id));
@@ -176,7 +180,8 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
       if(closeMode)onClosed?.();
       // A failed reload must never invalidate a successfully confirmed write.
       try{
-        const data=await readZnunyArticles(ticketId);
+        const data=await readZnunyArticles(ticketId,true);
+        setFetchedAt(data.fetchedAt??'');setStale(data.stale===true);
         setArticles(data.articles);
         setUnreadIds(data.unreadArticleIds??[]);
         setSelectedId(newestFirst(data.articles)[0]?.id??'');
@@ -197,11 +202,12 @@ export function ZnunyTicketConversationPanel({ticketId,closed,closeRequest=0,onC
     <div className="classic-wpf-optional-inner">
       <div className="classic-wpf-actions">
         <button type="button" className="button button-secondary" disabled={busy}
-          onClick={()=>void reload()}><RefreshCw size={14}/>Nachrichten aktualisieren</button>
+          onClick={()=>void reload(true)}><RefreshCw size={14}/>Nachrichten aktualisieren</button>
       </div>
       {busy&&<p role="status">Kommunikation mit Znuny …</p>}
       {error&&<p role="alert" className="um-feedback failure">{error}</p>}
       {notice&&<p role="status" className="um-feedback success">{notice}</p>}
+      {fetchedAt&&<p className="classic-wpf-help">{stale?'Zwischengespeicherter Stand · ':'Letzter Znuny-Abgleich · '}{germanArticleDate(fetchedAt)}{stale?' · Aktualisierung ausstehend':''}</p>}
       {loaded&&articles.length===0&&<p className="classic-wpf-help">
         Keine Artikel vorhanden oder von der API zurückgegeben.</p>}
       {articles.length>0&&<label>Nachricht

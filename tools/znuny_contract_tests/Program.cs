@@ -7,6 +7,11 @@ using Plenaro.Api.Znuny;
 using Plenaro.Api.Favorites;
 using static Plenaro.Api.Znuny.ZnunyEndpoints;
 
+if(Environment.GetEnvironmentVariable("PLENARO_TEST_CACHE_CONNECTION") is {Length:>0} cacheConnection){
+    await ReadCacheDatabaseTest.RunAsync(cacheConnection);
+    return;
+}
+
 // Regression: RateLimiter used to run BEFORE UseAuthentication and therefore
 // saw every user behind NGINX as the same reverse-proxy IP. A Znuny read
 // limiter of 40/5 minutes was exhausted across different Plenaro users.
@@ -2614,6 +2619,29 @@ using(var payload=JsonDocument.Parse(JsonSerializer.Serialize(Plenaro.Api.Graph.
 var calendarUpdate=Plenaro.Api.Graph.SegmentCalendarSync.Payload(calendarData,calendarMarker,calendarSegmentId,false);
 Assert(!calendarUpdate.ContainsKey("transactionId")&&!calendarUpdate.ContainsKey("singleValueExtendedProperties"),
     "existing event update leaves identity marker and transaction ID intact");
+// Persisted detail snapshots use the exact existing reader contract and
+// retain MIME bodies and attachment metadata; binary data is never fetched.
+var cacheSettings=new ServerSettings(ApiUrl:"https://znuny.example.org/api",
+    CostCenterFieldName:"KostenstelleID",OrderFieldName:"AuftragsID");
+var cacheDetailReader=new ZnunyReader(new FakeFactory(request=>{
+    Assert(request.RequestUri!.Query.Contains("GetAttachmentContents=0"),"cache reads only attachment metadata");
+    return new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(
+        """{"Ticket":{"TicketID":"77","TicketNumber":"20260077","Title":"Cache test","DynamicField":[{"Name":"KostenstelleID","Value":"100"},{"Name":"AuftragsID","Value":"AB"}],"Article":[{"ArticleID":"12","Subject":"Test","Body":"<p>Text</p>","ContentType":"text/html","CreateTime":"2026-11-26 10:00:00","Attachment":[{"FileID":"7","Filename":"image.png","ContentType":"image/png","Content":"BINARY_NOT_CACHED"}]}]}}""",
+        Encoding.UTF8,"application/json")};
+}));
+var cacheDetail=await cacheDetailReader.GetArticlesAsync(cacheSettings,"mock-session","77",
+    new ZnunyReader.Counter(4),CancellationToken.None);
+var cacheJson=JsonSerializer.Serialize(cacheDetail);
+var cacheRoundtrip=JsonSerializer.Deserialize<ZnunyReader.Detail>(cacheJson)!;
+Assert(cacheRoundtrip.CostCenter=="100"&&cacheRoundtrip.Order=="AB"&&
+    cacheRoundtrip.Articles.Single().Body=="<p>Text</p>"&&
+    cacheRoundtrip.Articles.Single().Attachments.Single().Filename=="image.png"&&
+    !cacheJson.Contains("BINARY_NOT_CACHED"),"detail cache roundtrip preserves article and booking metadata without binary content");
+Assert(ZnunyReadCache.Key(cacheSettings,"service-a")!=ZnunyReadCache.Key(cacheSettings,"service-b")&&
+    ZnunyReadCache.Key(cacheSettings,"service-a")!=ZnunyReadCache.Key(cacheSettings with{ArticleLimit=50},"service-a")&&
+    ZnunyReadCache.Key(cacheSettings,"service-a")!=ZnunyReadCache.Key(cacheSettings with{ApiUrl="https://other.example.org/api"},"service-a"),
+    "read cache identity includes service account, source and reader configuration");
+
 Console.WriteLine("Znuny mock integration tests completed successfully. No real ticket modified.");
 
 sealed class FakeFactory(Func<HttpRequestMessage,HttpResponseMessage> answer):IHttpClientFactory

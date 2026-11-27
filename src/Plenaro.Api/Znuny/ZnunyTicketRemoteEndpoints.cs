@@ -28,19 +28,17 @@ public static class ZnunyTicketRemoteEndpoints
 
     public static void Map(RouteGroupBuilder group)
     {
-        group.MapGet("/tickets/{ticketId}/articles",async (string ticketId,HttpContext http,
+        group.MapGet("/tickets/{ticketId}/articles",async (string ticketId,bool? refresh,HttpContext http,
             UserManager<ApplicationUser> users,IConfiguration config,SecretVault vault,
-            ZnunyReader reader,CancellationToken ct)=>{
+            ZnunyReadCache cache,CancellationToken ct)=>{
             var context=await Context(http,users,config,vault,ticketId,false,ct);
             if(context.Error is {} failure)return failure;
             try{
-                var cred=await ReadCredentials(context,vault,ct);
+                var cred=await CacheCredentials(context,vault,ct);
                 if(cred is null)return MissingCredentials();
-                var counter=new ZnunyReader.Counter(4);
-                var session=await reader.SessionAsync(context.Server!,cred.Value.Username,
-                    cred.Value.Password,counter,ct);
-                var detail=await reader.GetArticlesAsync(context.Server!,session,
-                    ticketId,counter,ct);
+                var snapshot=await cache.TicketAsync(context.Server!,cred,context.UserId!.Value,
+                    ticketId,refresh==true,ct);
+                var detail=snapshot.Detail;
                 await using var db=await Open(config,ct);
                 var account=await users.GetUserAsync(http.User);
                 if(account is null||account.IsDisabled)return Results.Unauthorized();
@@ -50,9 +48,10 @@ public static class ZnunyTicketRemoteEndpoints
                     db,account.Id,ticketId,ct);
                 return Results.Ok(new {ticketId=detail.TicketId,
                     ticketNumber=detail.TicketNumber,title=detail.Title,
-                    articles=detail.Articles,unreadArticleIds});
+                    articles=detail.Articles,unreadArticleIds,
+                    fetchedAt=snapshot.FetchedAt,stale=snapshot.Stale});
             }catch(ZnunyReader.RemoteFailure e){return RemoteReadError(e.Code);}
-        }).RequireRateLimiting("znuny-ticket-read");
+        });
 
         // Acknowledge only a genuinely tracked, unread article. The group
         // filter rechecks personal ticket access; CSRF protects this write.
@@ -108,20 +107,16 @@ public static class ZnunyTicketRemoteEndpoints
 
         group.MapGet("/tickets/{ticketId}/booking-fields",async(string ticketId,
             HttpContext http,UserManager<ApplicationUser> users,
-            IConfiguration config,SecretVault vault,ZnunyReader reader,
+            IConfiguration config,SecretVault vault,ZnunyReadCache cache,
             CancellationToken ct)=>{
             var context=await Context(http,users,config,vault,ticketId,false,ct);
             if(context.Error is {} denied)return denied;
             try{
-                var credentials=await ReadCredentials(context,vault,ct);
-                if(credentials is null)return MissingCredentials();
-                var calls=new ZnunyReader.Counter(6);
-                var session=await reader.SessionAsync(context.Server!,
-                    credentials.Value.Username,credentials.Value.Password,calls,ct);
-                return Results.Ok(await reader.GetBookingFieldsAsync(context.Server!,
-                    session,ticketId,calls,ct));
+                var cred=await CacheCredentials(context,vault,ct);
+                if(cred is null)return MissingCredentials();
+                return Results.Ok(await cache.BookingAsync(context.Server!,cred,context.UserId!.Value,ticketId,ct));
             }catch(ZnunyReader.RemoteFailure e){return RemoteReadError(e.Code);}
-        }).RequireRateLimiting("znuny-ticket-read");
+        });
 
         // Read-only personal write readiness check: verifies the same personal
         // credentials used by reply/booking, never the central sync account.
@@ -188,7 +183,7 @@ public static class ZnunyTicketRemoteEndpoints
                 remainingMinutes=Math.Max(0L,
                     ZnunyAgentDailyBookingLimit.MaximumMinutes-used)
             });
-        }).RequireRateLimiting("znuny-ticket-read");
+        });
 
         // The booking journal is committed BEFORE sending anything to Znuny.
         // A pending entry remains pending on network error or uncertain ACK.
@@ -333,6 +328,7 @@ public static class ZnunyTicketRemoteEndpoints
                 var calls=new ZnunyReader.Counter(2);
                 var ack=await reader.UpdateAsync(context.Server,session,ticketId,payload,calls,ct);
                 if(!ack)return UncertainBooking(id);
+                await http.RequestServices.GetRequiredService<ZnunyReadCache>().InvalidateAsync(ticketId);
                 await using var db=await Open(config,ct);
                 await using var cmd=new NpgsqlCommand("""
                     UPDATE znuny_ticket_time_bookings
@@ -421,19 +417,16 @@ public static class ZnunyTicketRemoteEndpoints
                 }catch(ZnunyReader.RemoteFailure e){return RemoteReadError(e.Code);}
             }).RequireRateLimiting("znuny-ticket-read");
 
-        group.MapGet("/agents",async(HttpContext http,UserManager<ApplicationUser> users,
-            IConfiguration config,SecretVault vault,ZnunyReader reader,CancellationToken ct)=>{
+        group.MapGet("/agents",async(bool? refresh,HttpContext http,UserManager<ApplicationUser> users,
+            IConfiguration config,SecretVault vault,ZnunyReadCache cache,CancellationToken ct)=>{
             var context=await Context(http,users,config,vault,null,false,ct);
             if(context.Error is {} failure)return failure;
             try{
-                var cred=await ReadCredentials(context,vault,ct);
+                var cred=await CacheCredentials(context,vault,ct);
                 if(cred is null)return MissingCredentials();
-                var counter=new ZnunyReader.Counter(3);
-                var session=await reader.SessionAsync(context.Server!,cred.Value.Username,
-                    cred.Value.Password,counter,ct);
-                return Results.Ok(await reader.GetAgentsAsync(context.Server!,session,counter,ct));
+                return Results.Ok(await cache.AgentsAsync(context.Server!,cred,context.UserId!.Value,ct,refresh==true));
             }catch(ZnunyReader.RemoteFailure e){return RemoteReadError(e.Code);}
-        }).RequireRateLimiting("znuny-ticket-read");
+        });
 
         group.MapPut("/tickets/{ticketId}/assignment",async(string ticketId,
             AssignmentRequest input,HttpContext http,IAntiforgery anti,
@@ -459,6 +452,7 @@ public static class ZnunyTicketRemoteEndpoints
                 var result=await reader.UpdateAsync(context.Server!,session,ticketId,
                     new Dictionary<string,object>{["Ticket"]=fields},counter,ct);
                 if(!result)return UncertainWrite();
+                await http.RequestServices.GetRequiredService<ZnunyReadCache>().InvalidateAsync(ticketId);
             }catch(ZnunyReader.RemoteFailure e) when(!writeAttempted){
                 // Login/TicketGet failed before a write was attempted. Retrying
                 // this particular action cannot duplicate a remote write.
@@ -509,6 +503,7 @@ public static class ZnunyTicketRemoteEndpoints
                         ["OwnerID"]=context.AgentId.Value,["ResponsibleID"]=context.AgentId.Value
                     }},counter,ct);
                 if(!confirmed)return UncertainWrite();
+                await http.RequestServices.GetRequiredService<ZnunyReadCache>().InvalidateAsync(ticketId);
             }catch(ZnunyReader.RemoteFailure e) when(!writeAttempted){
                 // Login/TicketGet failed before a write was attempted. Retrying
                 // this particular action cannot duplicate a remote write.
@@ -562,6 +557,7 @@ public static class ZnunyTicketRemoteEndpoints
                         ["State"]=nextState
                     }},counter,ct);
                 if(!confirmed)return UncertainWrite();
+                await http.RequestServices.GetRequiredService<ZnunyReadCache>().InvalidateAsync(ticketId);
             }catch(ZnunyReader.RemoteFailure e) when(!writeAttempted){
                 // Login/TicketGet failed before a write was attempted. Retrying
                 // this particular action cannot duplicate a remote write.
@@ -649,6 +645,7 @@ public static class ZnunyTicketRemoteEndpoints
                 var confirmed=await reader.UpdateAsync(context.Server!,session,ticketId,
                     contents,counter,ct);
                 if(!confirmed)return UncertainWrite();
+                await http.RequestServices.GetRequiredService<ZnunyReadCache>().InvalidateAsync(ticketId);
                 if(!input.Close)return Results.Ok(new{confirmed=true});
                 // Remote ACK precedes cache update. No automatic repeat if
                 // local cache write fails; next central sync reconciles it.
@@ -874,6 +871,17 @@ public static class ZnunyTicketRemoteEndpoints
         return new(null,user.Id,agent,assigned,server,personal,central);
     }
 
+    private static async Task<ZnunyReadCache.Credentials?> CacheCredentials(
+        ContextResult context,SecretVault vault,CancellationToken ct)
+    {
+        if(!string.IsNullOrWhiteSpace(context.CentralUsername)){
+            var pwd=await vault.GetForIntegrationAsync("global",null,ZnunyCentralSync.ServiceSecret,ct);
+            if(!string.IsNullOrEmpty(pwd))return new(context.CentralUsername,pwd,true);
+        }
+        var personal=await WriteCredentials(context,vault,ct);
+        return personal is null?null:new(personal.Value.Username,personal.Value.Password,false);
+    }
+
     private static async Task<(string Username,string Password)?> ReadCredentials(
         ContextResult context,SecretVault vault,CancellationToken ct)
     {
@@ -920,6 +928,8 @@ public static class ZnunyTicketRemoteEndpoints
         // gateway outage; surface actionable diagnostics without credentials.
         var loginProblem=operation.StartsWith("persönliche Znuny-API-Anmeldung",StringComparison.Ordinal);
         var detail=failure.Code switch{
+            "cache-miss-limit" => "Zu viele echte Znuny-Nachladevorgänge. Bereits zwischengespeicherte Tickets bleiben verfügbar.",
+            "cache-fetch-busy" => "Znuny wird gerade synchronisiert. Bitte gleich erneut versuchen.",
             "session-rejected" or "remote-rejected" when loginProblem =>
                 "Znuny hat für die persönlichen API-Zugangsdaten keine gültige "+
                 "SessionID geliefert. Benutzernamen, Passwort, Agentenberechtigung "+
@@ -941,6 +951,8 @@ public static class ZnunyTicketRemoteEndpoints
             (failure.Code is "session-rejected" or "remote-rejected" or "authentication")
             ?StatusCodes.Status422UnprocessableEntity
             :StatusCodes.Status502BadGateway;
+        if(failure.Code=="cache-miss-limit")status=StatusCodes.Status429TooManyRequests;
+        if(failure.Code=="cache-fetch-busy")status=StatusCodes.Status503ServiceUnavailable;
         return Results.Json(new{error=detail,stage=operation,code=failure.Code},
             statusCode:status);
     }

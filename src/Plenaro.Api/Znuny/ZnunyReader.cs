@@ -237,7 +237,8 @@ public sealed class ZnunyReader(IHttpClientFactory factory)
         string To,string ReplyTo,string SenderType,string Channel,string Created,
         string ContentType,IReadOnlyList<Attachment> Attachments);
     public sealed record Detail(string TicketId,string TicketNumber,string Title,
-        IReadOnlyList<Article> Articles,string CustomerUserId = "");
+        IReadOnlyList<Article> Articles,string CustomerUserId = "",
+        string CostCenter="",string Order="");
     public sealed record Agent(int Id,string Name);
 
     public async Task<Detail> GetArticlesAsync(ServerSettings settings,string session,
@@ -310,7 +311,8 @@ public sealed class ZnunyReader(IHttpClientFactory factory)
             articles.OrderBy(a=>a.Created,StringComparer.Ordinal)
                 .TakeLast(settings.ArticleLimit).ToArray(),
             string.IsNullOrWhiteSpace(String(ticket,"CustomerUserID",320))
-                ?String(ticket,"CustomerUser",320):String(ticket,"CustomerUserID",320));
+                ?String(ticket,"CustomerUser",320):String(ticket,"CustomerUserID",320),
+            FindDynamic(ticket,settings.CostCenterFieldName),FindDynamic(ticket,settings.OrderFieldName));
     }
 
     // Znuny TicketGet returns attachment metadata without binary content when
@@ -416,6 +418,18 @@ public sealed class ZnunyReader(IHttpClientFactory factory)
         IReadOnlyList<FieldOption> CostCenterOptions,
         IReadOnlyList<FieldOption> OrderOptions);
 
+    public sealed record BookingOptions(IReadOnlyList<FieldOption> CostCenterOptions,
+        IReadOnlyList<FieldOption> OrderOptions);
+    public async Task<BookingOptions> GetBookingOptionsAsync(ServerSettings settings,
+        string session,Counter counter,CancellationToken ct)
+    {
+        var costOptions=await OptionsAsync(settings,session,settings.CostCenterFieldName,
+            settings.CostCenterOptions,counter,ct);
+        var orderOptions=await OptionsAsync(settings,session,settings.OrderFieldName,
+            settings.OrderOptions,counter,ct);
+        return new(costOptions,orderOptions);
+    }
+
     // Mirrors the WPF picker: current DynamicField values from TicketGet and
     // Key/Value options from the administrator-configured options endpoint.
     // Configured fallback options use the same "key=label;..." syntax as WPF.
@@ -442,11 +456,8 @@ public sealed class ZnunyReader(IHttpClientFactory factory)
             throw new RemoteFailure("ticket-id-mismatch");
         var cost=FindDynamic(ticket,settings.CostCenterFieldName);
         var order=FindDynamic(ticket,settings.OrderFieldName);
-        var costOptions=await OptionsAsync(settings,session,settings.CostCenterFieldName,
-            settings.CostCenterOptions,counter,ct);
-        var orderOptions=await OptionsAsync(settings,session,settings.OrderFieldName,
-            settings.OrderOptions,counter,ct);
-        return new BookingFields(cost,order,costOptions,orderOptions);
+        var options=await GetBookingOptionsAsync(settings,session,counter,ct);
+        return new BookingFields(cost,order,options.CostCenterOptions,options.OrderOptions);
     }
 
     private static string FindDynamic(JsonElement ticket,string fieldName)

@@ -59,6 +59,10 @@ jobs:
           test "$(docker compose exec -T web printenv PLENARO_FAVORITES_HOST_TEMPLATE | tr -d '\r')" = '{slug}-plenaro.example.org'
           API=http://127.0.0.1
           curl -fsS "$API/health/ready" | grep -q '"schema":"current"'
+          CACHE_TEST_DB_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker compose ps -q database)")
+          test -n "$CACHE_TEST_DB_IP"
+          PLENARO_TEST_CACHE_CONNECTION="Host=$CACHE_TEST_DB_IP;Port=5432;Database=plenaro;Username=plenaro;Password=$POSTGRES_PASSWORD" \
+            dotnet run --project tools/znuny_contract_tests/ZnunyContractTests.csproj -c Release --no-build
           curl -fsS "$API/api/v1/setup/status" | grep -q '"required":true'
           # Entra is optional and disabled by default: no Microsoft credentials in CI.
           curl -fsS "$API/api/v1/auth/entra/status" | grep -q '"enabled":false'
