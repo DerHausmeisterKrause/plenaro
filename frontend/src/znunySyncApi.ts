@@ -211,12 +211,12 @@ export type ZnunyArticle = {
 };
 export type ZnunyConversation = {
   ticketId:string;ticketNumber:string;title:string;articles:ZnunyArticle[];
-  unreadArticleIds:string[];
+  unreadArticleIds:string[];fetchedAt?:string;stale?:boolean;
 };
 export type ZnunyAgent = { id:number;name:string };
 export type ZnunyUpdateConfirmation = { confirmed:boolean;cacheUpdated?:boolean };
-export const readZnunyArticles=(ticketId:string)=>
-  request<ZnunyConversation>(workspaceBase(ticketId)+'/articles');
+export const readZnunyArticles=(ticketId:string,refresh=false)=>
+  request<ZnunyConversation>(workspaceBase(ticketId)+'/articles'+(refresh?'?refresh=true':''));
 export const markZnunyArticleRead=async(ticketId:string,articleId:string):Promise<void>=>{
   await mutate(workspaceBase(ticketId)+'/articles/'+encodeURIComponent(articleId)+'/read','POST');
   window.dispatchEvent(new Event(ticketReadEvent));
